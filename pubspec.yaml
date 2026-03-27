@@ -1,0 +1,40 @@
+name: athan_call_to_success
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  geolocator: ^14.0.2
+
+  flutter_google_maps_webservices: ^1.1.1
+  sqflite: ^2.3.0
+  path: ^1.9.0
+  cupertino_icons: ^1.0.6
+  adhan: ^2.0.0+1
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_launcher_icons: ^0.14.4  
+  flutter_lints: ^6.0.0
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  # Using a relative path is safer for Flutter projects
+  image_path: "assets/icon/athan_app_icon.png"
+  adaptive_icon_background: "#00796B"
+
+flutter:
+  uses-material-design: true
+
+  # This section is REQUIRED for the image to show up in your Dart code
+  assets:
+    - assets/icon/athan_app_icon.png
