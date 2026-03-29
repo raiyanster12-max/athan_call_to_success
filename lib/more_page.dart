@@ -5,14 +5,22 @@ import 'package:intl/intl.dart';
 import 'masjid_page.dart';
 import 'settings_page.dart';
 
-class MorePage extends StatelessWidget {
+class MorePage extends StatefulWidget {
   const MorePage({super.key});
 
-  String get _gregorianLabel =>
-      DateFormat('EEEE, MMMM d, y').format(DateTime.now());
+  @override
+  State<MorePage> createState() => _MorePageState();
+}
 
-  String get _hijriLabel =>
-      HijriDate.fromDate(DateTime.now()).toFormat('DDDD, MMMM dd, yyyy');
+class _MorePageState extends State<MorePage> {
+  bool _showMasjidFinder = false;
+  DateTime _selectedDate = DateTime.now();
+
+  String get _selectedGregorianLabel =>
+      DateFormat('EEEE, MMMM d, y').format(_selectedDate);
+
+  String get _selectedHijriLabel =>
+      HijriDate.fromDate(_selectedDate).toFormat('DDDD, MMMM dd, yyyy');
 
   void _openSettings(BuildContext context) {
     Navigator.of(context).push(
@@ -21,13 +29,30 @@ class MorePage extends StatelessWidget {
   }
 
   void _openMasjidFinder(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const MasjidPage()),
-    );
+    setState(() => _showMasjidFinder = true);
+  }
+
+  void _setSelectedDate(DateTime date) {
+    setState(() => _selectedDate = date);
+  }
+
+  void _jumpToToday() {
+    final now = DateTime.now();
+    setState(() {
+      _selectedDate = DateTime(now.year, now.month, now.day);
+    });
+  }
+
+  void _closeMasjidFinder() {
+    setState(() => _showMasjidFinder = false);
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_showMasjidFinder) {
+      return MasjidPage(onBack: _closeMasjidFinder);
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('More'),
@@ -45,28 +70,37 @@ class MorePage extends StatelessWidget {
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    Icons.calendar_month_rounded,
-                    color: Color(0xFF00796B),
-                    size: 28,
+                  const Text(
+                    'Calendar View',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _gregorianLabel,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _hijriLabel,
-                          style: const TextStyle(color: Colors.black54),
-                        ),
-                      ],
+                  const SizedBox(height: 6),
+                  Text(
+                    'Selected: $_selectedGregorianLabel',
+                    style: const TextStyle(color: Colors.black87),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _selectedHijriLabel,
+                    style: const TextStyle(color: Colors.black54),
+                  ),
+                  const SizedBox(height: 12),
+                  CalendarDatePicker(
+                    initialDate: _selectedDate,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime(2100),
+                    onDateChanged: _setSelectedDate,
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: OutlinedButton.icon(
+                      onPressed: _jumpToToday,
+                      icon: const Icon(Icons.today_outlined),
+                      label: const Text('Today'),
                     ),
                   ),
                 ],
