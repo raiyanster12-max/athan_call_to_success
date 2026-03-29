@@ -5,7 +5,9 @@ import 'db_helper.dart';
 import 'mosque_service.dart';
 
 class MasjidPage extends StatefulWidget {
-  const MasjidPage({super.key});
+  const MasjidPage({super.key, this.onBack});
+
+  final VoidCallback? onBack;
 
   @override
   State<MasjidPage> createState() => _MasjidPageState();
@@ -107,6 +109,14 @@ class _MasjidPageState extends State<MasjidPage>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: widget.onBack == null,
+        leading: widget.onBack != null
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Back',
+                onPressed: widget.onBack,
+              )
+            : null,
         title: const Text('Masjid Finder'),
         bottom: TabBar(
           controller: _tabController,

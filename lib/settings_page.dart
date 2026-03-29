@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -28,10 +29,14 @@ class _SettingsPageState extends State<SettingsPage> {
 
   LocationPermission? _locationPermission;
   PermissionStatus? _notificationPermission;
+  PermissionStatus? _batteryOptimizationPermission;
   bool _isLoading = true;
   final Map<String, String> _tonePreferences = {
     for (final prayer in _prayerNames) prayer: 'Beep',
   };
+
+  bool get _supportsBatteryOptimizationPermission =>
+      defaultTargetPlatform == TargetPlatform.android;
 
   @override
   void initState() {
@@ -42,6 +47,10 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _loadSettings() async {
     final locationPermission = await Geolocator.checkPermission();
     final notificationPermission = await Permission.notification.status;
+    final batteryOptimizationPermission =
+      _supportsBatteryOptimizationPermission
+        ? await Permission.ignoreBatteryOptimizations.status
+        : null;
 
     for (final prayer in _prayerNames) {
       final storedTone = await DBHelper.getSetting(_toneKey(prayer));
@@ -54,6 +63,7 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() {
       _locationPermission = locationPermission;
       _notificationPermission = notificationPermission;
+      _batteryOptimizationPermission = batteryOptimizationPermission;
       _isLoading = false;
     });
   }
@@ -115,6 +125,26 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _notificationPermission = status);
   }
 
+  Future<void> _requestBatteryOptimizationPermission() async {
+    if (!_supportsBatteryOptimizationPermission) {
+      return;
+    }
+
+    final proceed = await _showPermissionDialog(
+      title: 'Unrestricted Battery Access',
+      message:
+          'To improve background reliability, allow this app to ignore battery optimizations on Android. '
+          'On the next system screen choose Allow or Unrestricted.',
+    );
+    if (!proceed) {
+      return;
+    }
+
+    final status = await Permission.ignoreBatteryOptimizations.request();
+    if (!mounted) return;
+    setState(() => _batteryOptimizationPermission = status);
+  }
+
   Future<void> _updateTone(String prayer, String tone) async {
     await DBHelper.setSetting(_toneKey(prayer), tone);
     if (!mounted) return;
@@ -142,6 +172,25 @@ class _SettingsPageState extends State<SettingsPage> {
         return 'Granted';
       case PermissionStatus.denied:
         return 'Denied';
+      case PermissionStatus.permanentlyDenied:
+        return 'Denied permanently';
+      case PermissionStatus.restricted:
+        return 'Restricted';
+      case PermissionStatus.limited:
+        return 'Limited';
+      case PermissionStatus.provisional:
+        return 'Provisional';
+      case null:
+        return 'Unknown';
+    }
+  }
+
+  String _batteryPermissionLabel() {
+    switch (_batteryOptimizationPermission) {
+      case PermissionStatus.granted:
+        return 'Unrestricted enabled';
+      case PermissionStatus.denied:
+        return 'Restricted by battery optimization';
       case PermissionStatus.permanentlyDenied:
         return 'Denied permanently';
       case PermissionStatus.restricted:
@@ -199,6 +248,17 @@ class _SettingsPageState extends State<SettingsPage> {
                       child: const Text('Review'),
                     ),
                   ),
+                  if (_supportsBatteryOptimizationPermission)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.battery_charging_full_outlined),
+                      title: const Text('Battery Optimization'),
+                      subtitle: Text(_batteryPermissionLabel()),
+                      trailing: FilledButton(
+                        onPressed: _requestBatteryOptimizationPermission,
+                        child: const Text('Unrestrict'),
+                      ),
+                    ),
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
                     onPressed: openAppSettings,
@@ -229,7 +289,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: DropdownButtonFormField<String>(
-                        value: _tonePreferences[prayer],
+                        initialValue: _tonePreferences[prayer],
                         decoration: InputDecoration(
                           labelText: prayer,
                           border: const OutlineInputBorder(),

@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:quran/quran.dart' as quran;
 
 import 'db_helper.dart';
 import 'settings_page.dart';
@@ -415,82 +419,339 @@ class _Surah {
   }
 }
 
-class _SurahDetailsPage extends StatelessWidget {
+class _SurahDetailsPage extends StatefulWidget {
   const _SurahDetailsPage({required this.surah});
 
   final _Surah surah;
 
   @override
+  State<_SurahDetailsPage> createState() => _SurahDetailsPageState();
+}
+
+class _SurahDetailsPageState extends State<_SurahDetailsPage> {
+  static const int _readingGoalMinutes = 5;
+
+  late final int _verseCount;
+  late final List<GlobalKey> _verseKeys;
+
+  final ScrollController _scrollController = ScrollController();
+  Timer? _readingTimer;
+
+  List<_AyahContent> _verses = <_AyahContent>[];
+  bool _isLoading = true;
+  bool _showTranslation = true;
+  int _selectedAyah = 1;
+  int _lastReadAyah = 1;
+  Duration _readingDuration = Duration.zero;
+
+  String get _lastReadAyahKey => 'quran_last_read_ayah_${widget.surah.number}';
+
+  @override
+  void initState() {
+    super.initState();
+    _verseCount = quran.getVerseCount(widget.surah.number);
+    _verseKeys = List<GlobalKey>.generate(_verseCount, (_) => GlobalKey());
+    _loadReaderState();
+    _readingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() {
+        _readingDuration += const Duration(seconds: 1);
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _readingTimer?.cancel();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadReaderState() async {
+    final storedLastRead = await DBHelper.getSetting(_lastReadAyahKey);
+    final parsedLastRead = int.tryParse(storedLastRead ?? '') ?? 1;
+
+    final verseItems = List<_AyahContent>.generate(_verseCount, (index) {
+      final ayah = index + 1;
+      return _AyahContent(
+        ayahNumber: ayah,
+        arabic: quran.getVerse(widget.surah.number, ayah, verseEndSymbol: true),
+        translation: quran.getVerseTranslation(
+          widget.surah.number,
+          ayah,
+          translation: quran.Translation.enSaheeh,
+        ),
+      );
+    });
+
+    if (!mounted) return;
+    setState(() {
+      _verses = verseItems;
+      _lastReadAyah = parsedLastRead.clamp(1, _verseCount);
+      _selectedAyah = _lastReadAyah;
+      _isLoading = false;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToAyah(_selectedAyah, animated: false);
+    });
+  }
+
+  Future<void> _setSelectedAyah(int ayah) async {
+    setState(() {
+      _selectedAyah = ayah;
+      _lastReadAyah = ayah;
+    });
+    await DBHelper.setSetting(_lastReadAyahKey, ayah.toString());
+  }
+
+  Future<void> _scrollToAyah(int ayah, {bool animated = true}) async {
+    if (ayah < 1 || ayah > _verseCount) return;
+    _setSelectedAyah(ayah);
+
+    final targetContext = _verseKeys[ayah - 1].currentContext;
+    if (targetContext == null) return;
+    await Scrollable.ensureVisible(
+      targetContext,
+      duration: animated ? const Duration(milliseconds: 350) : Duration.zero,
+      curve: Curves.easeOut,
+      alignment: 0.08,
+    );
+  }
+
+  Future<void> _copyAyah(_AyahContent ayah) async {
+    final messenger = ScaffoldMessenger.of(context);
+    await Clipboard.setData(
+      ClipboardData(
+        text:
+            'Surah ${widget.surah.number}:${ayah.ayahNumber}\n${ayah.arabic}\n${ayah.translation}',
+      ),
+    );
+    if (!mounted) return;
+    messenger.showSnackBar(
+      SnackBar(content: Text('Copied ayah ${widget.surah.number}:${ayah.ayahNumber}')),
+    );
+  }
+
+  double get _readingGoalProgress {
+    final goalSeconds = _readingGoalMinutes * 60;
+    return (_readingDuration.inSeconds / goalSeconds).clamp(0, 1);
+  }
+
+  String get _readingGoalLabel {
+    final minutes = _readingDuration.inMinutes;
+    final completed = minutes.clamp(0, _readingGoalMinutes);
+    return 'Reading goal: $completed/$_readingGoalMinutes mins';
+  }
+
+  String get _surahArabicName => quran.getSurahNameArabic(widget.surah.number);
+
+  bool get _showBasmala => widget.surah.number != 9;
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
+      backgroundColor: const Color(0xFFF4EEDC),
       appBar: AppBar(
-        title: Text(surah.displayTitle),
+        title: Text(widget.surah.displayTitle),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        controller: _scrollController,
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 20),
         children: [
           Card(
-            color: const Color(0xFF00796B),
-            child: ListTile(
-              leading: const Icon(Icons.history, color: Colors.white),
-              title: const Text(
-                'You Were Reading',
-                style: TextStyle(color: Colors.white70),
-              ),
-              subtitle: Text(
-                surah.displayTitle,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Card(
+            elevation: 0,
+            color: const Color(0xFFEAE3CF),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    surah.name,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${widget.surah.number}. ${widget.surah.name}',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        _surahArabicName,
+                        textDirection: TextDirection.rtl,
+                        style: const TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Text(
-                    surah.meaning,
+                    widget.surah.meaning,
                     style: const TextStyle(color: Colors.black54),
                   ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Arabic (placeholder)',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _readingGoalLabel,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            LinearProgressIndicator(
+                              value: _readingGoalProgress,
+                              minHeight: 7,
+                              borderRadius: BorderRadius.circular(6),
+                              backgroundColor: Colors.black12,
+                              color: const Color(0xFF00796B),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      DropdownButton<int>(
+                        value: _selectedAyah,
+                        underline: const SizedBox.shrink(),
+                        items: List<DropdownMenuItem<int>>.generate(
+                          _verseCount,
+                          (index) {
+                            final ayah = index + 1;
+                            return DropdownMenuItem<int>(
+                              value: ayah,
+                              child: Text('Ayah ${widget.surah.number}:$ayah'),
+                            );
+                          },
+                        ),
+                        onChanged: (value) {
+                          if (value == null) return;
+                          _scrollToAyah(value);
+                        },
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Bismillahir Rahmanir Rahim',
-                    style: TextStyle(fontSize: 20, height: 1.5),
-                    textAlign: TextAlign.right,
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Translation (placeholder)',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'In the name of Allah, the Entirely Merciful, the Especially Merciful.',
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilterChip(
+                        selected: _showTranslation,
+                        label: const Text('English Translation'),
+                        onSelected: (enabled) {
+                          setState(() => _showTranslation = enabled);
+                        },
+                      ),
+                      Chip(
+                        label: Text('Last read: ${widget.surah.number}:$_lastReadAyah'),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
           ),
+          if (_showBasmala)
+            Container(
+              margin: const EdgeInsets.only(top: 4, bottom: 10),
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD8E8D3),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFB8C9B2)),
+              ),
+              child: Text(
+                quran.basmala,
+                textAlign: TextAlign.center,
+                textDirection: TextDirection.rtl,
+                style: const TextStyle(fontSize: 34, height: 1.5),
+              ),
+            ),
+          ..._verses.map((ayah) {
+            final isCurrent = ayah.ayahNumber == _selectedAyah;
+            return Container(
+              key: _verseKeys[ayah.ayahNumber - 1],
+              margin: const EdgeInsets.only(bottom: 10),
+              decoration: BoxDecoration(
+                color: isCurrent ? const Color(0xFFF8F2E3) : Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isCurrent ? const Color(0xFF00796B) : Colors.black12,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        ActionChip(
+                          avatar: const Icon(Icons.expand_more, size: 18),
+                          label: Text('Aya ${widget.surah.number}:${ayah.ayahNumber}'),
+                          onPressed: () => _scrollToAyah(ayah.ayahNumber),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          tooltip: 'Copy ayah',
+                          onPressed: () => _copyAyah(ayah),
+                          icon: const Icon(Icons.copy_rounded),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      ayah.arabic,
+                      textAlign: TextAlign.right,
+                      textDirection: TextDirection.rtl,
+                      style: const TextStyle(fontSize: 34, height: 1.75),
+                    ),
+                    if (_showTranslation) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        ayah.translation,
+                        textAlign: TextAlign.left,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          color: Color(0xFF555555),
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          }),
         ],
       ),
     );
   }
+}
+
+class _AyahContent {
+  const _AyahContent({
+    required this.ayahNumber,
+    required this.arabic,
+    required this.translation,
+  });
+
+  final int ayahNumber;
+  final String arabic;
+  final String translation;
 }

@@ -97,6 +97,8 @@ class _HomePageState extends State<HomePage> {
   PrayerTimes? _currentPrayerTimes;
   bool _isLoading = false;
   Position? _currentPosition;
+  DateTime _now = DateTime.now();
+  Timer? _clockTimer;
   Timer? _countdownTimer;
   String? _nextPrayerName;
   Duration? _timeUntilNextPrayer;
@@ -139,6 +141,10 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _now = DateTime.now());
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _determinePosition();
       if (!mounted) return;
@@ -148,9 +154,17 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    _clockTimer?.cancel();
     _countdownTimer?.cancel();
     super.dispose();
   }
+
+  String get _gregorianNowLabel => DateFormat('EEEE, MMM d, y').format(_now);
+
+  String get _timeNowLabel => DateFormat('h:mm:ss a').format(_now);
+
+  String get _hijriNowLabel =>
+      HijriDate.fromDate(_now).toFormat('DDDD, MMMM dd, yyyy');
 
   Future<void> _maybePromptNotificationPermission() async {
     if (_notificationPrompted || !_supportsNotificationPermission) {
@@ -341,7 +355,8 @@ class _HomePageState extends State<HomePage> {
     }
 
     return Card(
-      color: const Color(0xFF00796B),
+      color: const Color(0xFF0E5F4F),
+      elevation: 1,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -378,7 +393,10 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF3F6F2),
       appBar: AppBar(
+        backgroundColor: const Color(0xFF0E5F4F),
+        foregroundColor: Colors.white,
         title: const Text('Athan - Call to Success'),
         actions: [
           IconButton(
@@ -388,68 +406,119 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 8),
-            Center(
-              child: Image.asset('assets/icon/athan_app_icon.png', height: 80),
-            ),
-            const SizedBox(height: 16),
-            _buildNextPrayerCard(),
-            const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _locationStatus,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _isLoading ? null : _determinePosition,
-                        icon: _isLoading
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.my_location),
-                        label: Text(_isLoading ? 'Detecting...' : 'Refresh Location'),
-                      ),
-                    ),
-                  ],
-                ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFE8F2EC), Color(0xFFF8FAF7)],
+          ),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 8),
+              Center(
+                child: Image.asset('assets/icon/athan_app_icon.png', height: 80),
               ),
-            ),
-            const SizedBox(height: 12),
-            if (_currentPrayerTimes != null)
+              const SizedBox(height: 16),
               Card(
+                color: const Color(0xFFE9F4EF),
                 child: Padding(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(16),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _prayerTile('Fajr', _currentPrayerTimes!.fajr),
-                      _prayerTile('Sunrise', _currentPrayerTimes!.sunrise),
-                      _prayerTile('Dhuhr', _currentPrayerTimes!.dhuhr),
-                      _prayerTile('Asr', _currentPrayerTimes!.asr),
-                      _prayerTile('Maghrib', _currentPrayerTimes!.maghrib),
-                      _prayerTile('Isha', _currentPrayerTimes!.isha),
+                      Text(
+                        _gregorianNowLabel,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0E5F4F),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _timeNowLabel,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          color: Color(0xFF1A3A35),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _hijriNowLabel,
+                        style: const TextStyle(color: Color(0xFF46645E)),
+                      ),
                     ],
                   ),
                 ),
               ),
-          ],
+              const SizedBox(height: 12),
+              _buildNextPrayerCard(),
+              const SizedBox(height: 12),
+              Card(
+                color: const Color(0xFFF1F7F4),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _locationStatus,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1F3F39),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0E5F4F),
+                            foregroundColor: Colors.white,
+                          ),
+                          onPressed: _isLoading ? null : _determinePosition,
+                          icon: _isLoading
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.my_location),
+                          label: Text(_isLoading ? 'Detecting...' : 'Refresh Location'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (_currentPrayerTimes != null)
+                Card(
+                  color: Colors.white,
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Column(
+                      children: [
+                        _prayerTile('Fajr', _currentPrayerTimes!.fajr),
+                        _prayerTile('Sunrise', _currentPrayerTimes!.sunrise),
+                        _prayerTile('Dhuhr', _currentPrayerTimes!.dhuhr),
+                        _prayerTile('Asr', _currentPrayerTimes!.asr),
+                        _prayerTile('Maghrib', _currentPrayerTimes!.maghrib),
+                        _prayerTile('Isha', _currentPrayerTimes!.isha),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
