@@ -9,10 +9,11 @@ import 'package:hijri_date/hijri.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import 'db_helper.dart';
-import 'masjid_page.dart';
+import 'more_page.dart';
 import 'prayer_service.dart';
+import 'quran_page.dart';
 import 'settings_page.dart';
+import 'tracker_page.dart';
 
 void main() {
   HijriDate.setLocal('en');
@@ -46,19 +47,38 @@ class _MainNavigationState extends State<MainNavigation> {
   Widget build(BuildContext context) {
     final List<Widget> pages = [
       const HomePage(),
-      const MasjidPage(),
-      const SettingsPage(),
+      const QuranPage(),
+      const TrackerPage(),
+      const MorePage(),
     ];
+
     return Scaffold(
       body: pages[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: (index) => setState(() => _selectedIndex = index),
-        selectedItemColor: const Color(0xFF00796B), // Emerald highlights
+        selectedItemColor: const Color(0xFF00796B),
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.mosque_outlined), activeIcon: Icon(Icons.mosque), label: 'Masjid'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings_outlined), activeIcon: Icon(Icons.settings), label: 'Settings'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.menu_book_outlined),
+            activeIcon: Icon(Icons.menu_book),
+            label: 'Quran',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.checklist_outlined),
+            activeIcon: Icon(Icons.checklist),
+            label: 'Tracker',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.more_horiz),
+            activeIcon: Icon(Icons.more_horiz),
+            label: 'More',
+          ),
         ],
       ),
     );
@@ -73,38 +93,19 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  static const List<String> _trackedPrayers = [
-    'Fajr',
-    'Dhuhr',
-    'Asr',
-    'Maghrib',
-    'Isha',
-  ];
-
-  String _locationStatus = "Waiting for location...";
+  String _locationStatus = 'Waiting for location...';
   PrayerTimes? _currentPrayerTimes;
   bool _isLoading = false;
   Position? _currentPosition;
   Timer? _countdownTimer;
   String? _nextPrayerName;
   Duration? _timeUntilNextPrayer;
-  Map<String, bool> _prayerStatuses = {
-    for (final prayer in _trackedPrayers) prayer: false,
-  };
   bool _notificationPrompted = false;
 
   bool get _supportsNotificationPermission {
     return defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS;
   }
-
-  String get _todayKey => DateFormat('yyyy-MM-dd').format(DateTime.now());
-
-  String get _gregorianLabel =>
-      DateFormat('EEEE, MMMM d, y').format(DateTime.now());
-
-  String get _hijriLabel =>
-      HijriDate.fromDate(DateTime.now()).toFormat('DDDD, MMMM dd, yyyy');
 
   Future<String> _buildLocationLabel(Position position) async {
     try {
@@ -190,29 +191,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _loadPrayerTracker() async {
-    final prayerStatuses = await DBHelper.getPrayerLogForDate(_todayKey);
-    if (!mounted) return;
-    setState(() {
-      _prayerStatuses = {
-        for (final prayer in _trackedPrayers)
-          prayer: prayerStatuses[prayer] ?? false,
-      };
-    });
-  }
-
-  Future<void> _togglePrayer(String prayer, bool value) async {
-    await DBHelper.setPrayerCompleted(
-      dateKey: _todayKey,
-      prayerName: prayer,
-      completed: value,
-    );
-    if (!mounted) return;
-    setState(() {
-      _prayerStatuses[prayer] = value;
-    });
-  }
-
   void _startCountdown() {
     _countdownTimer?.cancel();
     _updateNextPrayerCountdown();
@@ -250,12 +228,18 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _determinePosition() async {
-    setState(() { _isLoading = true; _locationStatus = 'Detecting location...'; });
+    setState(() {
+      _isLoading = true;
+      _locationStatus = 'Detecting location...';
+    });
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!mounted) return;
 
     if (!serviceEnabled) {
-      setState(() { _locationStatus = 'Location services are disabled.'; _isLoading = false; });
+      setState(() {
+        _locationStatus = 'Location services are disabled.';
+        _isLoading = false;
+      });
       return;
     }
 
@@ -287,19 +271,29 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
 
       if (proceed != true) {
-        setState(() { _locationStatus = 'Location permission not granted.'; _isLoading = false; });
+        setState(() {
+          _locationStatus = 'Location permission not granted.';
+          _isLoading = false;
+        });
         return;
       }
       permission = await Geolocator.requestPermission();
       if (!mounted) return;
 
       if (permission == LocationPermission.denied) {
-        setState(() { _locationStatus = 'Location permission denied.'; _isLoading = false; });
+        setState(() {
+          _locationStatus = 'Location permission denied.';
+          _isLoading = false;
+        });
         return;
       }
     }
     if (permission == LocationPermission.deniedForever) {
-      setState(() { _locationStatus = 'Location permission permanently denied. Enable it in device settings.'; _isLoading = false; });
+      setState(() {
+        _locationStatus =
+            'Location permission permanently denied. Enable it in device settings.';
+        _isLoading = false;
+      });
       return;
     }
 
@@ -322,45 +316,22 @@ class _HomePageState extends State<HomePage> {
         _isLoading = false;
       });
       _startCountdown();
-      await _loadPrayerTracker();
     } catch (e) {
       if (!mounted) return;
-      setState(() { _locationStatus = 'Could not get location: $e'; _isLoading = false; });
+      setState(() {
+        _locationStatus = 'Could not get location: $e';
+        _isLoading = false;
+      });
     }
   }
 
-  // Helper to format time (e.g., 5:30 AM)
   String _formatTime(DateTime time) {
     return DateFormat.jm().format(time.toLocal());
   }
 
-  Widget _buildDateCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            const Icon(Icons.calendar_today, color: Color(0xFF00796B)),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _gregorianLabel,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _hijriLabel,
-                    style: const TextStyle(color: Colors.black54),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+  void _openSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const SettingsPage()),
     );
   }
 
@@ -404,47 +375,19 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildPrayerTrackerCard() {
-    final completedCount =
-        _prayerStatuses.values.where((completed) => completed).length;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Prayer Tracker',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const SizedBox(height: 4),
-            Text('$completedCount of ${_trackedPrayers.length} prayers logged today'),
-            const SizedBox(height: 12),
-            for (final prayer in _trackedPrayers)
-              CheckboxListTile(
-                value: _prayerStatuses[prayer] ?? false,
-                contentPadding: EdgeInsets.zero,
-                activeColor: const Color(0xFF00796B),
-                title: Text(prayer),
-                controlAffinity: ListTileControlAffinity.leading,
-                onChanged: (value) {
-                  if (value == null) return;
-                  _togglePrayer(prayer, value);
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Athan - Call to Success")),
+      appBar: AppBar(
+        title: const Text('Athan - Call to Success'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Settings',
+            onPressed: _openSettings,
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -455,8 +398,6 @@ class _HomePageState extends State<HomePage> {
               child: Image.asset('assets/icon/athan_app_icon.png', height: 80),
             ),
             const SizedBox(height: 16),
-            _buildDateCard(),
-            const SizedBox(height: 12),
             _buildNextPrayerCard(),
             const SizedBox(height: 12),
             Card(
@@ -498,18 +439,16 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.all(8),
                   child: Column(
                     children: [
-                      _prayerTile("Fajr", _currentPrayerTimes!.fajr),
-                      _prayerTile("Sunrise", _currentPrayerTimes!.sunrise),
-                      _prayerTile("Dhuhr", _currentPrayerTimes!.dhuhr),
-                      _prayerTile("Asr", _currentPrayerTimes!.asr),
-                      _prayerTile("Maghrib", _currentPrayerTimes!.maghrib),
-                      _prayerTile("Isha", _currentPrayerTimes!.isha),
+                      _prayerTile('Fajr', _currentPrayerTimes!.fajr),
+                      _prayerTile('Sunrise', _currentPrayerTimes!.sunrise),
+                      _prayerTile('Dhuhr', _currentPrayerTimes!.dhuhr),
+                      _prayerTile('Asr', _currentPrayerTimes!.asr),
+                      _prayerTile('Maghrib', _currentPrayerTimes!.maghrib),
+                      _prayerTile('Isha', _currentPrayerTimes!.isha),
                     ],
                   ),
                 ),
               ),
-            if (_currentPrayerTimes != null) const SizedBox(height: 12),
-            if (_currentPrayerTimes != null) _buildPrayerTrackerCard(),
           ],
         ),
       ),
