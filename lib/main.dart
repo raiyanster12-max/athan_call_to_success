@@ -10,13 +10,16 @@ import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'db_helper.dart';
+import 'notification_service.dart';
 import 'more_page.dart';
 import 'prayer_service.dart';
 import 'quran_page.dart';
 import 'settings_page.dart';
 import 'tracker_page.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService.instance.initialize();
   HijriDate.setLocal('en');
   runApp(const AthanApp());
 }
@@ -160,6 +163,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    NotificationService.instance.refreshBatchIfNeeded();
     _loadHomePrayerTracker();
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       final updatedNow = DateTime.now();
@@ -383,6 +387,10 @@ class _HomePageState extends State<HomePage> {
         position.longitude,
       );
       _currentPosition = position;
+      await NotificationService.instance.scheduleRollingPrayerNotifications(
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
       setState(() {
         _locationStatus = locationLabel;
         _currentPrayerTimes = times;

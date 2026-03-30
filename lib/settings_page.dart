@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'db_helper.dart';
+import 'notification_service.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -47,8 +48,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _loadSettings() async {
     final locationPermission = await Geolocator.checkPermission();
     final notificationPermission = await Permission.notification.status;
-    final batteryOptimizationPermission =
-      _supportsBatteryOptimizationPermission
+    final batteryOptimizationPermission = _supportsBatteryOptimizationPermission
         ? await Permission.ignoreBatteryOptimizations.status
         : null;
 
@@ -68,8 +68,7 @@ class _SettingsPageState extends State<SettingsPage> {
     });
   }
 
-  String _toneKey(String prayer) =>
-      'alarm_tone_${prayer.toLowerCase()}';
+  String _toneKey(String prayer) => 'alarm_tone_${prayer.toLowerCase()}';
 
   Future<bool> _showPermissionDialog({
     required String title,
@@ -147,6 +146,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _updateTone(String prayer, String tone) async {
     await DBHelper.setSetting(_toneKey(prayer), tone);
+    await NotificationService.instance.rescheduleUsingStoredLocation();
     if (!mounted) return;
     setState(() => _tonePreferences[prayer] = tone);
   }
@@ -207,9 +207,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
@@ -282,7 +280,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Your selections are stored now and will be used by scheduled prayer alarms when the notification service is added.',
+                    'Your selections are stored and applied to upcoming prayer reminders.',
                   ),
                   const SizedBox(height: 12),
                   for (final prayer in _prayerNames)
