@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path_lib;
 import 'package:permission_handler/permission_handler.dart';
 
@@ -31,11 +32,31 @@ class _SettingsPageState extends State<SettingsPage> {
   ];
 
   static const String _customFileTone = NotificationService.toneCustomFile;
+  static const String _speakerRouteKey = 'notification_speaker_route';
+  static const String _networkSpeakerIpKey =
+      NotificationService.networkSpeakerIpKey;
+  static const String _networkSpeakerPortKey =
+      NotificationService.networkSpeakerPortKey;
+  static const String _networkSpeakerPathKey =
+      NotificationService.networkSpeakerPathKey;
+
+  static const List<String> _speakerRouteOptions = [
+    NotificationService.speakerSystemDefault,
+    NotificationService.speakerPhoneSpeaker,
+    NotificationService.speakerNetworkIp,
+  ];
 
   LocationPermission? _locationPermission;
   PermissionStatus? _notificationPermission;
   PermissionStatus? _batteryOptimizationPermission;
   bool _isLoading = true;
+  String _speakerRoute = NotificationService.speakerSystemDefault;
+  final TextEditingController _networkSpeakerIpController =
+      TextEditingController();
+  final TextEditingController _networkSpeakerPortController =
+      TextEditingController(text: '80');
+  final TextEditingController _networkSpeakerPathController =
+      TextEditingController(text: '/play');
   final Map<String, String> _tonePreferences = {
     for (final prayer in _prayerNames) prayer: 'Beep',
   };
@@ -52,12 +73,38 @@ class _SettingsPageState extends State<SettingsPage> {
     _loadSettings();
   }
 
+  @override
+  void dispose() {
+    _networkSpeakerIpController.dispose();
+    _networkSpeakerPortController.dispose();
+    _networkSpeakerPathController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadSettings() async {
     final locationPermission = await Geolocator.checkPermission();
     final notificationPermission = await Permission.notification.status;
     final batteryOptimizationPermission = _supportsBatteryOptimizationPermission
         ? await Permission.ignoreBatteryOptimizations.status
         : null;
+    final storedSpeakerRoute = await DBHelper.getSetting(_speakerRouteKey);
+    if (storedSpeakerRoute != null &&
+        _speakerRouteOptions.contains(storedSpeakerRoute)) {
+      _speakerRoute = storedSpeakerRoute;
+    }
+
+    final storedIp = await DBHelper.getSetting(_networkSpeakerIpKey);
+    final storedPort = await DBHelper.getSetting(_networkSpeakerPortKey);
+    final storedPath = await DBHelper.getSetting(_networkSpeakerPathKey);
+    if (storedIp != null && storedIp.trim().isNotEmpty) {
+      _networkSpeakerIpController.text = storedIp;
+    }
+    if (storedPort != null && storedPort.trim().isNotEmpty) {
+      _networkSpeakerPortController.text = storedPort;
+    }
+    if (storedPath != null && storedPath.trim().isNotEmpty) {
+      _networkSpeakerPathController.text = storedPath;
+    }
 
     for (final prayer in _prayerNames) {
       final storedTone = await DBHelper.getSetting(_toneKey(prayer));
@@ -179,6 +226,75 @@ class _SettingsPageState extends State<SettingsPage> {
     await NotificationService.instance.rescheduleUsingStoredLocation();
     if (!mounted) return;
     setState(() => _tonePreferences[prayer] = tone);
+  }
+
+  Future<void> _updateSpeakerRoute(String route) async {
+    await DBHelper.setSetting(_speakerRouteKey, route);
+    if (route == NotificationService.speakerNetworkIp) {
+      await _saveNetworkSpeakerConfig(reschedule: false);
+    }
+    await NotificationService.instance.rescheduleUsingStoredLocation();
+    if (!mounted) return;
+    setState(() => _speakerRoute = route);
+  }
+
+  Future<void> _saveNetworkSpeakerConfig({bool reschedule = true}) async {
+    await DBHelper.setSetting(
+      _networkSpeakerIpKey,
+      _networkSpeakerIpController.text.trim(),
+    );
+    await DBHelper.setSetting(
+      _networkSpeakerPortKey,
+      _networkSpeakerPortController.text.trim(),
+    );
+    await DBHelper.setSetting(
+      _networkSpeakerPathKey,
+      _networkSpeakerPathController.text.trim(),
+    );
+
+    if (reschedule) {
+      await NotificationService.instance.rescheduleUsingStoredLocation();
+    }
+  }
+
+  Future<void> _testNetworkSpeaker() async {
+    final ip = _networkSpeakerIpController.text.trim();
+    final port = int.tryParse(_networkSpeakerPortController.text.trim()) ?? 80;
+    var path = _networkSpeakerPathController.text.trim();
+
+    if (ip.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a speaker IP address first.')),
+      );
+      return;
+    }
+    if (path.isEmpty) {
+      path = '/play';
+    }
+    if (!path.startsWith('/')) {
+      path = '/$path';
+    }
+
+    await _saveNetworkSpeakerConfig(reschedule: false);
+
+    final uri = Uri(scheme: 'http', host: ip, port: port, path: path);
+    String message;
+    try {
+      final response = await http
+          .get(uri, headers: {'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 4));
+      message = response.statusCode >= 200 && response.statusCode < 400
+          ? 'Speaker endpoint reachable: ${response.statusCode}'
+          : 'Speaker responded with status ${response.statusCode}';
+    } catch (e) {
+      message = 'Could not reach speaker endpoint: $e';
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _pickCustomToneForPrayer(String prayer) async {
@@ -356,6 +472,85 @@ class _SettingsPageState extends State<SettingsPage> {
                     'Your selections are stored and applied to upcoming prayer reminders. '
                     'On Android, you can also choose a custom audio file from your phone.',
                   ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _speakerRoute,
+                    decoration: const InputDecoration(
+                      labelText: 'Notification Audio Route',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: _speakerRouteOptions
+                        .map(
+                          (route) => DropdownMenuItem<String>(
+                            value: route,
+                            child: Text(route),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      _updateSpeakerRoute(value);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'System Default follows your current audio route. '
+                    'Phone Speaker uses alarm audio usage for stronger output on Android. '
+                    'Network Speaker stores an IP endpoint used for connected speaker integrations.',
+                    style: TextStyle(color: Colors.black54, fontSize: 12),
+                  ),
+                  if (_speakerRoute ==
+                      NotificationService.speakerNetworkIp) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _networkSpeakerIpController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Speaker IP Address',
+                        hintText: 'e.g. 192.168.1.45',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (_) => _saveNetworkSpeakerConfig(),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _networkSpeakerPortController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Port',
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: (_) => _saveNetworkSpeakerConfig(),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 2,
+                          child: TextField(
+                            controller: _networkSpeakerPathController,
+                            decoration: const InputDecoration(
+                              labelText: 'Endpoint Path',
+                              hintText: '/play',
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: (_) => _saveNetworkSpeakerConfig(),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        onPressed: _testNetworkSpeaker,
+                        icon: const Icon(Icons.wifi_tethering),
+                        label: const Text('Test speaker endpoint'),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   for (final prayer in _prayerNames)
                     Padding(

@@ -18,11 +18,18 @@ class NotificationService {
   static const String _batchEndKey = 'notification_batch_end';
   static const String _lastLatKey = 'notification_last_lat';
   static const String _lastLngKey = 'notification_last_lng';
+  static const String _speakerRouteKey = 'notification_speaker_route';
+  static const String networkSpeakerIpKey = 'network_speaker_ip';
+  static const String networkSpeakerPortKey = 'network_speaker_port';
+  static const String networkSpeakerPathKey = 'network_speaker_path';
 
   static const String _toneBeep = 'Beep';
   static const String _toneMuezzin1 = 'Muezzin Voice 1';
   static const String _toneMuezzin2 = 'Muezzin Voice 2';
   static const String toneCustomFile = 'Custom File';
+  static const String speakerSystemDefault = 'System Default';
+  static const String speakerPhoneSpeaker = 'Phone Speaker (Alarm Stream)';
+  static const String speakerNetworkIp = 'Network Speaker (IP)';
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
@@ -107,6 +114,7 @@ class NotificationService {
     await _plugin.cancelAll();
 
     final toneMap = await _loadPrayerTonePreferences();
+    final speakerRoute = await _loadSpeakerRoutePreference();
     final now = DateTime.now();
     final formatter = DateFormat('h:mm a');
 
@@ -131,6 +139,7 @@ class NotificationService {
         final details = await _buildNotificationDetailsForPrayer(
           prayerName: prayer.name,
           tone: tone,
+          speakerRoute: speakerRoute,
         );
 
         await _plugin.zonedSchedule(
@@ -241,7 +250,10 @@ class NotificationService {
   Future<NotificationDetails> _buildNotificationDetailsForPrayer({
     required String prayerName,
     required String tone,
+    required String speakerRoute,
   }) async {
+    final audioUsage = _audioUsageForRoute(speakerRoute);
+
     if (tone == toneCustomFile &&
         defaultTargetPlatform == TargetPlatform.android) {
       final customPath = await DBHelper.getSetting(
@@ -268,6 +280,7 @@ class NotificationService {
               priority: Priority.high,
               playSound: true,
               sound: UriAndroidNotificationSound(uri),
+              audioAttributesUsage: audioUsage,
             ),
             // iOS cannot use arbitrary user file paths for notification sounds.
             iOS: const DarwinNotificationDetails(presentSound: true),
@@ -287,9 +300,27 @@ class NotificationService {
         priority: Priority.high,
         playSound: true,
         sound: androidSound,
+        audioAttributesUsage: audioUsage,
       ),
       iOS: DarwinNotificationDetails(presentSound: true, sound: iOSSound),
     );
+  }
+
+  Future<String> _loadSpeakerRoutePreference() async {
+    final stored = await DBHelper.getSetting(_speakerRouteKey);
+    if (stored == speakerPhoneSpeaker ||
+        stored == speakerSystemDefault ||
+        stored == speakerNetworkIp) {
+      return stored!;
+    }
+    return speakerSystemDefault;
+  }
+
+  AudioAttributesUsage _audioUsageForRoute(String route) {
+    if (route == speakerPhoneSpeaker) {
+      return AudioAttributesUsage.alarm;
+    }
+    return AudioAttributesUsage.notification;
   }
 
   Future<void> _createAndroidCustomChannel({
