@@ -9,6 +9,7 @@ import 'package:hijri_date/hijri.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'db_helper.dart';
 import 'more_page.dart';
 import 'prayer_service.dart';
 import 'quran_page.dart';
@@ -93,6 +94,14 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  static const List<String> _trackedPrayers = [
+    'Fajr',
+    'Dhuhr',
+    'Asr',
+    'Maghrib',
+    'Isha',
+  ];
+
   String _locationStatus = 'Waiting for location...';
   PrayerTimes? _currentPrayerTimes;
   bool _isLoading = false;
@@ -103,6 +112,13 @@ class _HomePageState extends State<HomePage> {
   String? _nextPrayerName;
   Duration? _timeUntilNextPrayer;
   bool _notificationPrompted = false;
+  String _homePrayerDateKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
+  Map<String, bool> _homePrayerStatuses = {
+    for (final prayer in _trackedPrayers) prayer: false,
+  };
+
+  int get _homeCompletedCount =>
+      _homePrayerStatuses.values.where((done) => done).length;
 
   bool get _supportsNotificationPermission {
     return defaultTargetPlatform == TargetPlatform.android ||
@@ -123,7 +139,10 @@ class _HomePageState extends State<HomePage> {
       final city = placemark.locality?.trim();
       final state = placemark.administrativeArea?.trim();
 
-      if (city != null && city.isNotEmpty && state != null && state.isNotEmpty) {
+      if (city != null &&
+          city.isNotEmpty &&
+          state != null &&
+          state.isNotEmpty) {
         return 'Location: $city, $state';
       }
       if (city != null && city.isNotEmpty) {
@@ -141,9 +160,21 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    _loadHomePrayerTracker();
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      final updatedNow = DateTime.now();
+      final updatedDateKey = DateFormat('yyyy-MM-dd').format(updatedNow);
+      final dateChanged = updatedDateKey != _homePrayerDateKey;
       if (!mounted) return;
-      setState(() => _now = DateTime.now());
+      setState(() {
+        _now = updatedNow;
+        if (dateChanged) {
+          _homePrayerDateKey = updatedDateKey;
+        }
+      });
+      if (dateChanged) {
+        _loadHomePrayerTracker();
+      }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _determinePosition();
@@ -241,6 +272,31 @@ class _HomePageState extends State<HomePage> {
         '${seconds.toString().padLeft(2, '0')}';
   }
 
+  Future<void> _loadHomePrayerTracker() async {
+    final dateKey = _homePrayerDateKey;
+    final prayerStatuses = await DBHelper.getPrayerLogForDate(dateKey);
+    if (!mounted || dateKey != _homePrayerDateKey) return;
+
+    setState(() {
+      _homePrayerStatuses = {
+        for (final prayer in _trackedPrayers)
+          prayer: prayerStatuses[prayer] ?? false,
+      };
+    });
+  }
+
+  Future<void> _toggleHomePrayer(String prayer, bool value) async {
+    await DBHelper.setPrayerCompleted(
+      dateKey: _homePrayerDateKey,
+      prayerName: prayer,
+      completed: value,
+    );
+    if (!mounted) return;
+    setState(() {
+      _homePrayerStatuses[prayer] = value;
+    });
+  }
+
   Future<void> _determinePosition() async {
     setState(() {
       _isLoading = true;
@@ -322,7 +378,10 @@ class _HomePageState extends State<HomePage> {
       final locationLabel = await _buildLocationLabel(position);
       if (!mounted) return;
 
-      final times = PrayerService.getTimes(position.latitude, position.longitude);
+      final times = PrayerService.getTimes(
+        position.latitude,
+        position.longitude,
+      );
       _currentPosition = position;
       setState(() {
         _locationStatus = locationLabel;
@@ -344,9 +403,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _openSettings() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const SettingsPage()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const SettingsPage()));
   }
 
   Widget _buildNextPrayerCard() {
@@ -362,10 +421,7 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Next Prayer',
-              style: TextStyle(color: Colors.white70),
-            ),
+            const Text('Next Prayer', style: TextStyle(color: Colors.white70)),
             const SizedBox(height: 8),
             Text(
               _nextPrayerName!,
@@ -421,7 +477,10 @@ class _HomePageState extends State<HomePage> {
             children: [
               const SizedBox(height: 8),
               Center(
-                child: Image.asset('assets/icon/athan_app_icon.png', height: 80),
+                child: Image.asset(
+                  'assets/icon/athan_app_icon.png',
+                  height: 80,
+                ),
               ),
               const SizedBox(height: 16),
               Card(
@@ -460,6 +519,41 @@ class _HomePageState extends State<HomePage> {
               _buildNextPrayerCard(),
               const SizedBox(height: 12),
               Card(
+                color: Colors.white,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Prayer Tracker',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$_homeCompletedCount of ${_trackedPrayers.length} prayers logged',
+                        style: const TextStyle(color: Colors.black54),
+                      ),
+                      const SizedBox(height: 8),
+                      for (final prayer in _trackedPrayers)
+                        CheckboxListTile(
+                          value: _homePrayerStatuses[prayer] ?? false,
+                          contentPadding: EdgeInsets.zero,
+                          activeColor: const Color(0xFF00796B),
+                          title: Text(prayer),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          onChanged: (value) {
+                            if (value == null) return;
+                            _toggleHomePrayer(prayer, value);
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Card(
                 color: const Color(0xFFF1F7F4),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -492,7 +586,9 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                 )
                               : const Icon(Icons.my_location),
-                          label: Text(_isLoading ? 'Detecting...' : 'Refresh Location'),
+                          label: Text(
+                            _isLoading ? 'Detecting...' : 'Refresh Location',
+                          ),
                         ),
                       ),
                     ],
