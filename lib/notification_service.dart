@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
@@ -20,6 +22,7 @@ class NotificationService {
   static const String _toneBeep = 'Beep';
   static const String _toneMuezzin1 = 'Muezzin Voice 1';
   static const String _toneMuezzin2 = 'Muezzin Voice 2';
+  static const String toneCustomFile = 'Custom File';
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
@@ -125,7 +128,10 @@ class NotificationService {
         }
 
         final tone = toneMap[prayer.name] ?? _toneBeep;
-        final details = _buildNotificationDetails(tone);
+        final details = await _buildNotificationDetailsForPrayer(
+          prayerName: prayer.name,
+          tone: tone,
+        );
 
         await _plugin.zonedSchedule(
           _notificationIdFor(prayer.name, prayer.time),
@@ -221,6 +227,7 @@ class NotificationService {
       final stored = await DBHelper.getSetting(key);
       if (stored == _toneMuezzin1 ||
           stored == _toneMuezzin2 ||
+          stored == toneCustomFile ||
           stored == _toneBeep) {
         map[prayer] = stored!;
       } else {
@@ -231,7 +238,44 @@ class NotificationService {
     return map;
   }
 
-  NotificationDetails _buildNotificationDetails(String tone) {
+  Future<NotificationDetails> _buildNotificationDetailsForPrayer({
+    required String prayerName,
+    required String tone,
+  }) async {
+    if (tone == toneCustomFile &&
+        defaultTargetPlatform == TargetPlatform.android) {
+      final customPath = await DBHelper.getSetting(
+        _customTonePathKey(prayerName),
+      );
+      if (customPath != null && customPath.trim().isNotEmpty) {
+        final file = File(customPath);
+        if (file.existsSync()) {
+          final uri = Uri.file(customPath).toString();
+          final channelId =
+              'athan_tone_custom_${prayerName.toLowerCase()}_${uri.hashCode.abs()}';
+
+          await _createAndroidCustomChannel(
+            channelId: channelId,
+            prayerName: prayerName,
+            uri: uri,
+          );
+
+          return NotificationDetails(
+            android: AndroidNotificationDetails(
+              channelId,
+              'Athan Tone: Custom ($prayerName)',
+              importance: Importance.max,
+              priority: Priority.high,
+              playSound: true,
+              sound: UriAndroidNotificationSound(uri),
+            ),
+            // iOS cannot use arbitrary user file paths for notification sounds.
+            iOS: const DarwinNotificationDetails(presentSound: true),
+          );
+        }
+      }
+    }
+
     final (channelId, channelName, androidSound, iOSSound) =
         _tonePlatformConfig(tone);
 
@@ -247,6 +291,34 @@ class NotificationService {
       iOS: DarwinNotificationDetails(presentSound: true, sound: iOSSound),
     );
   }
+
+  Future<void> _createAndroidCustomChannel({
+    required String channelId,
+    required String prayerName,
+    required String uri,
+  }) async {
+    final androidPlugin = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    if (androidPlugin == null) {
+      return;
+    }
+
+    await androidPlugin.createNotificationChannel(
+      AndroidNotificationChannel(
+        channelId,
+        'Athan Tone: Custom ($prayerName)',
+        description: 'Prayer reminders with your selected custom audio file',
+        importance: Importance.max,
+        playSound: true,
+        sound: UriAndroidNotificationSound(uri),
+      ),
+    );
+  }
+
+  String _customTonePathKey(String prayerName) =>
+      'alarm_tone_custom_path_${prayerName.toLowerCase()}';
 
   (String, String, RawResourceAndroidNotificationSound?, String?)
   _tonePlatformConfig(String tone) {

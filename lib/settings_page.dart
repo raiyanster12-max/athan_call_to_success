@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:path/path.dart' as path_lib;
 import 'package:permission_handler/permission_handler.dart';
 
 import 'db_helper.dart';
@@ -28,12 +30,17 @@ class _SettingsPageState extends State<SettingsPage> {
     'Muezzin Voice 2',
   ];
 
+  static const String _customFileTone = NotificationService.toneCustomFile;
+
   LocationPermission? _locationPermission;
   PermissionStatus? _notificationPermission;
   PermissionStatus? _batteryOptimizationPermission;
   bool _isLoading = true;
   final Map<String, String> _tonePreferences = {
     for (final prayer in _prayerNames) prayer: 'Beep',
+  };
+  final Map<String, String> _customToneFileNames = {
+    for (final prayer in _prayerNames) prayer: '',
   };
 
   bool get _supportsBatteryOptimizationPermission =>
@@ -54,8 +61,21 @@ class _SettingsPageState extends State<SettingsPage> {
 
     for (final prayer in _prayerNames) {
       final storedTone = await DBHelper.getSetting(_toneKey(prayer));
-      if (storedTone != null && _toneOptions.contains(storedTone)) {
+      if (storedTone != null &&
+          (_toneOptions.contains(storedTone) ||
+              storedTone == _customFileTone)) {
         _tonePreferences[prayer] = storedTone;
+      }
+
+      final customPath = await DBHelper.getSetting(_customTonePathKey(prayer));
+      if (customPath != null && customPath.trim().isNotEmpty) {
+        _customToneFileNames[prayer] = path_lib.basename(customPath);
+      }
+
+      if (_tonePreferences[prayer] == _customFileTone &&
+          _customToneFileNames[prayer]!.isEmpty) {
+        // Fallback gracefully if custom tone was selected but file is unavailable.
+        _tonePreferences[prayer] = _toneOptions.first;
       }
     }
 
@@ -69,6 +89,16 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   String _toneKey(String prayer) => 'alarm_tone_${prayer.toLowerCase()}';
+
+  String _customTonePathKey(String prayer) =>
+      'alarm_tone_custom_path_${prayer.toLowerCase()}';
+
+  List<String> get _allToneOptions {
+    if (kIsWeb) {
+      return _toneOptions;
+    }
+    return [..._toneOptions, _customFileTone];
+  }
 
   Future<bool> _showPermissionDialog({
     required String title,
@@ -149,6 +179,49 @@ class _SettingsPageState extends State<SettingsPage> {
     await NotificationService.instance.rescheduleUsingStoredLocation();
     if (!mounted) return;
     setState(() => _tonePreferences[prayer] = tone);
+  }
+
+  Future<void> _pickCustomToneForPrayer(String prayer) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg'],
+      allowMultiple: false,
+    );
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
+
+    final selected = result.files.single;
+    final selectedPath = selected.path;
+    if (selectedPath == null || selectedPath.trim().isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not access selected file path.')),
+      );
+      return;
+    }
+
+    await DBHelper.setSetting(_customTonePathKey(prayer), selectedPath);
+    await DBHelper.setSetting(_toneKey(prayer), _customFileTone);
+    await NotificationService.instance.rescheduleUsingStoredLocation();
+
+    if (!mounted) return;
+    setState(() {
+      _tonePreferences[prayer] = _customFileTone;
+      _customToneFileNames[prayer] = path_lib.basename(selectedPath);
+    });
+  }
+
+  Future<void> _clearCustomToneForPrayer(String prayer) async {
+    await DBHelper.setSetting(_customTonePathKey(prayer), '');
+    await DBHelper.setSetting(_toneKey(prayer), _toneOptions.first);
+    await NotificationService.instance.rescheduleUsingStoredLocation();
+
+    if (!mounted) return;
+    setState(() {
+      _tonePreferences[prayer] = _toneOptions.first;
+      _customToneFileNames[prayer] = '';
+    });
   }
 
   String _locationPermissionLabel() {
@@ -280,30 +353,71 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Your selections are stored and applied to upcoming prayer reminders.',
+                    'Your selections are stored and applied to upcoming prayer reminders. '
+                    'On Android, you can also choose a custom audio file from your phone.',
                   ),
                   const SizedBox(height: 12),
                   for (final prayer in _prayerNames)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: DropdownButtonFormField<String>(
-                        initialValue: _tonePreferences[prayer],
-                        decoration: InputDecoration(
-                          labelText: prayer,
-                          border: const OutlineInputBorder(),
-                        ),
-                        items: _toneOptions
-                            .map(
-                              (tone) => DropdownMenuItem<String>(
-                                value: tone,
-                                child: Text(tone),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          DropdownButtonFormField<String>(
+                            initialValue: _tonePreferences[prayer],
+                            decoration: InputDecoration(
+                              labelText: prayer,
+                              border: const OutlineInputBorder(),
+                            ),
+                            items: _allToneOptions
+                                .map(
+                                  (tone) => DropdownMenuItem<String>(
+                                    value: tone,
+                                    child: Text(tone),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) async {
+                              if (value == null) return;
+                              if (value == _customFileTone && !kIsWeb) {
+                                await _pickCustomToneForPrayer(prayer);
+                                return;
+                              }
+                              _updateTone(prayer, value);
+                            },
+                          ),
+                          if (_tonePreferences[prayer] == _customFileTone &&
+                              !kIsWeb)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8, left: 4),
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  Text(
+                                    _customToneFileNames[prayer]!.isEmpty
+                                        ? 'No custom file selected'
+                                        : 'Selected: ${_customToneFileNames[prayer]}',
+                                    style: const TextStyle(
+                                      color: Colors.black54,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  OutlinedButton(
+                                    onPressed: () =>
+                                        _pickCustomToneForPrayer(prayer),
+                                    child: const Text('Change file'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () =>
+                                        _clearCustomToneForPrayer(prayer),
+                                    child: const Text('Use Beep'),
+                                  ),
+                                ],
                               ),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          if (value == null) return;
-                          _updateTone(prayer, value);
-                        },
+                            ),
+                        ],
                       ),
                     ),
                 ],
