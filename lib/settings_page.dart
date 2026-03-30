@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
@@ -64,6 +65,9 @@ class _SettingsPageState extends State<SettingsPage> {
     for (final prayer in _prayerNames) prayer: '',
   };
 
+  AudioPlayer? _audioPlayer;
+  String? _playingPrayer;
+
   bool get _supportsBatteryOptimizationPermission =>
       defaultTargetPlatform == TargetPlatform.android;
 
@@ -75,6 +79,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   void dispose() {
+    _audioPlayer?.stop();
+    _audioPlayer?.dispose();
     _networkSpeakerIpController.dispose();
     _networkSpeakerPortController.dispose();
     _networkSpeakerPathController.dispose();
@@ -300,7 +306,11 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _pickCustomToneForPrayer(String prayer) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg'],
+      allowedExtensions: [
+        'mp3', 'wav', 'm4a', 'aac', 'ogg',
+        'flac', 'opus', '3gp', 'amr', 'wma',
+        'aiff', 'aif', 'mp4', 'mkv',
+      ],
       allowMultiple: false,
     );
     if (result == null || result.files.isEmpty) {
@@ -326,6 +336,67 @@ class _SettingsPageState extends State<SettingsPage> {
       _tonePreferences[prayer] = _customFileTone;
       _customToneFileNames[prayer] = path_lib.basename(selectedPath);
     });
+  }
+
+  Future<void> _playCustomTone(String prayer) async {
+    // Stop any currently playing audio first.
+    await _stopPlayback();
+
+    final customPath = await DBHelper.getSetting(_customTonePathKey(prayer));
+    if (customPath == null || customPath.trim().isEmpty) return;
+
+    // ExoPlayer (audioplayers v6 on Android) does not support WMA or AIFF.
+    // Detect early and surface a friendly message instead of a silent failure.
+    final ext = path_lib.extension(customPath).toLowerCase().replaceFirst('.', '');
+    const androidUnsupported = {'wma', 'aiff', 'aif'};
+    if (defaultTargetPlatform == TargetPlatform.android &&
+        androidUnsupported.contains(ext)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '.$ext files are not supported for preview on Android. '
+            'Convert to MP3, AAC, WAV, or OGG for playback.',
+          ),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+      return;
+    }
+
+    final player = AudioPlayer();
+    player.onPlayerComplete.listen((_) {
+      if (mounted) setState(() => _playingPrayer = null);
+      player.dispose();
+    });
+
+    try {
+      await player.play(DeviceFileSource(customPath));
+      if (!mounted) {
+        await player.dispose();
+        return;
+      }
+      setState(() {
+        _audioPlayer = player;
+        _playingPrayer = prayer;
+      });
+    } catch (e) {
+      await player.dispose();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not play audio: $e')),
+      );
+    }
+  }
+
+  Future<void> _stopPlayback() async {
+    final player = _audioPlayer;
+    if (player != null) {
+      await player.stop();
+      await player.dispose();
+    }
+    _audioPlayer = null;
+    if (mounted) setState(() => _playingPrayer = null);
   }
 
   Future<void> _clearCustomToneForPrayer(String prayer) async {
@@ -396,7 +467,14 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(
+            // WCAG 4.1.2: announce loading state
+            semanticsLabel: 'Loading settings',
+          ),
+        ),
+      );
     }
 
     return Scaffold(
@@ -410,9 +488,13 @@ class _SettingsPageState extends State<SettingsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Permissions',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  // WCAG 2.4.6: mark as heading for screen-reader navigation
+                  Semantics(
+                    header: true,
+                    child: const Text(
+                      'Permissions',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   ListTile(
@@ -463,9 +545,13 @@ class _SettingsPageState extends State<SettingsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Athan Sound Preferences',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  // WCAG 2.4.6: mark as heading for screen-reader navigation
+                  Semantics(
+                    header: true,
+                    child: const Text(
+                      'Athan Sound Preferences',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
                   ),
                   const SizedBox(height: 8),
                   const Text(
@@ -521,6 +607,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             keyboardType: TextInputType.number,
                             decoration: const InputDecoration(
                               labelText: 'Port',
+                              hintText: '80',
                               border: OutlineInputBorder(),
                             ),
                             onChanged: (_) => _saveNetworkSpeakerConfig(),
@@ -590,15 +677,28 @@ class _SettingsPageState extends State<SettingsPage> {
                                 runSpacing: 8,
                                 crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
-                                  Text(
-                                    _customToneFileNames[prayer]!.isEmpty
-                                        ? 'No custom file selected'
-                                        : 'Selected: ${_customToneFileNames[prayer]}',
-                                    style: const TextStyle(
-                                      color: Colors.black54,
-                                      fontSize: 12,
-                                    ),
-                                  ),
+                  Text(
+                    _customToneFileNames[prayer]!.isEmpty
+                        ? 'No custom file selected'
+                        : 'Selected: ${_customToneFileNames[prayer]}',
+                    // WCAG 1.4.3: Color(0xFF616161) ~5.6:1 on white (passes AA)
+                    style: const TextStyle(
+                      color: Color(0xFF616161),
+                      fontSize: 12,
+                    ),
+                  ),
+                                  if (_customToneFileNames[prayer]!.isNotEmpty)
+                                    _playingPrayer == prayer
+                                        ? OutlinedButton.icon(
+                                            onPressed: _stopPlayback,
+                                            icon: const Icon(Icons.stop, color: Colors.red),
+                                            label: const Text('Stop'),
+                                          )
+                                        : OutlinedButton.icon(
+                                            onPressed: () => _playCustomTone(prayer),
+                                            icon: const Icon(Icons.play_arrow),
+                                            label: const Text('Preview'),
+                                          ),
                                   OutlinedButton(
                                     onPressed: () =>
                                         _pickCustomToneForPrayer(prayer),
@@ -625,13 +725,17 @@ class _SettingsPageState extends State<SettingsPage> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'Reliability Roadmap',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                children: [
+                  // WCAG 2.4.6: mark as heading
+                  Semantics(
+                    header: true,
+                    child: const Text(
+                      'Reliability Roadmap',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
                   ),
-                  SizedBox(height: 8),
-                  Text(
+                  const SizedBox(height: 8),
+                  const Text(
                     'The next implementation pass will add background Athan scheduling in 3-day batches and connect these tone preferences to real prayer notifications.',
                   ),
                 ],

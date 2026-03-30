@@ -76,7 +76,8 @@ class _MorePageState extends State<MorePage> {
                 children: [
                   const Text(
                     'Calendar View',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 6),
                   Text(
@@ -86,7 +87,8 @@ class _MorePageState extends State<MorePage> {
                   const SizedBox(height: 2),
                   Text(
                     _selectedHijriLabel,
-                    style: const TextStyle(color: Colors.black54),
+                    // WCAG 1.4.3: accessible contrast for secondary text
+                    style: const TextStyle(color: Color(0xFF616161)),
                   ),
                   const SizedBox(height: 12),
                   CalendarDatePicker(

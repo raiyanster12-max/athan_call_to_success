@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
@@ -48,7 +49,14 @@ class NotificationService {
       iOS: iosInit,
     );
 
-    await _plugin.initialize(initSettings);
+    await _plugin.initialize(
+      initSettings,
+      // When the user taps a prayer notification, fire the network speaker
+      // HTTP endpoint (if Network Speaker route is active).
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        _triggerNetworkSpeakerIfConfigured();
+      },
+    );
 
     final androidPlugin = _plugin
         .resolvePlatformSpecificImplementation<
@@ -70,7 +78,21 @@ class NotificationService {
         >();
     if (androidPlugin == null) return;
 
-    await androidPlugin.createNotificationChannel(
+    // Wrap each channel creation individually. Android throws PlatformException
+    // (invalid_sound) when a channel already exists on the device with a
+    // cached sound that can no longer be resolved (e.g. after a fresh install
+    // or a build that previously lacked the raw resource). Catching here
+    // prevents the error from propagating up and masquerading as a location
+    // failure in the UI.
+    Future<void> create(AndroidNotificationChannel channel) async {
+      try {
+        await androidPlugin.createNotificationChannel(channel);
+      } catch (_) {
+        // Channel may already exist from a prior install; safe to ignore.
+      }
+    }
+
+    await create(
       const AndroidNotificationChannel(
         'athan_tone_beep',
         'Athan Tone: Beep',
@@ -81,7 +103,7 @@ class NotificationService {
       ),
     );
 
-    await androidPlugin.createNotificationChannel(
+    await create(
       const AndroidNotificationChannel(
         'athan_tone_muezzin_1',
         'Athan Tone: Muezzin Voice 1',
@@ -92,7 +114,7 @@ class NotificationService {
       ),
     );
 
-    await androidPlugin.createNotificationChannel(
+    await create(
       const AndroidNotificationChannel(
         'athan_tone_muezzin_2',
         'Athan Tone: Muezzin Voice 2',
@@ -304,6 +326,29 @@ class NotificationService {
       ),
       iOS: DarwinNotificationDetails(presentSound: true, sound: iOSSound),
     );
+  }
+
+  Future<void> _triggerNetworkSpeakerIfConfigured() async {
+    try {
+      final route = await _loadSpeakerRoutePreference();
+      if (route != speakerNetworkIp) return;
+
+      final ip = await DBHelper.getSetting(networkSpeakerIpKey);
+      if (ip == null || ip.trim().isEmpty) return;
+
+      final portStr = await DBHelper.getSetting(networkSpeakerPortKey);
+      final port = int.tryParse(portStr?.trim() ?? '') ?? 80;
+      var path = (await DBHelper.getSetting(networkSpeakerPathKey))?.trim() ?? '/play';
+      if (path.isEmpty) path = '/play';
+      if (!path.startsWith('/')) path = '/$path';
+
+      final uri = Uri(scheme: 'http', host: ip.trim(), port: port, path: path);
+      await http
+          .get(uri, headers: {'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // Best-effort fire — silent failure if speaker is unreachable.
+    }
   }
 
   Future<String> _loadSpeakerRoutePreference() async {
