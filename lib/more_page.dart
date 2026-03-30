@@ -3,6 +3,7 @@ import 'package:hijri_date/hijri.dart';
 import 'package:intl/intl.dart';
 
 import 'masjid_page.dart';
+import 'qibla_page.dart';
 import 'settings_page.dart';
 
 class MorePage extends StatefulWidget {
@@ -30,6 +31,12 @@ class _MorePageState extends State<MorePage> {
 
   void _openMasjidFinder(BuildContext context) {
     setState(() => _showMasjidFinder = true);
+  }
+
+  void _openQiblaCompass(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const QiblaPage()),
+    );
   }
 
   void _setSelectedDate(DateTime date) {
@@ -111,6 +118,14 @@ class _MorePageState extends State<MorePage> {
           Card(
             child: Column(
               children: [
+                ListTile(
+                  leading: const Icon(Icons.explore_outlined),
+                  title: const Text('Qibla Compass'),
+                  subtitle: const Text('Find the direction of prayer'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _openQiblaCompass(context),
+                ),
+                const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.mosque_outlined),
                   title: const Text('Masjid Finder'),

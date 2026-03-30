@@ -1,13 +1,14 @@
 {
-    "name": "athan_call_to_success",
-    "short_name": "athan_call_to_success",
+    "name": "Athan - Call to Success",
+    "short_name": "Athan",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0F2D23",
+    "theme_color": "#1B4332",
+    "description": "Accurate prayer times, Qibla direction, Quran reader, and masjid finder for Muslims.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
+    "categories": ["lifestyle", "religion"],
     "icons": [
         {
             "src": "icons/Icon-192.png",

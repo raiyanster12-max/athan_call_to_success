@@ -46,9 +46,12 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _loadSettings() async {
     final locationPermission = await Geolocator.checkPermission();
-    final notificationPermission = await Permission.notification.status;
+    // permission_handler is not supported on web — skip native permission checks.
+    final notificationPermission = kIsWeb
+        ? null
+        : await Permission.notification.status;
     final batteryOptimizationPermission =
-      _supportsBatteryOptimizationPermission
+      (!kIsWeb && _supportsBatteryOptimizationPermission)
         ? await Permission.ignoreBatteryOptimizations.status
         : null;
 

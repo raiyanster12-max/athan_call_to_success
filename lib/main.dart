@@ -105,6 +105,7 @@ class _HomePageState extends State<HomePage> {
   bool _notificationPrompted = false;
 
   bool get _supportsNotificationPermission {
+    if (kIsWeb) return false;
     return defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS;
   }
