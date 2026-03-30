@@ -3,12 +3,15 @@ import 'dart:async';
 import 'package:adhan/adhan.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hijri_date/hijri.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import 'db_helper.dart';
 import 'more_page.dart';
 import 'prayer_service.dart';
 import 'quran_page.dart';
@@ -41,7 +44,56 @@ class MainNavigation extends StatefulWidget {
 }
 
 class _MainNavigationState extends State<MainNavigation> {
+  static const _webTesterBannerKey = 'web_tester_banner_dismissed';
   int _selectedIndex = 0;
+  bool _showWebTesterBanner = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadWebTesterBannerPreference();
+  }
+
+  Future<void> _loadWebTesterBannerPreference() async {
+    if (!kIsWeb) {
+      return;
+    }
+
+    final dismissed = await DBHelper.getSetting(_webTesterBannerKey);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _showWebTesterBanner = dismissed != 'true';
+    });
+  }
+
+  Future<void> _dismissWebTesterBanner() async {
+    await DBHelper.setSetting(_webTesterBannerKey, 'true');
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _showWebTesterBanner = false;
+    });
+  }
+
+  Future<void> _openFeedbackDialog() async {
+    final message = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => const _TesterFeedbackDialog(),
+    );
+
+    if (!mounted || message == null || message.isEmpty) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +105,16 @@ class _MainNavigationState extends State<MainNavigation> {
     ];
 
     return Scaffold(
-      body: pages[_selectedIndex],
+      body: Column(
+        children: [
+          if (kIsWeb && _showWebTesterBanner)
+            _WebTesterBanner(
+              onDismiss: _dismissWebTesterBanner,
+              onShareFeedback: _openFeedbackDialog,
+            ),
+          Expanded(child: pages[_selectedIndex]),
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: (index) => setState(() => _selectedIndex = index),
@@ -81,6 +142,230 @@ class _MainNavigationState extends State<MainNavigation> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _WebTesterBanner extends StatelessWidget {
+  const _WebTesterBanner({
+    required this.onDismiss,
+    required this.onShareFeedback,
+  });
+
+  final Future<void> Function() onDismiss;
+  final Future<void> Function() onShareFeedback;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFF143A2E),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            runSpacing: 8,
+            spacing: 12,
+            children: [
+              const SizedBox(
+                width: 420,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Tester Preview',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'This hosted build is for early feedback. Use the feedback button to report bugs, ideas, or anything unclear.',
+                      style: TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.icon(
+                    onPressed: onShareFeedback,
+                    icon: const Icon(Icons.rate_review_outlined),
+                    label: const Text('Share Feedback'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF53B97B),
+                      foregroundColor: Colors.black,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: onDismiss,
+                    child: const Text(
+                      'Dismiss',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TesterFeedbackDialog extends StatefulWidget {
+  const _TesterFeedbackDialog();
+
+  @override
+  State<_TesterFeedbackDialog> createState() => _TesterFeedbackDialogState();
+}
+
+class _TesterFeedbackDialogState extends State<_TesterFeedbackDialog> {
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _commentController = TextEditingController();
+  int _rating = 4;
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  String _buildFeedbackBody() {
+    final name = _nameController.text.trim();
+    final comments = _commentController.text.trim();
+
+    return [
+      '## Tester Feedback',
+      '',
+      '- Rating: $_rating/5',
+      '- Tester: ${name.isEmpty ? 'Anonymous tester' : name}',
+      '- Platform: Chrome Web (GitHub Pages)',
+      '',
+      '### Comments',
+      comments.isEmpty ? 'No comments provided.' : comments,
+    ].join('\n');
+  }
+
+  Future<void> _submit({required bool openIssue}) async {
+    final comments = _commentController.text.trim();
+    if (comments.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add a short comment before submitting.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _submitting = true;
+    });
+
+    final body = _buildFeedbackBody();
+    await Clipboard.setData(ClipboardData(text: body));
+    await DBHelper.setSetting('last_feedback_draft', body);
+
+    String message = 'Feedback copied to clipboard.';
+    if (openIssue) {
+      final issueUri = Uri.https(
+        'github.com',
+        '/raiyanster12-max/athan_call_to_success/issues/new',
+        {
+          'title': 'Tester feedback ($_rating/5)',
+          'body': body,
+        },
+      );
+
+      final launched = await launchUrl(issueUri);
+      message = launched
+          ? 'Opened GitHub issue draft and copied feedback to clipboard.'
+          : 'Feedback copied to clipboard. GitHub issue could not be opened automatically.';
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.of(context).pop(message);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Share Tester Feedback'),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'This copies the feedback text first, then opens a prefilled GitHub issue draft if you choose that option.',
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Name (optional)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Rating',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: List.generate(5, (index) {
+                  final value = index + 1;
+                  return ChoiceChip(
+                    label: Text('$value/5'),
+                    selected: _rating == value,
+                    onSelected: (_) => setState(() => _rating = value),
+                  );
+                }),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _commentController,
+                minLines: 4,
+                maxLines: 6,
+                decoration: const InputDecoration(
+                  labelText: 'What worked well, what broke, or what felt unclear?',
+                  alignLabelWithHint: true,
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _submitting ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        OutlinedButton(
+          onPressed: _submitting ? null : () => _submit(openIssue: false),
+          child: const Text('Copy Only'),
+        ),
+        FilledButton(
+          onPressed: _submitting ? null : () => _submit(openIssue: true),
+          child: const Text('Open GitHub Issue'),
+        ),
+      ],
     );
   }
 }
