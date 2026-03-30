@@ -9,7 +9,6 @@ import 'package:hijri_date/hijri.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import 'db_helper.dart';
 import 'notification_service.dart';
 import 'more_page.dart';
 import 'prayer_service.dart';
@@ -31,7 +30,100 @@ class AthanApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Athan - Call to Success',
-      theme: ThemeData(primarySwatch: Colors.green),
+      theme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF0D2818),
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFF4CAF50),
+          onPrimary: Colors.white,
+          secondary: Color(0xFF66BB6A),
+          onSecondary: Colors.white,
+          surface: Color(0xFF143526),
+          onSurface: Colors.white,
+          outline: Color(0xFF2D5C40),
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF0D2818),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+        ),
+        cardTheme: CardThemeData(
+          color: const Color(0xFF143526),
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          margin: EdgeInsets.zero,
+        ),
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+          backgroundColor: Color(0xFF0A2015),
+          selectedItemColor: Color(0xFF4CAF50),
+          unselectedItemColor: Color(0xFF5A8A6A),
+          type: BottomNavigationBarType.fixed,
+          elevation: 0,
+        ),
+        listTileTheme: const ListTileThemeData(
+          iconColor: Color(0xFF4CAF50),
+          // WCAG 1.4.3: accessible contrast
+          subtitleTextStyle: TextStyle(color: Color(0xFF8FBE9E)),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF2E7D32),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF4CAF50),
+            side: const BorderSide(color: Color(0xFF2D5C40)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        inputDecorationTheme: const InputDecorationTheme(
+          filled: true,
+          fillColor: Color(0xFF143526),
+          border: OutlineInputBorder(
+            borderSide: BorderSide(color: Color(0xFF2D5C40)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: Color(0xFF2D5C40)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: Color(0xFF4CAF50), width: 2),
+          ),
+          labelStyle: TextStyle(color: Color(0xFF8FBE9E)),
+          hintStyle: TextStyle(color: Color(0xFF5A8A6A)),
+        ),
+        chipTheme: const ChipThemeData(
+          backgroundColor: Color(0xFF1A3E2A),
+          labelStyle: TextStyle(color: Colors.white),
+          side: BorderSide(color: Color(0xFF2D5C40)),
+        ),
+        dividerTheme: const DividerThemeData(
+          color: Color(0xFF1E4B30),
+        ),
+        tabBarTheme: const TabBarThemeData(
+          labelColor: Color(0xFF4CAF50),
+          unselectedLabelColor: Color(0xFF8FBE9E),
+          indicatorColor: Color(0xFF4CAF50),
+        ),
+        checkboxTheme: CheckboxThemeData(
+          fillColor: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.selected)
+                ? const Color(0xFF4CAF50)
+                : null,
+          ),
+          checkColor: WidgetStateProperty.all(Colors.white),
+        ),
+      ),
       home: const MainNavigation(),
     );
   }
@@ -61,12 +153,11 @@ class _MainNavigationState extends State<MainNavigation> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: (index) => setState(() => _selectedIndex = index),
-        selectedItemColor: const Color(0xFF00796B),
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined),
             activeIcon: Icon(Icons.home),
-            label: 'Home',
+            label: 'Today',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.menu_book_outlined),
@@ -97,14 +188,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  static const List<String> _trackedPrayers = [
-    'Fajr',
-    'Dhuhr',
-    'Asr',
-    'Maghrib',
-    'Isha',
-  ];
-
   String _locationStatus = 'Waiting for location...';
   PrayerTimes? _currentPrayerTimes;
   bool _isLoading = false;
@@ -115,13 +198,6 @@ class _HomePageState extends State<HomePage> {
   String? _nextPrayerName;
   Duration? _timeUntilNextPrayer;
   bool _notificationPrompted = false;
-  String _homePrayerDateKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
-  Map<String, bool> _homePrayerStatuses = {
-    for (final prayer in _trackedPrayers) prayer: false,
-  };
-
-  int get _homeCompletedCount =>
-      _homePrayerStatuses.values.where((done) => done).length;
 
   bool get _supportsNotificationPermission {
     return defaultTargetPlatform == TargetPlatform.android ||
@@ -164,21 +240,11 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     NotificationService.instance.refreshBatchIfNeeded();
-    _loadHomePrayerTracker();
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      final updatedNow = DateTime.now();
-      final updatedDateKey = DateFormat('yyyy-MM-dd').format(updatedNow);
-      final dateChanged = updatedDateKey != _homePrayerDateKey;
       if (!mounted) return;
       setState(() {
-        _now = updatedNow;
-        if (dateChanged) {
-          _homePrayerDateKey = updatedDateKey;
-        }
+        _now = DateTime.now();
       });
-      if (dateChanged) {
-        _loadHomePrayerTracker();
-      }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _determinePosition();
@@ -276,31 +342,6 @@ class _HomePageState extends State<HomePage> {
         '${seconds.toString().padLeft(2, '0')}';
   }
 
-  Future<void> _loadHomePrayerTracker() async {
-    final dateKey = _homePrayerDateKey;
-    final prayerStatuses = await DBHelper.getPrayerLogForDate(dateKey);
-    if (!mounted || dateKey != _homePrayerDateKey) return;
-
-    setState(() {
-      _homePrayerStatuses = {
-        for (final prayer in _trackedPrayers)
-          prayer: prayerStatuses[prayer] ?? false,
-      };
-    });
-  }
-
-  Future<void> _toggleHomePrayer(String prayer, bool value) async {
-    await DBHelper.setPrayerCompleted(
-      dateKey: _homePrayerDateKey,
-      prayerName: prayer,
-      completed: value,
-    );
-    if (!mounted) return;
-    setState(() {
-      _homePrayerStatuses[prayer] = value;
-    });
-  }
-
   Future<void> _determinePosition() async {
     setState(() {
       _isLoading = true;
@@ -387,16 +428,22 @@ class _HomePageState extends State<HomePage> {
         position.longitude,
       );
       _currentPosition = position;
-      await NotificationService.instance.scheduleRollingPrayerNotifications(
-        latitude: position.latitude,
-        longitude: position.longitude,
-      );
+
       setState(() {
         _locationStatus = locationLabel;
         _currentPrayerTimes = times;
         _isLoading = false;
       });
       _startCountdown();
+
+      // Schedule notifications independently so a sound/channel error never
+      // surfaces as a "Could not get location" message.
+      NotificationService.instance
+          .scheduleRollingPrayerNotifications(
+            latitude: position.latitude,
+            longitude: position.longitude,
+          )
+          .catchError((_) {});
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -420,36 +467,41 @@ class _HomePageState extends State<HomePage> {
     if (_nextPrayerName == null || _timeUntilNextPrayer == null) {
       return const SizedBox.shrink();
     }
-
-    return Card(
-      color: const Color(0xFF0E5F4F),
-      elevation: 1,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Next Prayer', style: TextStyle(color: Colors.white70)),
-            const SizedBox(height: 8),
-            Text(
-              _nextPrayerName!,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0E2A1A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF1E5030)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.av_timer, color: Color(0xFF4CAF50), size: 28),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Next: ${_nextPrayerName!}',
+                style: const TextStyle(
+                  color: Color(0xFF8FBE9E),
+                  fontSize: 13,
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              _formatCountdown(_timeUntilNextPrayer!),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 28,
-                letterSpacing: 1.2,
+              Text(
+                _formatCountdown(_timeUntilNextPrayer!),
+                semanticsLabel:
+                    'Time until ${_nextPrayerName!}: ${_formatCountdown(_timeUntilNextPrayer!)}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.5,
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -457,11 +509,25 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F6F2),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0E5F4F),
-        foregroundColor: Colors.white,
-        title: const Text('Athan - Call to Success'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Athan — Call to Success',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            Text(
+              _hijriNowLabel,
+              style: const TextStyle(
+                color: Color(0xFF8FBE9E),
+                fontSize: 11,
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined),
@@ -470,169 +536,279 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFE8F2EC), Color(0xFFF8FAF7)],
-          ),
-        ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 8),
-              Center(
-                child: Image.asset(
-                  'assets/icon/athan_app_icon.png',
-                  height: 80,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Card(
-                color: const Color(0xFFE9F4EF),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _gregorianNowLabel,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF0E5F4F),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _timeNowLabel,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          color: Color(0xFF1A3A35),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _hijriNowLabel,
-                        style: const TextStyle(color: Color(0xFF46645E)),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildNextPrayerCard(),
-              const SizedBox(height: 12),
-              Card(
-                color: Colors.white,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Prayer Tracker',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '$_homeCompletedCount of ${_trackedPrayers.length} prayers logged',
-                        style: const TextStyle(color: Colors.black54),
-                      ),
-                      const SizedBox(height: 8),
-                      for (final prayer in _trackedPrayers)
-                        CheckboxListTile(
-                          value: _homePrayerStatuses[prayer] ?? false,
-                          contentPadding: EdgeInsets.zero,
-                          activeColor: const Color(0xFF00796B),
-                          title: Text(prayer),
-                          controlAffinity: ListTileControlAffinity.leading,
-                          onChanged: (value) {
-                            if (value == null) return;
-                            _toggleHomePrayer(prayer, value);
-                          },
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Card(
-                color: const Color(0xFFF1F7F4),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _locationStatus,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1F3F39),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0E5F4F),
-                            foregroundColor: Colors.white,
-                          ),
-                          onPressed: _isLoading ? null : _determinePosition,
-                          icon: _isLoading
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Icon(Icons.my_location),
-                          label: Text(
-                            _isLoading ? 'Detecting...' : 'Refresh Location',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              if (_currentPrayerTimes != null)
-                Card(
-                  color: Colors.white,
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Column(
-                      children: [
-                        _prayerTile('Fajr', _currentPrayerTimes!.fajr),
-                        _prayerTile('Sunrise', _currentPrayerTimes!.sunrise),
-                        _prayerTile('Dhuhr', _currentPrayerTimes!.dhuhr),
-                        _prayerTile('Asr', _currentPrayerTimes!.asr),
-                        _prayerTile('Maghrib', _currentPrayerTimes!.maghrib),
-                        _prayerTile('Isha', _currentPrayerTimes!.isha),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildDateTimeCard(),
+            const SizedBox(height: 12),
+            if (_currentPrayerTimes != null) ..._buildNextTwoPrayersRow(),
+            _buildNextPrayerCard(),
+            if (_nextPrayerName != null) const SizedBox(height: 12),
+            if (_currentPrayerTimes != null) ...[_buildPrayerTimesCard(), const SizedBox(height: 12)],
+            _buildLocationCard(),
+          ],
         ),
       ),
     );
   }
 
   Widget _prayerTile(String name, DateTime time) {
-    return ListTile(
-      leading: const Icon(Icons.access_time, color: Color(0xFF00796B)),
-      title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-      trailing: Text(_formatTime(time), style: const TextStyle(fontSize: 16)),
+    // WCAG 4.1.2: merge into a single accessible announcement
+    return Semantics(
+      label: '$name prayer time is ${_formatTime(time)}',
+      excludeSemantics: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: const Color(0xFF0E2A1A),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.access_time,
+                color: Color(0xFF4CAF50),
+                size: 17,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Text(
+              _formatTime(time),
+              style: const TextStyle(
+                color: Color(0xFF8FBE9E),
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateTimeCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF143526),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _gregorianNowLabel,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _timeNowLabel,
+                  style: const TextStyle(
+                    color: Color(0xFF4CAF50),
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Returns up to 2 upcoming prayers as (label, name, time) records.
+  List<(String, String, DateTime)> _getNextTwoPrayers() {
+    final times = _currentPrayerTimes;
+    if (times == null) return [];
+    final now = DateTime.now();
+    final all = [
+      ('Fajr', times.fajr),
+      ('Sunrise', times.sunrise),
+      ('Dhuhr', times.dhuhr),
+      ('Asr', times.asr),
+      ('Maghrib', times.maghrib),
+      ('Isha', times.isha),
+    ];
+    final upcoming = all.where((p) => p.$2.isAfter(now)).toList();
+    final result = <(String, String, DateTime)>[];
+    for (int i = 0; i < upcoming.length && i < 2; i++) {
+      result.add((i == 0 ? 'Next' : 'Upcoming', upcoming[i].$1, upcoming[i].$2));
+    }
+    return result;
+  }
+
+  List<Widget> _buildNextTwoPrayersRow() {
+    final prayers = _getNextTwoPrayers();
+    if (prayers.isEmpty) return [];
+    final Widget row;
+    if (prayers.length == 1) {
+      row = _buildPrayerQuickCard(
+          prayers[0].$1, prayers[0].$2, prayers[0].$3);
+    } else {
+      row = Row(
+        children: [
+          Expanded(
+            child: _buildPrayerQuickCard(
+                prayers[0].$1, prayers[0].$2, prayers[0].$3),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _buildPrayerQuickCard(
+                prayers[1].$1, prayers[1].$2, prayers[1].$3),
+          ),
+        ],
+      );
+    }
+    return [row, const SizedBox(height: 12)];
+  }
+
+  Widget _buildPrayerQuickCard(String label, String name, DateTime time) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF143526),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF1E4B30)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0E2A1A),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF4CAF50),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            _formatTime(time),
+            style: const TextStyle(
+              color: Color(0xFF8FBE9E),
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPrayerTimesCard() {
+    final times = _currentPrayerTimes!;
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF143526),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      child: Column(
+        children: [
+          _prayerTile('Fajr', times.fajr),
+          const Divider(color: Color(0xFF1E4B30), height: 1),
+          _prayerTile('Sunrise', times.sunrise),
+          const Divider(color: Color(0xFF1E4B30), height: 1),
+          _prayerTile('Dhuhr', times.dhuhr),
+          const Divider(color: Color(0xFF1E4B30), height: 1),
+          _prayerTile('Asr', times.asr),
+          const Divider(color: Color(0xFF1E4B30), height: 1),
+          _prayerTile('Maghrib', times.maghrib),
+          const Divider(color: Color(0xFF1E4B30), height: 1),
+          _prayerTile('Isha', times.isha),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocationCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF143526),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.location_on_outlined,
+                color: Color(0xFF4CAF50),
+                size: 15,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  _locationStatus,
+                  style: const TextStyle(
+                    color: Color(0xFF8FBE9E),
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _isLoading ? null : _determinePosition,
+              icon: _isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.my_location),
+              label: Text(
+                _isLoading ? 'Detecting...' : 'Refresh Location',
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -268,18 +268,19 @@ class _QuranPageState extends State<QuranPage> {
     }
 
     return Card(
-      color: const Color(0xFF00796B),
+      color: const Color(0xFF143526),
       child: ListTile(
-        leading: const Icon(Icons.auto_stories, color: Colors.white),
+        leading: const Icon(Icons.auto_stories, color: Color(0xFF4CAF50)),
         title: const Text(
           'Continue Reading',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: Color(0xFF8FBE9E)),
         ),
         subtitle: Text(
           lastRead.displayTitle,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.bold),
         ),
-        trailing: const Icon(Icons.chevron_right, color: Colors.white),
+        trailing: const Icon(Icons.chevron_right, color: Color(0xFF4CAF50)),
         onTap: () => _openSurahDetails(lastRead),
       ),
     );
@@ -300,12 +301,19 @@ class _QuranPageState extends State<QuranPage> {
         final isLastRead = _lastReadSurah == surah.number;
 
         return ListTile(
-          leading: CircleAvatar(
-            backgroundColor: const Color(0xFF00796B),
-            foregroundColor: Colors.white,
-            child: Text(surah.number.toString()),
+          // WCAG 1.1.1: exclude decorative avatar; number is conveyed via title semanticsLabel
+          leading: ExcludeSemantics(
+            child: CircleAvatar(
+              backgroundColor: const Color(0xFF1A5030),
+              foregroundColor: Colors.white,
+              child: Text(surah.number.toString()),
+            ),
           ),
-          title: Text(surah.name),
+          // WCAG 4.1.2: include surah number in accessible name
+          title: Text(
+            surah.name,
+            semanticsLabel: '${surah.number}. ${surah.name}',
+          ),
           subtitle: Text(surah.meaning),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -313,7 +321,13 @@ class _QuranPageState extends State<QuranPage> {
               if (isLastRead)
                 const Padding(
                   padding: EdgeInsets.only(right: 8),
-                  child: Icon(Icons.history, size: 18, color: Color(0xFF00796B)),
+                  // WCAG 1.1.1: provide text alternative for the history icon
+                  child: Icon(
+                    Icons.history,
+                    size: 18,
+                    color: Color(0xFF4CAF50),
+                    semanticLabel: 'Last read surah',
+                  ),
                 ),
               IconButton(
                 onPressed: () => _toggleFavorite(surah.number),
@@ -349,7 +363,12 @@ class _QuranPageState extends State<QuranPage> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+            child: CircularProgressIndicator(
+              // WCAG 4.1.2: announce loading state to screen readers
+              semanticsLabel: 'Loading Quran',
+            ),
+          )
           : DefaultTabController(
               length: 2,
               child: Column(
@@ -610,7 +629,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                               _readingGoalLabel,
                               style: const TextStyle(
                                 fontSize: 13,
-                                color: Colors.black87,
+                                color: Color(0xFF8FBE9E),
                               ),
                             ),
                             const SizedBox(height: 6),
@@ -618,8 +637,8 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                               value: _readingGoalProgress,
                               minHeight: 7,
                               borderRadius: BorderRadius.circular(6),
-                              backgroundColor: Colors.black12,
-                              color: const Color(0xFF00796B),
+                              backgroundColor: const Color(0xFF1E4B30),
+                              color: const Color(0xFF4CAF50),
                             ),
                           ],
                         ),
@@ -671,9 +690,9 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
               margin: const EdgeInsets.only(top: 4, bottom: 10),
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFFD8E8D3),
+                color: const Color(0xFF1A3E2A),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFB8C9B2)),
+                border: Border.all(color: const Color(0xFF2D5C40)),
               ),
               child: Text(
                 quran.basmala,
@@ -688,10 +707,10 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
               key: _verseKeys[ayah.ayahNumber - 1],
               margin: const EdgeInsets.only(bottom: 10),
               decoration: BoxDecoration(
-                color: isCurrent ? const Color(0xFFF8F2E3) : Colors.white,
+                color: isCurrent ? const Color(0xFF193D24) : const Color(0xFF0E2A1A),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: isCurrent ? const Color(0xFF00796B) : Colors.black12,
+                  color: isCurrent ? const Color(0xFF4CAF50) : const Color(0xFF1E4B30),
                 ),
               ),
               child: Padding(

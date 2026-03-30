@@ -161,7 +161,7 @@ class _MasjidPageState extends State<MasjidPage>
         title: const Text('Masjid Finder'),
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: Colors.white,
+          indicatorColor: const Color(0xFF4CAF50),
           tabs: const [
             Tab(icon: Icon(Icons.location_on), text: 'Nearby'),
             Tab(icon: Icon(Icons.bookmark), text: 'Saved'),
@@ -177,7 +177,12 @@ class _MasjidPageState extends State<MasjidPage>
 
   Widget _buildNearbyTab() {
     if (_isLoadingNearby) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(
+          // WCAG 4.1.2: announce loading state
+          semanticsLabel: 'Loading nearby masjids',
+        ),
+      );
     }
 
     return Column(
@@ -228,7 +233,8 @@ class _MasjidPageState extends State<MasjidPage>
               alignment: Alignment.centerLeft,
               child: Text(
                 _searchLabel!,
-                style: const TextStyle(color: Colors.black54, fontSize: 12),
+                // WCAG 1.4.3: Color(0xFF616161) ~5.6:1 on white (passes AA)
+                style: const TextStyle(color: Color(0xFF616161), fontSize: 12),
               ),
             ),
           ),
@@ -242,10 +248,12 @@ class _MasjidPageState extends State<MasjidPage>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // WCAG 1.1.1: semantic label for the error icon
                     const Icon(
                       Icons.error_outline,
                       size: 48,
                       color: Colors.red,
+                      semanticLabel: 'Error loading masjids',
                     ),
                     const SizedBox(height: 12),
                     const Text(
@@ -256,13 +264,14 @@ class _MasjidPageState extends State<MasjidPage>
                     Text(
                       _error!,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.grey),
+                      // WCAG 1.4.3: accessible contrast
+                      style: const TextStyle(color: Color(0xFF616161)),
                     ),
                     const SizedBox(height: 4),
                     const Text(
                       'Tip: Check the zip code, location permission, and internet connection.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                      style: TextStyle(color: Color(0xFF616161), fontSize: 12),
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
@@ -290,7 +299,7 @@ class _MasjidPageState extends State<MasjidPage>
                   final m = _nearbyMasjids[i];
                   final saved = _isSaved(m.id);
                   return ListTile(
-                    leading: const Icon(Icons.mosque, color: Color(0xFF00796B)),
+                    leading: const Icon(Icons.mosque, color: Color(0xFF4CAF50)),
                     title: Text(
                       m.name,
                       style: const TextStyle(fontWeight: FontWeight.bold),
@@ -299,7 +308,7 @@ class _MasjidPageState extends State<MasjidPage>
                     trailing: IconButton(
                       icon: Icon(
                         saved ? Icons.bookmark : Icons.bookmark_border,
-                        color: const Color(0xFF00796B),
+                        color: const Color(0xFF4CAF50),
                       ),
                       tooltip: saved ? 'Already saved' : 'Save masjid',
                       onPressed: saved ? null : () => _saveMasjid(m),
@@ -315,7 +324,11 @@ class _MasjidPageState extends State<MasjidPage>
 
   Widget _buildSavedTab() {
     if (_isLoadingSaved) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(
+          semanticsLabel: 'Loading saved masjids',
+        ),
+      );
     }
     if (_savedMasjids.isEmpty) {
       return const Center(
@@ -324,7 +337,8 @@ class _MasjidPageState extends State<MasjidPage>
           child: Text(
             'No saved masjids yet.\nSearch nearby and tap the bookmark icon to save one.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey),
+            // WCAG 1.4.3: accessible contrast
+            style: TextStyle(color: Color(0xFF616161)),
           ),
         ),
       );
@@ -334,7 +348,7 @@ class _MasjidPageState extends State<MasjidPage>
       itemBuilder: (context, i) {
         final m = _savedMasjids[i];
         return ListTile(
-          leading: const Icon(Icons.mosque, color: Color(0xFF00796B)),
+          leading: const Icon(Icons.mosque, color: Color(0xFF4CAF50)),
           title: Text(
             m['name'] ?? '',
             style: const TextStyle(fontWeight: FontWeight.bold),

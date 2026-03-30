@@ -182,30 +182,45 @@ class _TrackerPageState extends State<TrackerPage> {
     final isToday = DateUtils.isSameDay(date, _today);
 
     IconData? statusIcon;
-    Color statusColor = const Color(0xFF607D8B);
-    Color backgroundColor = Colors.white;
+    Color statusColor = const Color(0xFF5A8F6A);
+    Color backgroundColor = const Color(0xFF143526);
 
+    // WCAG 4.1.2: determine semantic status label for screen readers
+    String statusLabel;
     if (status == 'done') {
       statusIcon = Icons.check_circle;
       statusColor = const Color(0xFF2E7D32);
-      backgroundColor = const Color(0xFFE9F6EC);
+      backgroundColor = const Color(0xFF193D24);
+      statusLabel = 'Fast observed';
     } else if (status == 'missed') {
       statusIcon = Icons.cancel;
       statusColor = const Color(0xFFC62828);
-      backgroundColor = const Color(0xFFFBEAEA);
+      backgroundColor = const Color(0xFF3D1515);
+      statusLabel = 'Fast missed';
+    } else {
+      statusLabel = 'Fast status not recorded';
     }
 
-    return InkWell(
-      onTap: () => _toggleRamadanStatus(date),
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
+    final int hijriDay = HijriDate.fromDate(date).hDay;
+    final String gregDateLabel = DateFormat('MMMM d').format(date);
+
+    return Semantics(
+      button: true,
+      label:
+          '${isToday ? 'Today, ' : ''}$gregDateLabel, Ramadan day $hijriDay: $statusLabel',
+      hint: 'Activate to change status',
+      child: ExcludeSemantics(
+        child: InkWell(
+          onTap: () => _toggleRamadanStatus(date),
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
         margin: const EdgeInsets.all(3),
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
         decoration: BoxDecoration(
           color: backgroundColor,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isToday ? const Color(0xFF00796B) : Colors.black12,
+            color: isToday ? const Color(0xFF4CAF50) : const Color(0xFF1E4B30),
             width: isToday ? 1.5 : 1,
           ),
         ),
@@ -222,7 +237,8 @@ class _TrackerPageState extends State<TrackerPage> {
             const SizedBox(height: 4),
             Text(
               DateFormat('MMM d').format(date),
-              style: const TextStyle(fontSize: 11, color: Colors.black54),
+              // WCAG 1.4.3: accessible contrast on dark background
+              style: const TextStyle(fontSize: 11, color: Color(0xFF8FBE9E)),
             ),
             const SizedBox(height: 4),
             Icon(
@@ -233,7 +249,9 @@ class _TrackerPageState extends State<TrackerPage> {
           ],
         ),
       ),
-    );
+    ),
+  ),
+  );
   }
 
   Widget _buildRamadanTrackerCard() {
@@ -262,9 +280,10 @@ class _TrackerPageState extends State<TrackerPage> {
                   ?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
+            // WCAG 1.4.3: accessible contrast for instruction text
             const Text(
               'Tap each day to cycle: pending -> done -> missed -> pending.',
-              style: TextStyle(color: Colors.black54),
+              style: TextStyle(color: Color(0xFF8FBE9E)),
             ),
             const SizedBox(height: 12),
             Wrap(
@@ -277,15 +296,16 @@ class _TrackerPageState extends State<TrackerPage> {
               ],
             ),
             const SizedBox(height: 10),
+            // WCAG 4.1.2: accessible column headers with full day names for screen readers
             Row(
               children: const [
-                Expanded(child: Center(child: Text('Mon'))),
-                Expanded(child: Center(child: Text('Tue'))),
-                Expanded(child: Center(child: Text('Wed'))),
-                Expanded(child: Center(child: Text('Thu'))),
-                Expanded(child: Center(child: Text('Fri'))),
-                Expanded(child: Center(child: Text('Sat'))),
-                Expanded(child: Center(child: Text('Sun'))),
+                Expanded(child: Center(child: Text('Mon', semanticsLabel: 'Monday'))),
+                Expanded(child: Center(child: Text('Tue', semanticsLabel: 'Tuesday'))),
+                Expanded(child: Center(child: Text('Wed', semanticsLabel: 'Wednesday'))),
+                Expanded(child: Center(child: Text('Thu', semanticsLabel: 'Thursday'))),
+                Expanded(child: Center(child: Text('Fri', semanticsLabel: 'Friday'))),
+                Expanded(child: Center(child: Text('Sat', semanticsLabel: 'Saturday'))),
+                Expanded(child: Center(child: Text('Sun', semanticsLabel: 'Sunday'))),
               ],
             ),
             const SizedBox(height: 6),
@@ -326,7 +346,12 @@ class _TrackerPageState extends State<TrackerPage> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(
+                // WCAG 4.1.2: label for screen readers
+                semanticsLabel: 'Loading tracker data',
+              ),
+            )
           : RefreshIndicator(
               onRefresh: _loadTrackerData,
               child: ListView(
@@ -342,7 +367,7 @@ class _TrackerPageState extends State<TrackerPage> {
                             children: [
                               const Icon(
                                 Icons.checklist,
-                                color: Color(0xFF00796B),
+                                color: Color(0xFF4CAF50),
                               ),
                               const SizedBox(width: 8),
                               Text(
@@ -355,16 +380,16 @@ class _TrackerPageState extends State<TrackerPage> {
                             ],
                           ),
                           const SizedBox(height: 12),
+                          // WCAG 1.4.3: accessible on dark background
                           Text(
                             'Today — $_completedCount of ${_trackedPrayers.length} prayers logged',
-                            style: const TextStyle(color: Colors.black54),
+                            style: const TextStyle(color: Color(0xFF8FBE9E)),
                           ),
                           const SizedBox(height: 8),
                           for (final prayer in _trackedPrayers)
                             CheckboxListTile(
                               value: _prayerStatuses[prayer] ?? false,
                               contentPadding: EdgeInsets.zero,
-                              activeColor: const Color(0xFF00796B),
                               title: Text(prayer),
                               controlAffinity: ListTileControlAffinity.leading,
                               onChanged: (value) {
