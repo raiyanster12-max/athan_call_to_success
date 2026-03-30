@@ -50,8 +50,9 @@ class _MasjidPageState extends State<MasjidPage>
     try {
       Position? position = await Geolocator.getLastKnownPosition();
       position ??= await Geolocator.getCurrentPosition(
-        locationSettings:
-            const LocationSettings(accuracy: LocationAccuracy.high),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
       );
       if (!mounted) return;
       final results = await _mosqueService.findNearbyMosques(
@@ -92,6 +93,7 @@ class _MasjidPageState extends State<MasjidPage>
       final results = await _mosqueService.findNearbyMosques(
         coords.lat,
         coords.lng,
+        zipcode: zip,
       );
       if (!mounted) return;
       setState(() {
@@ -128,22 +130,21 @@ class _MasjidPageState extends State<MasjidPage>
     });
     await _loadSaved();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${masjid.name} saved.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${masjid.name} saved.')));
   }
 
   Future<void> _removeMasjid(String id, String name) async {
     await DBHelper.deleteMasjid(id);
     await _loadSaved();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$name removed.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$name removed.')));
   }
 
-  bool _isSaved(String id) =>
-      _savedMasjids.any((m) => m['id'] == id);
+  bool _isSaved(String id) => _savedMasjids.any((m) => m['id'] == id);
 
   @override
   Widget build(BuildContext context) {
@@ -169,10 +170,7 @@ class _MasjidPageState extends State<MasjidPage>
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          _buildNearbyTab(),
-          _buildSavedTab(),
-        ],
+        children: [_buildNearbyTab(), _buildSavedTab()],
       ),
     );
   }
@@ -208,8 +206,7 @@ class _MasjidPageState extends State<MasjidPage>
               ),
               const SizedBox(width: 8),
               FilledButton(
-                onPressed: () =>
-                    _fetchNearbyByZipcode(_zipcodeController.text),
+                onPressed: () => _fetchNearbyByZipcode(_zipcodeController.text),
                 child: const Text('Go'),
               ),
               const SizedBox(width: 4),
@@ -231,10 +228,7 @@ class _MasjidPageState extends State<MasjidPage>
               alignment: Alignment.centerLeft,
               child: Text(
                 _searchLabel!,
-                style: const TextStyle(
-                  color: Colors.black54,
-                  fontSize: 12,
-                ),
+                style: const TextStyle(color: Colors.black54, fontSize: 12),
               ),
             ),
           ),
@@ -289,23 +283,19 @@ class _MasjidPageState extends State<MasjidPage>
         else
           Expanded(
             child: RefreshIndicator(
-              onRefresh: () =>
-                  _fetchNearbyByZipcode(_zipcodeController.text),
+              onRefresh: () => _fetchNearbyByZipcode(_zipcodeController.text),
               child: ListView.builder(
                 itemCount: _nearbyMasjids.length,
                 itemBuilder: (context, i) {
                   final m = _nearbyMasjids[i];
                   final saved = _isSaved(m.id);
                   return ListTile(
-                    leading:
-                        const Icon(Icons.mosque, color: Color(0xFF00796B)),
+                    leading: const Icon(Icons.mosque, color: Color(0xFF00796B)),
                     title: Text(
                       m.name,
-                      style:
-                          const TextStyle(fontWeight: FontWeight.bold),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    subtitle:
-                        m.address.isNotEmpty ? Text(m.address) : null,
+                    subtitle: m.address.isNotEmpty ? Text(m.address) : null,
                     trailing: IconButton(
                       icon: Icon(
                         saved ? Icons.bookmark : Icons.bookmark_border,
