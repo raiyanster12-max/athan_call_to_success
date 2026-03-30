@@ -29,7 +29,7 @@ class MosqueLookupException implements Exception {
 }
 
 class MosqueService {
-  static const int _defaultRadiusMeters = 24140; // 15 miles
+  static const int _defaultRadiusMeters = 16093; // 10 miles
   static const String _userAgent =
       'athan_call_to_success/1.0 (contact: app-local)';
   static const List<String> _overpassUrls = [
@@ -279,5 +279,47 @@ out center;
             math.sin(dLon / 2);
     final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
     return earthRadius * c;
+  }
+
+  /// Geocodes a US zip code to (lat, lng) using the Nominatim API.
+  /// Throws [MosqueLookupException] if the zip code cannot be resolved.
+  Future<({double lat, double lng})> geocodeZipcode(String zipcode) async {
+    final uri = Uri.https('nominatim.openstreetmap.org', '/search', {
+      'format': 'jsonv2',
+      'postalcode': zipcode.trim(),
+      'countrycodes': 'us',
+      'limit': '1',
+    });
+
+    try {
+      final response = await http.get(uri, headers: {
+        'User-Agent': _userAgent,
+        'Accept': 'application/json',
+      }).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode != 200) {
+        throw MosqueLookupException(
+          'Could not look up that zip code (HTTP ${response.statusCode}).',
+        );
+      }
+
+      final data = json.decode(response.body) as List<dynamic>;
+      if (data.isEmpty) {
+        throw MosqueLookupException(
+          'Zip code "$zipcode" was not found. Please check and try again.',
+        );
+      }
+
+      final item = data.first as Map<String, dynamic>;
+      final lat = double.parse(item['lat'] as String);
+      final lng = double.parse(item['lon'] as String);
+      return (lat: lat, lng: lng);
+    } on MosqueLookupException {
+      rethrow;
+    } catch (e) {
+      throw MosqueLookupException(
+        'Failed to look up zip code: ${e.toString()}',
+      );
+    }
   }
 }

@@ -17,12 +17,14 @@ class _MasjidPageState extends State<MasjidPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final MosqueService _mosqueService = MosqueService();
+  final TextEditingController _zipcodeController = TextEditingController();
 
   List<MasjidResult> _nearbyMasjids = [];
   List<Map<String, dynamic>> _savedMasjids = [];
   bool _isLoadingNearby = false;
   bool _isLoadingSaved = false;
   String? _error;
+  String? _searchLabel; // describes the active search (GPS or zip)
 
   @override
   void initState() {
@@ -35,6 +37,7 @@ class _MasjidPageState extends State<MasjidPage>
   @override
   void dispose() {
     _tabController.dispose();
+    _zipcodeController.dispose();
     super.dispose();
   }
 
@@ -42,6 +45,7 @@ class _MasjidPageState extends State<MasjidPage>
     setState(() {
       _isLoadingNearby = true;
       _error = null;
+      _searchLabel = null;
     });
     try {
       Position? position = await Geolocator.getLastKnownPosition();
@@ -58,6 +62,42 @@ class _MasjidPageState extends State<MasjidPage>
       setState(() {
         _nearbyMasjids = results;
         _isLoadingNearby = false;
+        _searchLabel = 'Showing results near your GPS location';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _isLoadingNearby = false;
+      });
+    }
+  }
+
+  Future<void> _fetchNearbyByZipcode(String zipcode) async {
+    final zip = zipcode.trim();
+    if (zip.isEmpty) {
+      _fetchNearby();
+      return;
+    }
+
+    setState(() {
+      _isLoadingNearby = true;
+      _error = null;
+      _searchLabel = null;
+    });
+
+    try {
+      final coords = await _mosqueService.geocodeZipcode(zip);
+      if (!mounted) return;
+      final results = await _mosqueService.findNearbyMosques(
+        coords.lat,
+        coords.lng,
+      );
+      if (!mounted) return;
+      setState(() {
+        _nearbyMasjids = results;
+        _isLoadingNearby = false;
+        _searchLabel = 'Showing results within 10 miles of $zip';
       });
     } catch (e) {
       if (!mounted) return;
@@ -141,67 +181,145 @@ class _MasjidPageState extends State<MasjidPage>
     if (_isLoadingNearby) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+
+    return Column(
+      children: [
+        // ── Zipcode search row ──────────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          child: Row(
             children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.red),
-              const SizedBox(height: 12),
-              const Text(
-                'Could not load nearby masjids.',
-                style: TextStyle(fontWeight: FontWeight.bold),
+              Expanded(
+                child: TextField(
+                  controller: _zipcodeController,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.search,
+                  maxLength: 10,
+                  decoration: const InputDecoration(
+                    labelText: 'Search by zip code (optional)',
+                    hintText: 'e.g. 10001',
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(),
+                    counterText: '',
+                    isDense: true,
+                  ),
+                  onSubmitted: _fetchNearbyByZipcode,
+                ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.grey),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: () =>
+                    _fetchNearbyByZipcode(_zipcodeController.text),
+                child: const Text('Go'),
               ),
-              const SizedBox(height: 4),
-              const Text(
-                'Tip: Make sure location permission is granted and you have an internet connection.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey, fontSize: 12),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: _fetchNearby,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
+              const SizedBox(width: 4),
+              IconButton(
+                tooltip: 'Use my GPS location',
+                icon: const Icon(Icons.my_location),
+                onPressed: () {
+                  _zipcodeController.clear();
+                  _fetchNearby();
+                },
               ),
             ],
           ),
         ),
-      );
-    }
-    if (_nearbyMasjids.isEmpty) {
-      return const Center(child: Text('No masjids found nearby.'));
-    }
-    return RefreshIndicator(
-      onRefresh: _fetchNearby,
-      child: ListView.builder(
-        itemCount: _nearbyMasjids.length,
-        itemBuilder: (context, i) {
-          final m = _nearbyMasjids[i];
-          final saved = _isSaved(m.id);
-          return ListTile(
-            leading: const Icon(Icons.mosque, color: Color(0xFF00796B)),
-            title: Text(m.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: m.address.isNotEmpty ? Text(m.address) : null,
-            trailing: IconButton(
-              icon: Icon(
-                saved ? Icons.bookmark : Icons.bookmark_border,
-                color: const Color(0xFF00796B),
+        if (_searchLabel != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                _searchLabel!,
+                style: const TextStyle(
+                  color: Colors.black54,
+                  fontSize: 12,
+                ),
               ),
-              tooltip: saved ? 'Already saved' : 'Save masjid',
-              onPressed: saved ? null : () => _saveMasjid(m),
             ),
-          );
-        },
-      ),
+          ),
+        const SizedBox(height: 8),
+        // ── Results ────────────────────────────────────────────────────
+        if (_error != null)
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: Colors.red,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Could not load nearby masjids.',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Tip: Check the zip code, location permission, and internet connection.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () =>
+                          _fetchNearbyByZipcode(_zipcodeController.text),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
+        else if (_nearbyMasjids.isEmpty)
+          const Expanded(
+            child: Center(child: Text('No masjids found in this area.')),
+          )
+        else
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () =>
+                  _fetchNearbyByZipcode(_zipcodeController.text),
+              child: ListView.builder(
+                itemCount: _nearbyMasjids.length,
+                itemBuilder: (context, i) {
+                  final m = _nearbyMasjids[i];
+                  final saved = _isSaved(m.id);
+                  return ListTile(
+                    leading:
+                        const Icon(Icons.mosque, color: Color(0xFF00796B)),
+                    title: Text(
+                      m.name,
+                      style:
+                          const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle:
+                        m.address.isNotEmpty ? Text(m.address) : null,
+                    trailing: IconButton(
+                      icon: Icon(
+                        saved ? Icons.bookmark : Icons.bookmark_border,
+                        color: const Color(0xFF00796B),
+                      ),
+                      tooltip: saved ? 'Already saved' : 'Save masjid',
+                      onPressed: saved ? null : () => _saveMasjid(m),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+      ],
     );
   }
 

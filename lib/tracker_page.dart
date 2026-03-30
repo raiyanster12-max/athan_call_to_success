@@ -335,40 +335,31 @@ class _TrackerPageState extends State<TrackerPage> {
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.checklist, color: Color(0xFF00796B)),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Prayer Tracker',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Today',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '$_completedCount of ${_trackedPrayers.length} prayers logged',
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.checklist,
+                                color: Color(0xFF00796B),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Prayer Tracker',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 12),
+                          Text(
+                            'Today — $_completedCount of ${_trackedPrayers.length} prayers logged',
+                            style: const TextStyle(color: Colors.black54),
+                          ),
+                          const SizedBox(height: 8),
                           for (final prayer in _trackedPrayers)
                             CheckboxListTile(
                               value: _prayerStatuses[prayer] ?? false,
