@@ -90,9 +90,9 @@ class _MainNavigationState extends State<MainNavigation> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -250,11 +250,37 @@ class _TesterFeedbackDialogState extends State<_TesterFeedbackDialog> {
       '',
       '- Rating: $_rating/5',
       '- Tester: ${name.isEmpty ? 'Anonymous tester' : name}',
-      '- Platform: Chrome Web (GitHub Pages)',
+      '- Platform: Web (GitHub Pages)',
       '',
       '### Comments',
       comments.isEmpty ? 'No comments provided.' : comments,
     ].join('\n');
+  }
+
+  String _truncateForIssueQuery(String text, {int maxChars = 1200}) {
+    if (text.length <= maxChars) {
+      return text;
+    }
+    return '${text.substring(0, maxChars)}\n\n...[truncated - full text copied to clipboard]';
+  }
+
+  Uri _buildIssueUri(String fullBody) {
+    // Keep query payload short to avoid URL length issues in Safari/iOS.
+    final compactBody = _truncateForIssueQuery(fullBody);
+    return Uri.https(
+      'github.com',
+      '/raiyanster12-max/athan_call_to_success/issues/new',
+      {'title': 'Tester feedback ($_rating/5)', 'body': compactBody},
+    );
+  }
+
+  Future<bool> _copyToClipboardSafely(String text) async {
+    try {
+      await Clipboard.setData(ClipboardData(text: text));
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _submit({required bool openIssue}) async {
@@ -271,24 +297,34 @@ class _TesterFeedbackDialogState extends State<_TesterFeedbackDialog> {
     });
 
     final body = _buildFeedbackBody();
-    await Clipboard.setData(ClipboardData(text: body));
+    final issueUri = _buildIssueUri(body);
+
+    bool launched = false;
+    if (openIssue) {
+      // Launch first while still in the tap gesture to avoid Safari popup blocking.
+      launched = await launchUrl(issueUri, webOnlyWindowName: '_blank');
+    }
+
+    final copied = await _copyToClipboardSafely(body);
     await DBHelper.setSetting('last_feedback_draft', body);
 
-    String message = 'Feedback copied to clipboard.';
-    if (openIssue) {
-      final issueUri = Uri.https(
-        'github.com',
-        '/raiyanster12-max/athan_call_to_success/issues/new',
-        {
-          'title': 'Tester feedback ($_rating/5)',
-          'body': body,
-        },
-      );
-
-      final launched = await launchUrl(issueUri);
-      message = launched
-          ? 'Opened GitHub issue draft and copied feedback to clipboard.'
-          : 'Feedback copied to clipboard. GitHub issue could not be opened automatically.';
+    String message;
+    if (openIssue && launched && copied) {
+      message = 'Opened GitHub issue draft and copied feedback to clipboard.';
+    } else if (openIssue && launched && !copied) {
+      message =
+          'Opened GitHub issue draft. Clipboard was blocked on this browser.';
+    } else if (openIssue && !launched && copied) {
+      message =
+          'Feedback copied to clipboard. GitHub issue could not be opened automatically.';
+    } else if (openIssue && !launched && !copied) {
+      message =
+          'Could not open GitHub issue or access clipboard automatically. Please copy your feedback manually and open the issue page.';
+    } else if (copied) {
+      message = 'Feedback copied to clipboard.';
+    } else {
+      message =
+          'Could not access clipboard automatically. Please copy your feedback manually.';
     }
 
     if (!mounted) {
@@ -310,7 +346,7 @@ class _TesterFeedbackDialogState extends State<_TesterFeedbackDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'This copies the feedback text first, then opens a prefilled GitHub issue draft if you choose that option.',
+                'Choose Open GitHub Issue to launch a prefilled draft. Your full feedback is also saved and copied when the browser allows clipboard access.',
               ),
               const SizedBox(height: 16),
               TextField(
@@ -343,7 +379,8 @@ class _TesterFeedbackDialogState extends State<_TesterFeedbackDialog> {
                 minLines: 4,
                 maxLines: 6,
                 decoration: const InputDecoration(
-                  labelText: 'What worked well, what broke, or what felt unclear?',
+                  labelText:
+                      'What worked well, what broke, or what felt unclear?',
                   alignLabelWithHint: true,
                   border: OutlineInputBorder(),
                 ),
@@ -409,7 +446,10 @@ class _HomePageState extends State<HomePage> {
       final city = placemark.locality?.trim();
       final state = placemark.administrativeArea?.trim();
 
-      if (city != null && city.isNotEmpty && state != null && state.isNotEmpty) {
+      if (city != null &&
+          city.isNotEmpty &&
+          state != null &&
+          state.isNotEmpty) {
         return 'Location: $city, $state';
       }
       if (city != null && city.isNotEmpty) {
@@ -608,7 +648,10 @@ class _HomePageState extends State<HomePage> {
       final locationLabel = await _buildLocationLabel(position);
       if (!mounted) return;
 
-      final times = PrayerService.getTimes(position.latitude, position.longitude);
+      final times = PrayerService.getTimes(
+        position.latitude,
+        position.longitude,
+      );
       _currentPosition = position;
       setState(() {
         _locationStatus = locationLabel;
@@ -630,9 +673,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _openSettings() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const SettingsPage()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const SettingsPage()));
   }
 
   Widget _buildNextPrayerCard() {
@@ -648,10 +691,7 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Next Prayer',
-              style: TextStyle(color: Colors.white70),
-            ),
+            const Text('Next Prayer', style: TextStyle(color: Colors.white70)),
             const SizedBox(height: 8),
             Text(
               _nextPrayerName!,
@@ -707,7 +747,10 @@ class _HomePageState extends State<HomePage> {
             children: [
               const SizedBox(height: 8),
               Center(
-                child: Image.asset('assets/icon/athan_app_icon.png', height: 80),
+                child: Image.asset(
+                  'assets/icon/athan_app_icon.png',
+                  height: 80,
+                ),
               ),
               const SizedBox(height: 16),
               Card(
@@ -778,7 +821,9 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                 )
                               : const Icon(Icons.my_location),
-                          label: Text(_isLoading ? 'Detecting...' : 'Refresh Location'),
+                          label: Text(
+                            _isLoading ? 'Detecting...' : 'Refresh Location',
+                          ),
                         ),
                       ),
                     ],
