@@ -343,6 +343,46 @@ out center;
     return earthRadius * c;
   }
 
+  /// Geocodes a zip code, city name, or free-text location query to (lat, lng).
+  /// Falls back to [geocodeZipcode] for 5-digit US zip codes.
+  Future<({double lat, double lng})> geocodeQuery(String query) async {
+    final q = query.trim();
+    if (RegExp(r'^\d{5}(-\d{4})?$').hasMatch(q)) {
+      return geocodeZipcode(q);
+    }
+    final uri = Uri.https('nominatim.openstreetmap.org', '/search', {
+      'format': 'jsonv2',
+      'q': q,
+      'limit': '1',
+      'addressdetails': '1',
+    });
+    try {
+      final response = await http
+          .get(uri, headers: {'User-Agent': _userAgent, 'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode != 200) {
+        throw MosqueLookupException(
+          'Could not find "$q" (HTTP ${response.statusCode}).',
+        );
+      }
+      final data = json.decode(response.body) as List<dynamic>;
+      if (data.isEmpty) {
+        throw MosqueLookupException(
+          '"$q" was not found. Please check the name and try again.',
+        );
+      }
+      final item = data.first as Map<String, dynamic>;
+      return (
+        lat: double.parse(item['lat'] as String),
+        lng: double.parse(item['lon'] as String),
+      );
+    } on MosqueLookupException {
+      rethrow;
+    } catch (e) {
+      throw MosqueLookupException('Failed to find location: $e');
+    }
+  }
+
   /// Geocodes a US zip code to (lat, lng) using the Nominatim API.
   /// Throws [MosqueLookupException] if the zip code cannot be resolved.
   Future<({double lat, double lng})> geocodeZipcode(String zipcode) async {

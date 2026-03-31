@@ -27,6 +27,10 @@ dependencies:
   timezone: ^0.9.4
   file_picker: ^8.1.2
   audioplayers: ^6.0.0
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.0
+  googlecast:
+    path: third_party/googlecast
 
 dev_dependencies:
   flutter_test:

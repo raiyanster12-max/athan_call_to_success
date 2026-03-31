@@ -1,8 +1,14 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:googlecast/CastController.dart';
+import 'package:googlecast/googlecast.dart';
+import 'package:googlecast/googlecastbutton.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path_lib;
 import 'package:permission_handler/permission_handler.dart';
@@ -40,10 +46,13 @@ class _SettingsPageState extends State<SettingsPage> {
       NotificationService.networkSpeakerPortKey;
   static const String _networkSpeakerPathKey =
       NotificationService.networkSpeakerPathKey;
+    static const String _googleCastMediaUrlKey =
+      NotificationService.googleCastMediaUrlKey;
 
   static const List<String> _speakerRouteOptions = [
     NotificationService.speakerSystemDefault,
     NotificationService.speakerPhoneSpeaker,
+    NotificationService.speakerGoogleCast,
     NotificationService.speakerNetworkIp,
   ];
 
@@ -58,6 +67,8 @@ class _SettingsPageState extends State<SettingsPage> {
       TextEditingController(text: '80');
   final TextEditingController _networkSpeakerPathController =
       TextEditingController(text: '/play');
+    final TextEditingController _googleCastMediaUrlController =
+      TextEditingController();
   final Map<String, String> _tonePreferences = {
     for (final prayer in _prayerNames) prayer: 'Beep',
   };
@@ -67,6 +78,11 @@ class _SettingsPageState extends State<SettingsPage> {
 
   AudioPlayer? _audioPlayer;
   String? _playingPrayer;
+  final CastController _castController = CastController();
+  StreamSubscription<bool>? _castConnectionSub;
+  bool _castConnected = false;
+  bool _isScanningNetwork = false;
+  List<String> _scannedDevices = [];
 
   bool get _supportsBatteryOptimizationPermission =>
       defaultTargetPlatform == TargetPlatform.android;
@@ -74,6 +90,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void initState() {
     super.initState();
+    _initializeCastConnectionListener();
     _loadSettings();
   }
 
@@ -81,10 +98,101 @@ class _SettingsPageState extends State<SettingsPage> {
   void dispose() {
     _audioPlayer?.stop();
     _audioPlayer?.dispose();
+    _castConnectionSub?.cancel();
     _networkSpeakerIpController.dispose();
     _networkSpeakerPortController.dispose();
     _networkSpeakerPathController.dispose();
+    _googleCastMediaUrlController.dispose();
     super.dispose();
+  }
+
+  void _initializeCastConnectionListener() {
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    _castConnectionSub = GoogleChromeCast().connectionState.listen((connected) {
+      if (!mounted) return;
+      setState(() => _castConnected = connected);
+    });
+  }
+
+  // ── Network scanner ────────────────────────────────────────────────────────
+
+  Future<String?> _getLocalSubnet() async {
+    try {
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLoopback: false,
+      );
+      for (final iface in interfaces) {
+        for (final addr in iface.addresses) {
+          if (!addr.isLoopback) {
+            final parts = addr.address.split('.');
+            if (parts.length == 4) {
+              return '${parts[0]}.${parts[1]}.${parts[2]}';
+            }
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<String?> _probeHost(String ip) async {
+    for (final port in [8008, 8009, 80]) {
+      try {
+        final socket = await Socket.connect(
+          ip,
+          port,
+          timeout: const Duration(milliseconds: 400),
+        );
+        await socket.close();
+        return '$ip:$port';
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  Future<void> _scanLocalNetwork() async {
+    if (_isScanningNetwork) return;
+    setState(() {
+      _isScanningNetwork = true;
+      _scannedDevices = [];
+    });
+
+    final subnet = await _getLocalSubnet();
+    if (subnet == null) {
+      if (!mounted) return;
+      setState(() => _isScanningNetwork = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not detect local network.')),
+      );
+      return;
+    }
+
+    const batchSize = 30;
+    final found = <String>[];
+    for (int start = 1; start <= 254; start += batchSize) {
+      final end = (start + batchSize - 1).clamp(1, 254);
+      final batch = <Future<String?>>[]; 
+      for (int i = start; i <= end; i++) {
+        batch.add(_probeHost('$subnet.$i'));
+      }
+      final results = await Future.wait(batch);
+      found.addAll(results.whereType<String>());
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _scannedDevices = found;
+      _isScanningNetwork = false;
+    });
+
+    if (found.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No network speakers found on this network.')),
+      );
+    }
   }
 
   Future<void> _loadSettings() async {
@@ -102,6 +210,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final storedIp = await DBHelper.getSetting(_networkSpeakerIpKey);
     final storedPort = await DBHelper.getSetting(_networkSpeakerPortKey);
     final storedPath = await DBHelper.getSetting(_networkSpeakerPathKey);
+    final storedCastUrl = await DBHelper.getSetting(_googleCastMediaUrlKey);
     if (storedIp != null && storedIp.trim().isNotEmpty) {
       _networkSpeakerIpController.text = storedIp;
     }
@@ -110,6 +219,12 @@ class _SettingsPageState extends State<SettingsPage> {
     }
     if (storedPath != null && storedPath.trim().isNotEmpty) {
       _networkSpeakerPathController.text = storedPath;
+    }
+    if (storedCastUrl != null && storedCastUrl.trim().isNotEmpty) {
+      _googleCastMediaUrlController.text = storedCastUrl;
+    } else {
+      _googleCastMediaUrlController.text =
+          'https://download.samplelib.com/mp3/sample-3s.mp3';
     }
 
     for (final prayer in _prayerNames) {
@@ -263,6 +378,70 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _saveGoogleCastMediaUrl() async {
+    await DBHelper.setSetting(
+      _googleCastMediaUrlKey,
+      _googleCastMediaUrlController.text.trim(),
+    );
+  }
+
+  Future<void> _testGoogleCastPlayback() async {
+    final mediaUrl = _googleCastMediaUrlController.text.trim();
+    if (mediaUrl.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a Cast media URL first.')),
+      );
+      return;
+    }
+
+    await _saveGoogleCastMediaUrl();
+
+    try {
+      await _castController.setMedia(
+        url: mediaUrl,
+        title: 'Athan Test',
+        subtitle: 'Call to Success',
+      );
+      await _castController.loadAudio();
+      await _castController.play();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cast playback started.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not play on Cast: $e')),
+      );
+    }
+  }
+
+  List<Uri> _speakerProbeUris({
+    required String ip,
+    required int port,
+    required String preferredPath,
+  }) {
+    final normalized = preferredPath.startsWith('/')
+        ? preferredPath
+        : '/$preferredPath';
+    final candidates = <String>[
+      normalized,
+      '/play',
+      '/api/play',
+      '/trigger',
+      '/status',
+      '/health',
+      '/setup/eureka_info',
+      '/',
+    ];
+    final unique = <String>{};
+    return candidates
+        .where((p) => unique.add(p))
+        .map((p) => Uri(scheme: 'http', host: ip, port: port, path: p))
+        .toList();
+  }
+
   Future<void> _testNetworkSpeaker() async {
     final ip = _networkSpeakerIpController.text.trim();
     final port = int.tryParse(_networkSpeakerPortController.text.trim()) ?? 80;
@@ -284,15 +463,45 @@ class _SettingsPageState extends State<SettingsPage> {
 
     await _saveNetworkSpeakerConfig(reschedule: false);
 
-    final uri = Uri(scheme: 'http', host: ip, port: port, path: path);
-    String message;
+    final probeUris = _speakerProbeUris(
+      ip: ip,
+      port: port,
+      preferredPath: path,
+    );
+    String message = 'Could not reach speaker endpoint.';
     try {
-      final response = await http
-          .get(uri, headers: {'Accept': 'application/json'})
-          .timeout(const Duration(seconds: 4));
-      message = response.statusCode >= 200 && response.statusCode < 400
-          ? 'Speaker endpoint reachable: ${response.statusCode}'
-          : 'Speaker responded with status ${response.statusCode}';
+      bool anyHttpResponse = false;
+      int? selectedStatus;
+      Uri? selectedUri;
+
+      for (final uri in probeUris) {
+        try {
+          final response = await http
+              .get(uri, headers: {'Accept': 'application/json'})
+              .timeout(const Duration(seconds: 3));
+          anyHttpResponse = true;
+          selectedStatus = response.statusCode;
+          selectedUri = uri;
+          if (response.statusCode >= 200 && response.statusCode < 400) {
+            break;
+          }
+        } catch (_) {
+          // Try the next endpoint candidate.
+        }
+      }
+
+      if (selectedStatus != null && selectedStatus >= 200 && selectedStatus < 400) {
+        message = 'Speaker reachable at ${selectedUri!.path} (HTTP $selectedStatus).';
+        _networkSpeakerPathController.text = selectedUri.path;
+        await _saveNetworkSpeakerConfig(reschedule: false);
+      } else if (anyHttpResponse && selectedStatus == 404) {
+        message =
+            'Device is reachable but endpoint path is not found (404). '
+            'If this is a Google/Chromecast speaker, direct HTTP /play is not supported. '
+            'Use a compatible local speaker endpoint app/service and set its path.';
+      } else if (anyHttpResponse && selectedStatus != null) {
+        message = 'Device responded with HTTP $selectedStatus. Check endpoint path/auth.';
+      }
     } catch (e) {
       message = 'Could not reach speaker endpoint: $e';
     }
@@ -558,36 +767,145 @@ class _SettingsPageState extends State<SettingsPage> {
                     'Your selections are stored and applied to upcoming prayer reminders. '
                     'On Android, you can also choose a custom audio file from your phone.',
                   ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: _speakerRoute,
-                    decoration: const InputDecoration(
-                      labelText: 'Notification Audio Route',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: _speakerRouteOptions
-                        .map(
-                          (route) => DropdownMenuItem<String>(
-                            value: route,
-                            child: Text(route),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value == null) return;
-                      _updateSpeakerRoute(value);
-                    },
+                  const SizedBox(height: 16),
+                  // ── Play Adhan On... ──────────────────────────────────
+                  const Text(
+                    'Play Adhan On...',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'System Default follows your current audio route. '
-                    'Phone Speaker uses alarm audio usage for stronger output on Android. '
-                    'Network Speaker stores an IP endpoint used for connected speaker integrations.',
-                    style: TextStyle(color: Colors.black54, fontSize: 12),
+                  RadioListTile<String>(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Phone'),
+                    value: NotificationService.speakerPhoneSpeaker,
+                    groupValue: _speakerRoute,
+                    onChanged: (v) {
+                      if (v != null) _updateSpeakerRoute(v);
+                    },
                   ),
-                  if (_speakerRoute ==
-                      NotificationService.speakerNetworkIp) ...[
+                  RadioListTile<String>(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Google/ChromeCast Speaker'),
+                    value: NotificationService.speakerGoogleCast,
+                    groupValue: _speakerRoute,
+                    onChanged: (v) {
+                      if (v != null) _updateSpeakerRoute(v);
+                    },
+                  ),
+                  RadioListTile<String>(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Legacy IP Endpoint'),
+                    value: NotificationService.speakerNetworkIp,
+                    groupValue: _speakerRoute,
+                    onChanged: (v) {
+                      if (v != null) _updateSpeakerRoute(v);
+                    },
+                  ),
+                  if (_speakerRoute == NotificationService.speakerGoogleCast) ...[
                     const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const GoogleCastButton(size: 32),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _castConnected
+                                ? 'Cast connected. Tap Test Cast Audio to play Athan.'
+                                : 'Tap the Cast icon to select your Google speaker.',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _googleCastMediaUrlController,
+                      decoration: const InputDecoration(
+                        labelText: 'Cast Media URL (MP3/AAC)',
+                        hintText: 'https://example.com/athan.mp3',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (_) => _saveGoogleCastMediaUrl(),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _testGoogleCastPlayback,
+                            icon: const Icon(Icons.cast_connected),
+                            label: const Text('Test Cast Audio'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          onPressed: () => _castController.stop(),
+                          icon: const Icon(Icons.stop),
+                          label: const Text('Stop'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Note: Chromecast requires a URL it can fetch directly. '
+                      'Local phone files are not playable on Cast without hosting.',
+                      style: TextStyle(color: Colors.black54, fontSize: 12),
+                    ),
+                  ],
+                  if (_speakerRoute == NotificationService.speakerNetworkIp) ...[
+                    const SizedBox(height: 12),
+                    // Show currently saved IP if any
+                    if (_networkSpeakerIpController.text.trim().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          _networkSpeakerIpController.text.trim(),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    // Scanned device list
+                    if (_scannedDevices.isNotEmpty)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Discovered devices:',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 4),
+                          for (final device in _scannedDevices)
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.speaker),
+                              title: Text(device),
+                              trailing: TextButton(
+                                child: const Text('Select'),
+                                onPressed: () {
+                                  final parts = device.split(':');
+                                  _networkSpeakerIpController.text = parts[0];
+                                  if (parts.length > 1) {
+                                    _networkSpeakerPortController.text = parts[1];
+                                  }
+                                  _saveNetworkSpeakerConfig(reschedule: false);
+                                  setState(() {});
+                                },
+                              ),
+                            ),
+                          const SizedBox(height: 8),
+                        ],
+                      ),
+                    // Manual IP fields
                     TextField(
                       controller: _networkSpeakerIpController,
                       keyboardType: TextInputType.number,
@@ -596,7 +914,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         hintText: 'e.g. 192.168.1.45',
                         border: OutlineInputBorder(),
                       ),
-                      onChanged: (_) => _saveNetworkSpeakerConfig(),
+                      onChanged: (_) => _saveNetworkSpeakerConfig(reschedule: false),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -610,7 +928,7 @@ class _SettingsPageState extends State<SettingsPage> {
                               hintText: '80',
                               border: OutlineInputBorder(),
                             ),
-                            onChanged: (_) => _saveNetworkSpeakerConfig(),
+                            onChanged: (_) => _saveNetworkSpeakerConfig(reschedule: false),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -623,19 +941,41 @@ class _SettingsPageState extends State<SettingsPage> {
                               hintText: '/play',
                               border: OutlineInputBorder(),
                             ),
-                            onChanged: (_) => _saveNetworkSpeakerConfig(),
+                            onChanged: (_) => _saveNetworkSpeakerConfig(reschedule: false),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: OutlinedButton.icon(
-                        onPressed: _testNetworkSpeaker,
-                        icon: const Icon(Icons.wifi_tethering),
-                        label: const Text('Test speaker endpoint'),
-                      ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _isScanningNetwork ? null : _scanLocalNetwork,
+                            icon: _isScanningNetwork
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.wifi_find),
+                            label: Text(
+                              _isScanningNetwork
+                                  ? 'Scanning...'
+                                  : 'Choose Speaker',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          onPressed: _testNetworkSpeaker,
+                          icon: const Icon(Icons.wifi_tethering),
+                          label: const Text('Test'),
+                        ),
+                      ],
                     ),
                   ],
                   const SizedBox(height: 12),

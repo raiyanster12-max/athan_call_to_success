@@ -33,24 +33,24 @@ class AthanApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0D2818),
+        scaffoldBackgroundColor: const Color(0xFF0A1F1F),
         colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF4CAF50),
+          primary: Color(0xFF26A69A),
           onPrimary: Colors.white,
-          secondary: Color(0xFF66BB6A),
+          secondary: Color(0xFF4DB6AC),
           onSecondary: Colors.white,
-          surface: Color(0xFF143526),
+          surface: Color(0xFF102B2B),
           onSurface: Colors.white,
-          outline: Color(0xFF2D5C40),
+          outline: Color(0xFF1A4040),
         ),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF0D2818),
+          backgroundColor: Color(0xFF0A1F1F),
           foregroundColor: Colors.white,
           elevation: 0,
           scrolledUnderElevation: 0,
         ),
         cardTheme: CardThemeData(
-          color: const Color(0xFF143526),
+          color: const Color(0xFF102B2B),
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -58,20 +58,19 @@ class AthanApp extends StatelessWidget {
           margin: EdgeInsets.zero,
         ),
         bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: Color(0xFF0A2015),
-          selectedItemColor: Color(0xFF4CAF50),
-          unselectedItemColor: Color(0xFF5A8A6A),
+          backgroundColor: Color(0xFF071818),
+          selectedItemColor: Color(0xFF26A69A),
+          unselectedItemColor: Color(0xFF3D7070),
           type: BottomNavigationBarType.fixed,
           elevation: 0,
         ),
         listTileTheme: const ListTileThemeData(
-          iconColor: Color(0xFF4CAF50),
-          // WCAG 1.4.3: accessible contrast
-          subtitleTextStyle: TextStyle(color: Color(0xFF8FBE9E)),
+          iconColor: Color(0xFF26A69A),
+          subtitleTextStyle: TextStyle(color: Color(0xFF6BAAAA)),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF2E7D32),
+            backgroundColor: const Color(0xFF00695C),
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
@@ -80,8 +79,8 @@ class AthanApp extends StatelessWidget {
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
-            foregroundColor: const Color(0xFF4CAF50),
-            side: const BorderSide(color: Color(0xFF2D5C40)),
+            foregroundColor: const Color(0xFF26A69A),
+            side: const BorderSide(color: Color(0xFF1A4040)),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
@@ -89,36 +88,36 @@ class AthanApp extends StatelessWidget {
         ),
         inputDecorationTheme: const InputDecorationTheme(
           filled: true,
-          fillColor: Color(0xFF143526),
+          fillColor: Color(0xFF102B2B),
           border: OutlineInputBorder(
-            borderSide: BorderSide(color: Color(0xFF2D5C40)),
+            borderSide: BorderSide(color: Color(0xFF1A4040)),
           ),
           enabledBorder: OutlineInputBorder(
-            borderSide: BorderSide(color: Color(0xFF2D5C40)),
+            borderSide: BorderSide(color: Color(0xFF1A4040)),
           ),
           focusedBorder: OutlineInputBorder(
-            borderSide: BorderSide(color: Color(0xFF4CAF50), width: 2),
+            borderSide: BorderSide(color: Color(0xFF26A69A), width: 2),
           ),
-          labelStyle: TextStyle(color: Color(0xFF8FBE9E)),
-          hintStyle: TextStyle(color: Color(0xFF5A8A6A)),
+          labelStyle: TextStyle(color: Color(0xFF6BAAAA)),
+          hintStyle: TextStyle(color: Color(0xFF3D7070)),
         ),
         chipTheme: const ChipThemeData(
-          backgroundColor: Color(0xFF1A3E2A),
+          backgroundColor: Color(0xFF133333),
           labelStyle: TextStyle(color: Colors.white),
-          side: BorderSide(color: Color(0xFF2D5C40)),
+          side: BorderSide(color: Color(0xFF1A4040)),
         ),
         dividerTheme: const DividerThemeData(
-          color: Color(0xFF1E4B30),
+          color: Color(0xFF153030),
         ),
         tabBarTheme: const TabBarThemeData(
-          labelColor: Color(0xFF4CAF50),
-          unselectedLabelColor: Color(0xFF8FBE9E),
-          indicatorColor: Color(0xFF4CAF50),
+          labelColor: Color(0xFF26A69A),
+          unselectedLabelColor: Color(0xFF6BAAAA),
+          indicatorColor: Color(0xFF26A69A),
         ),
         checkboxTheme: CheckboxThemeData(
           fillColor: WidgetStateProperty.resolveWith(
             (s) => s.contains(WidgetState.selected)
-                ? const Color(0xFF4CAF50)
+                ? const Color(0xFF26A69A)
                 : null,
           ),
           checkColor: WidgetStateProperty.all(Colors.white),

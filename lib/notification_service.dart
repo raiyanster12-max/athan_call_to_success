@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:googlecast/CastController.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:timezone/data/latest.dart' as tz;
@@ -23,6 +24,7 @@ class NotificationService {
   static const String networkSpeakerIpKey = 'network_speaker_ip';
   static const String networkSpeakerPortKey = 'network_speaker_port';
   static const String networkSpeakerPathKey = 'network_speaker_path';
+  static const String googleCastMediaUrlKey = 'google_cast_media_url';
 
   static const String _toneBeep = 'Beep';
   static const String _toneMuezzin1 = 'Muezzin Voice 1';
@@ -30,6 +32,7 @@ class NotificationService {
   static const String toneCustomFile = 'Custom File';
   static const String speakerSystemDefault = 'System Default';
   static const String speakerPhoneSpeaker = 'Phone Speaker (Alarm Stream)';
+  static const String speakerGoogleCast = 'Google Cast (Chromecast)';
   static const String speakerNetworkIp = 'Network Speaker (IP)';
 
   final FlutterLocalNotificationsPlugin _plugin =
@@ -71,6 +74,10 @@ class NotificationService {
     _initialized = true;
   }
 
+  // Increment this when raw sound files change to force channel recreation.
+  static const int _channelVersion = 2;
+  static const String _channelVersionKey = 'notification_channel_version';
+
   Future<void> _ensureAndroidToneChannels() async {
     final androidPlugin = _plugin
         .resolvePlatformSpecificImplementation<
@@ -78,22 +85,16 @@ class NotificationService {
         >();
     if (androidPlugin == null) return;
 
-    // Wrap each channel creation individually. Android throws PlatformException
-    // (invalid_sound) when a channel already exists on the device with a
-    // cached sound that can no longer be resolved (e.g. after a fresh install
-    // or a build that previously lacked the raw resource). Catching here
-    // prevents the error from propagating up and masquerading as a location
-    // failure in the UI.
-    Future<void> create(AndroidNotificationChannel channel) async {
-      try {
-        await androidPlugin.createNotificationChannel(channel);
-      } catch (_) {
-        // Channel may already exist from a prior install; safe to ignore.
-      }
-    }
+    // Android notification channels are immutable once created – their sound
+    // cannot be changed after first creation. We track a version number in the
+    // DB and delete + recreate all channels whenever the version changes, so
+    // users always get the correct sound even after upgrading the app.
+    final storedVersion = int.tryParse(
+      await DBHelper.getSetting(_channelVersionKey) ?? '',
+    );
 
-    await create(
-      const AndroidNotificationChannel(
+    const channels = [
+      AndroidNotificationChannel(
         'athan_tone_beep',
         'Athan Tone: Beep',
         description: 'Prayer reminders with Beep tone',
@@ -101,10 +102,7 @@ class NotificationService {
         playSound: true,
         sound: RawResourceAndroidNotificationSound('athan_beep'),
       ),
-    );
-
-    await create(
-      const AndroidNotificationChannel(
+      AndroidNotificationChannel(
         'athan_tone_muezzin_1',
         'Athan Tone: Muezzin Voice 1',
         description: 'Prayer reminders with Muezzin Voice 1 tone',
@@ -112,10 +110,7 @@ class NotificationService {
         playSound: true,
         sound: RawResourceAndroidNotificationSound('athan_muezzin_1'),
       ),
-    );
-
-    await create(
-      const AndroidNotificationChannel(
+      AndroidNotificationChannel(
         'athan_tone_muezzin_2',
         'Athan Tone: Muezzin Voice 2',
         description: 'Prayer reminders with Muezzin Voice 2 tone',
@@ -123,6 +118,29 @@ class NotificationService {
         playSound: true,
         sound: RawResourceAndroidNotificationSound('athan_muezzin_2'),
       ),
+    ];
+
+    if (storedVersion != _channelVersion) {
+      // Delete stale channels so Android allows recreating them with the
+      // correct sound resource.
+      for (final ch in channels) {
+        try {
+          await androidPlugin.deleteNotificationChannel(ch.id);
+        } catch (_) {}
+      }
+    }
+
+    for (final ch in channels) {
+      try {
+        await androidPlugin.createNotificationChannel(ch);
+      } catch (_) {
+        // Best-effort – if creation still fails, the system default is used.
+      }
+    }
+
+    await DBHelper.setSetting(
+      _channelVersionKey,
+      _channelVersion.toString(),
     );
   }
 
@@ -170,7 +188,9 @@ class NotificationService {
           'It is ${formatter.format(prayer.time)}. Time for ${prayer.name}.',
           tz.TZDateTime.from(prayer.time, tz.local),
           details,
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          // alarmClock is the most reliable mode: it bypasses Doze mode,
+          // wakes the device, and appears in the system alarm clock tray.
+          androidScheduleMode: AndroidScheduleMode.alarmClock,
           uiLocalNotificationDateInterpretation:
               UILocalNotificationDateInterpretation.absoluteTime,
           payload: '${prayer.name}|${prayer.time.toIso8601String()}',
@@ -331,6 +351,10 @@ class NotificationService {
   Future<void> _triggerNetworkSpeakerIfConfigured() async {
     try {
       final route = await _loadSpeakerRoutePreference();
+      if (route == speakerGoogleCast) {
+        await _triggerGoogleCastIfConfigured();
+        return;
+      }
       if (route != speakerNetworkIp) return;
 
       final ip = await DBHelper.getSetting(networkSpeakerIpKey);
@@ -343,17 +367,45 @@ class NotificationService {
       if (!path.startsWith('/')) path = '/$path';
 
       final uri = Uri(scheme: 'http', host: ip.trim(), port: port, path: path);
-      await http
+      final getResp = await http
           .get(uri, headers: {'Accept': 'application/json'})
           .timeout(const Duration(seconds: 5));
+
+      if (getResp.statusCode == 404 || getResp.statusCode == 405) {
+        // Some local automation endpoints require POST instead of GET.
+        await http
+            .post(uri, headers: {'Accept': 'application/json'})
+            .timeout(const Duration(seconds: 5));
+      }
     } catch (_) {
       // Best-effort fire — silent failure if speaker is unreachable.
     }
   }
 
+  Future<void> _triggerGoogleCastIfConfigured() async {
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+
+    final mediaUrl = await DBHelper.getSetting(googleCastMediaUrlKey);
+    if (mediaUrl == null || mediaUrl.trim().isEmpty) {
+      return;
+    }
+
+    final castController = CastController();
+    await castController.setMedia(
+      url: mediaUrl.trim(),
+      title: 'Athan - Prayer Reminder',
+      subtitle: 'Athan is now playing',
+    );
+    await castController.loadAudio();
+    await castController.play();
+  }
+
   Future<String> _loadSpeakerRoutePreference() async {
     final stored = await DBHelper.getSetting(_speakerRouteKey);
     if (stored == speakerPhoneSpeaker ||
+        stored == speakerGoogleCast ||
         stored == speakerSystemDefault ||
         stored == speakerNetworkIp) {
       return stored!;
