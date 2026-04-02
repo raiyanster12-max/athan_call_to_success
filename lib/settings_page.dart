@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -8,11 +9,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:googlecast/CastController.dart';
 import 'package:googlecast/googlecast.dart';
-import 'package:googlecast/googlecastbutton.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path_lib;
 import 'package:permission_handler/permission_handler.dart';
 
+import 'app_palette.dart';
 import 'db_helper.dart';
 import 'notification_service.dart';
 
@@ -37,37 +38,44 @@ class _SettingsPageState extends State<SettingsPage> {
     'Muezzin Voice 1',
     'Muezzin Voice 2',
   ];
+  static const String _knownGoodCastTestUrl =
+      'https://download.samplelib.com/mp3/sample-3s.mp3';
 
   static const String _customFileTone = NotificationService.toneCustomFile;
   static const String _speakerRouteKey = 'notification_speaker_route';
-  static const String _networkSpeakerIpKey =
-      NotificationService.networkSpeakerIpKey;
-  static const String _networkSpeakerPortKey =
-      NotificationService.networkSpeakerPortKey;
-  static const String _networkSpeakerPathKey =
-      NotificationService.networkSpeakerPathKey;
-    static const String _googleCastMediaUrlKey =
+  static const String _googleCastMediaUrlKey =
       NotificationService.googleCastMediaUrlKey;
+    static const String _preferredCastSpeakerNameKey =
+      'preferred_cast_speaker_name';
+  static const String _overrideMuteKey = 'settings_override_mute';
+  static const String _showHijriDateKey = 'settings_show_hijri_date';
+  static const String _stickyStatusBarAlertKey =
+      'settings_sticky_status_bar_alert';
+  static const String _languageKey = 'settings_language';
+  static const String _hijriCorrectionKey = 'settings_hijri_correction';
+  static const String _alwaysShowLockscreenKey =
+      'settings_always_show_lockscreen';
+
+  static const Color _pageBackground = AppPalette.backgroundTop;
+  static const Color _surfaceBackground = AppPalette.surface;
+  static const Color _surfaceHighlight = AppPalette.surfaceRaised;
+  static const Color _dividerColor = AppPalette.outline;
+  static const Color _primaryText = AppPalette.textPrimary;
+  static const Color _secondaryText = AppPalette.textSecondary;
+  static const Color _sectionAccent = AppPalette.accent;
+  static const Color _iconBackground = AppPalette.panel;
 
   static const List<String> _speakerRouteOptions = [
-    NotificationService.speakerSystemDefault,
     NotificationService.speakerPhoneSpeaker,
     NotificationService.speakerGoogleCast,
-    NotificationService.speakerNetworkIp,
   ];
 
   LocationPermission? _locationPermission;
   PermissionStatus? _notificationPermission;
   PermissionStatus? _batteryOptimizationPermission;
   bool _isLoading = true;
-  String _speakerRoute = NotificationService.speakerSystemDefault;
-  final TextEditingController _networkSpeakerIpController =
-      TextEditingController();
-  final TextEditingController _networkSpeakerPortController =
-      TextEditingController(text: '80');
-  final TextEditingController _networkSpeakerPathController =
-      TextEditingController(text: '/play');
-    final TextEditingController _googleCastMediaUrlController =
+    String _speakerRoute = NotificationService.speakerPhoneSpeaker;
+  final TextEditingController _googleCastMediaUrlController =
       TextEditingController();
   final Map<String, String> _tonePreferences = {
     for (final prayer in _prayerNames) prayer: 'Beep',
@@ -80,9 +88,19 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _playingPrayer;
   final CastController _castController = CastController();
   StreamSubscription<bool>? _castConnectionSub;
+  StreamSubscription<String?>? _castMessageSub;
   bool _castConnected = false;
+  String _lastCastState = 'Not connected';
+  String _castDiagnostics = '';
+  String _preferredCastSpeakerName = '';
   bool _isScanningNetwork = false;
-  List<String> _scannedDevices = [];
+  List<_CastNetworkDevice> _discoveredCastDevices = [];
+  bool _overrideMute = true;
+  bool _showHijriDate = true;
+  bool _alwaysShowOnLockscreen = false;
+  String _stickyStatusBarAlert = 'None';
+  String _languageLabel = 'English';
+  int _hijriCorrection = 0;
 
   bool get _supportsBatteryOptimizationPermission =>
       defaultTargetPlatform == TargetPlatform.android;
@@ -92,6 +110,7 @@ class _SettingsPageState extends State<SettingsPage> {
     super.initState();
     _initializeCastConnectionListener();
     _loadSettings();
+    _refreshCastConnectionState();
   }
 
   @override
@@ -99,9 +118,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _audioPlayer?.stop();
     _audioPlayer?.dispose();
     _castConnectionSub?.cancel();
-    _networkSpeakerIpController.dispose();
-    _networkSpeakerPortController.dispose();
-    _networkSpeakerPathController.dispose();
+    _castMessageSub?.cancel();
     _googleCastMediaUrlController.dispose();
     super.dispose();
   }
@@ -110,9 +127,53 @@ class _SettingsPageState extends State<SettingsPage> {
     if (defaultTargetPlatform != TargetPlatform.android) {
       return;
     }
-    _castConnectionSub = GoogleChromeCast().connectionState.listen((connected) {
+    final cast = GoogleChromeCast();
+    _castConnectionSub = cast.connectionState.listen((connected) {
       if (!mounted) return;
-      setState(() => _castConnected = connected);
+      setState(() {
+        _castConnected = connected;
+        if (!connected) {
+          _lastCastState = 'Disconnected';
+        }
+      });
+    });
+    _castMessageSub = cast.messageStream.listen((state) {
+      if (!mounted || state == null || state.trim().isEmpty) return;
+      final message = state.trim();
+      setState(() {
+        _lastCastState = message;
+        if (message.startsWith('SESSION_CONNECTED')) {
+          _castConnected = true;
+        } else if (message.startsWith('SESSION_ENDED') ||
+            message.startsWith('SESSION_SUSPENDED') ||
+            message.startsWith('NO_CAST_SESSION')) {
+          _castConnected = false;
+        }
+      });
+    });
+  }
+
+  Future<void> _refreshCastConnectionState() async {
+    if (defaultTargetPlatform != TargetPlatform.android || !mounted) {
+      return;
+    }
+    final connected = await GoogleChromeCast.isConnected();
+    final debug = await GoogleChromeCast.debugState();
+    final diagnostics = debug['error'] != null
+      ? 'plugin_error=${debug['error']}'
+      : (debug.isEmpty
+          ? 'no_debug_data'
+          : 'initialized=${debug['initialized']} | '
+            'session=${debug['hasSession']} | '
+            'remote=${debug['hasRemoteMediaClient']} | '
+            'playback=${debug['playbackState']}');
+    if (!mounted) return;
+    setState(() {
+      _castConnected = connected;
+      _castDiagnostics = diagnostics;
+      if (!connected && _lastCastState == 'Not connected') {
+        _lastCastState = 'Not connected';
+      }
     });
   }
 
@@ -138,26 +199,97 @@ class _SettingsPageState extends State<SettingsPage> {
     return null;
   }
 
-  Future<String?> _probeHost(String ip) async {
-    for (final port in [8008, 8009, 80]) {
-      try {
-        final socket = await Socket.connect(
-          ip,
-          port,
-          timeout: const Duration(milliseconds: 400),
-        );
-        await socket.close();
-        return '$ip:$port';
-      } catch (_) {}
+  Future<bool> _ensureCastScanPermission() async {
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return true;
     }
-    return null;
+
+    final proceed = await _showPermissionDialog(
+      title: 'Nearby Device Access',
+      message:
+          'To discover Google/Chromecast speakers on your local network, allow nearby Wi-Fi device access when prompted.',
+    );
+    if (!proceed) {
+      return false;
+    }
+
+    final status = await Permission.nearbyWifiDevices.request();
+    if (status == PermissionStatus.granted ||
+        status == PermissionStatus.limited) {
+      return true;
+    }
+
+    if (!mounted) return false;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Nearby Wi-Fi permission is needed to scan for Chromecast speakers.',
+        ),
+      ),
+    );
+    return false;
+  }
+
+  Future<_CastNetworkDevice?> _probeCastHost(String ip) async {
+    Socket socket;
+    try {
+      socket = await Socket.connect(
+        ip,
+        8008,
+        timeout: const Duration(milliseconds: 350),
+      );
+    } catch (_) {
+      return null;
+    }
+    await socket.close();
+
+    final uri = Uri(
+      scheme: 'http',
+      host: ip,
+      port: 8008,
+      path: '/setup/eureka_info',
+      queryParameters: const {'params': 'name,device_info'},
+    );
+
+    try {
+      final resp = await http
+          .get(uri, headers: {'Accept': 'application/json'})
+          .timeout(const Duration(milliseconds: 650));
+      if (resp.statusCode != 200) {
+        return null;
+      }
+
+      final decoded = jsonDecode(resp.body);
+      if (decoded is! Map<String, dynamic>) {
+        return null;
+      }
+
+      final name = (decoded['name'] ?? '').toString().trim();
+      final info = decoded['device_info'];
+      final model = info is Map ? (info['model_name'] ?? '').toString() : '';
+      if (name.isEmpty) {
+        return null;
+      }
+
+      return _CastNetworkDevice(
+        name: name,
+        model: model.isEmpty ? 'Google/Chromecast Speaker' : model,
+        ip: ip,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _scanLocalNetwork() async {
     if (_isScanningNetwork) return;
+
+    final hasPermission = await _ensureCastScanPermission();
+    if (!hasPermission) return;
+
     setState(() {
       _isScanningNetwork = true;
-      _scannedDevices = [];
+      _discoveredCastDevices = [];
     });
 
     final subnet = await _getLocalSubnet();
@@ -170,27 +302,40 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
 
-    const batchSize = 30;
-    final found = <String>[];
+    const batchSize = 24;
+    final found = <_CastNetworkDevice>[];
     for (int start = 1; start <= 254; start += batchSize) {
       final end = (start + batchSize - 1).clamp(1, 254);
-      final batch = <Future<String?>>[]; 
+      final batch = <Future<_CastNetworkDevice?>>[];
       for (int i = start; i <= end; i++) {
-        batch.add(_probeHost('$subnet.$i'));
+        batch.add(_probeCastHost('$subnet.$i'));
       }
       final results = await Future.wait(batch);
-      found.addAll(results.whereType<String>());
+      found.addAll(results.whereType<_CastNetworkDevice>());
+
+      if (!mounted) return;
+      setState(() {
+        _discoveredCastDevices = [...found];
+      });
     }
+
+    final unique = <String, _CastNetworkDevice>{
+      for (final device in found) device.ip: device,
+    };
+    final sorted = unique.values.toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
     if (!mounted) return;
     setState(() {
-      _scannedDevices = found;
+      _discoveredCastDevices = sorted;
       _isScanningNetwork = false;
     });
 
-    if (found.isEmpty) {
+    if (sorted.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No network speakers found on this network.')),
+        const SnackBar(
+          content: Text('No Google/Chromecast speakers found on this network.'),
+        ),
       );
     }
   }
@@ -207,25 +352,27 @@ class _SettingsPageState extends State<SettingsPage> {
       _speakerRoute = storedSpeakerRoute;
     }
 
-    final storedIp = await DBHelper.getSetting(_networkSpeakerIpKey);
-    final storedPort = await DBHelper.getSetting(_networkSpeakerPortKey);
-    final storedPath = await DBHelper.getSetting(_networkSpeakerPathKey);
     final storedCastUrl = await DBHelper.getSetting(_googleCastMediaUrlKey);
-    if (storedIp != null && storedIp.trim().isNotEmpty) {
-      _networkSpeakerIpController.text = storedIp;
-    }
-    if (storedPort != null && storedPort.trim().isNotEmpty) {
-      _networkSpeakerPortController.text = storedPort;
-    }
-    if (storedPath != null && storedPath.trim().isNotEmpty) {
-      _networkSpeakerPathController.text = storedPath;
-    }
+    final storedPreferredCastName = await DBHelper.getSetting(
+      _preferredCastSpeakerNameKey,
+    );
     if (storedCastUrl != null && storedCastUrl.trim().isNotEmpty) {
       _googleCastMediaUrlController.text = storedCastUrl;
     } else {
       _googleCastMediaUrlController.text =
           'https://download.samplelib.com/mp3/sample-3s.mp3';
     }
+    _preferredCastSpeakerName = (storedPreferredCastName ?? '').trim();
+
+    _overrideMute = await _loadBoolSetting(_overrideMuteKey, fallback: true);
+    _showHijriDate = await _loadBoolSetting(_showHijriDateKey, fallback: true);
+    _alwaysShowOnLockscreen = await _loadBoolSetting(_alwaysShowLockscreenKey);
+    _stickyStatusBarAlert =
+        await DBHelper.getSetting(_stickyStatusBarAlertKey) ?? 'None';
+    _languageLabel = await DBHelper.getSetting(_languageKey) ?? 'English';
+    _hijriCorrection =
+        int.tryParse(await DBHelper.getSetting(_hijriCorrectionKey) ?? '0') ??
+        0;
 
     for (final prayer in _prayerNames) {
       final storedTone = await DBHelper.getSetting(_toneKey(prayer));
@@ -350,32 +497,11 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _updateSpeakerRoute(String route) async {
+    if (mounted) {
+      setState(() => _speakerRoute = route);
+    }
     await DBHelper.setSetting(_speakerRouteKey, route);
-    if (route == NotificationService.speakerNetworkIp) {
-      await _saveNetworkSpeakerConfig(reschedule: false);
-    }
     await NotificationService.instance.rescheduleUsingStoredLocation();
-    if (!mounted) return;
-    setState(() => _speakerRoute = route);
-  }
-
-  Future<void> _saveNetworkSpeakerConfig({bool reschedule = true}) async {
-    await DBHelper.setSetting(
-      _networkSpeakerIpKey,
-      _networkSpeakerIpController.text.trim(),
-    );
-    await DBHelper.setSetting(
-      _networkSpeakerPortKey,
-      _networkSpeakerPortController.text.trim(),
-    );
-    await DBHelper.setSetting(
-      _networkSpeakerPathKey,
-      _networkSpeakerPathController.text.trim(),
-    );
-
-    if (reschedule) {
-      await NotificationService.instance.rescheduleUsingStoredLocation();
-    }
   }
 
   Future<void> _saveGoogleCastMediaUrl() async {
@@ -385,9 +511,15 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Future<void> _testGoogleCastPlayback() async {
-    final mediaUrl = _googleCastMediaUrlController.text.trim();
-    if (mediaUrl.isEmpty) {
+  Future<void> _playCastUrl(
+    String mediaUrl, {
+    required String title,
+    required String subtitle,
+    bool saveUrl = false,
+  }) async {
+    await _refreshCastConnectionState();
+
+    if (mediaUrl.trim().isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Enter a Cast media URL first.')),
@@ -395,115 +527,102 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
 
-    await _saveGoogleCastMediaUrl();
+    if (saveUrl) {
+      await _saveGoogleCastMediaUrl();
+    }
 
     try {
-      await _castController.setMedia(
-        url: mediaUrl,
-        title: 'Athan Test',
-        subtitle: 'Call to Success',
-      );
-      await _castController.loadAudio();
-      await _castController.play();
+      if (!_castConnected) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Cast is not connected. Tap the Cast icon and select your speaker first.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      await _castController
+          .setMedia(
+        url: mediaUrl.trim(),
+        title: title,
+        subtitle: subtitle,
+      )
+          .timeout(const Duration(seconds: 5));
+      await _castController.loadAudio().timeout(const Duration(seconds: 10));
+      await _castController.play().timeout(const Duration(seconds: 10));
+      await Future.delayed(const Duration(milliseconds: 1200));
+      await _refreshCastConnectionState();
       if (!mounted) return;
+      if (_lastCastState == 'ERROR' || _lastCastState == 'IDLE') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Cast command sent, but device state is $_lastCastState. '
+              'If the known-good test also fails, the Cast session/plugin path is the problem.',
+            ),
+          ),
+        );
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cast playback started.')),
+        SnackBar(
+          content: Text('Cast playback started. State: $_lastCastState'),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not play on Cast: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not play on Cast: $e')));
     }
   }
 
-  List<Uri> _speakerProbeUris({
-    required String ip,
-    required int port,
-    required String preferredPath,
-  }) {
-    final normalized = preferredPath.startsWith('/')
-        ? preferredPath
-        : '/$preferredPath';
-    final candidates = <String>[
-      normalized,
-      '/play',
-      '/api/play',
-      '/trigger',
-      '/status',
-      '/health',
-      '/setup/eureka_info',
-      '/',
-    ];
-    final unique = <String>{};
-    return candidates
-        .where((p) => unique.add(p))
-        .map((p) => Uri(scheme: 'http', host: ip, port: port, path: p))
-        .toList();
+  Future<void> _testGoogleCastPlayback() async {
+    final mediaUrl = _googleCastMediaUrlController.text.trim();
+    await _playCastUrl(
+      mediaUrl,
+      title: 'Athan Test',
+      subtitle: 'Call to Success',
+      saveUrl: true,
+    );
   }
 
-  Future<void> _testNetworkSpeaker() async {
-    final ip = _networkSpeakerIpController.text.trim();
-    final port = int.tryParse(_networkSpeakerPortController.text.trim()) ?? 80;
-    var path = _networkSpeakerPathController.text.trim();
+  Future<void> _testKnownGoodCastPlayback() async {
+    await _playCastUrl(
+      _knownGoodCastTestUrl,
+      title: 'Known Good Cast Test',
+      subtitle: 'Sample MP3 sanity check',
+    );
+  }
 
-    if (ip.isEmpty) {
+  Future<void> _testPrayerTriggerNow() async {
+    await _saveGoogleCastMediaUrl();
+    await DBHelper.setSetting(_speakerRouteKey, _speakerRoute);
+    await _refreshCastConnectionState();
+
+    if (_speakerRoute == NotificationService.speakerGoogleCast &&
+        !_castConnected) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a speaker IP address first.')),
+        const SnackBar(
+          content: Text(
+            'Google Cast route is selected, but no Cast session is connected yet.',
+          ),
+        ),
       );
       return;
     }
-    if (path.isEmpty) {
-      path = '/play';
-    }
-    if (!path.startsWith('/')) {
-      path = '/$path';
-    }
 
-    await _saveNetworkSpeakerConfig(reschedule: false);
-
-    final probeUris = _speakerProbeUris(
-      ip: ip,
-      port: port,
-      preferredPath: path,
-    );
-    String message = 'Could not reach speaker endpoint.';
+    String message;
     try {
-      bool anyHttpResponse = false;
-      int? selectedStatus;
-      Uri? selectedUri;
-
-      for (final uri in probeUris) {
-        try {
-          final response = await http
-              .get(uri, headers: {'Accept': 'application/json'})
-              .timeout(const Duration(seconds: 3));
-          anyHttpResponse = true;
-          selectedStatus = response.statusCode;
-          selectedUri = uri;
-          if (response.statusCode >= 200 && response.statusCode < 400) {
-            break;
-          }
-        } catch (_) {
-          // Try the next endpoint candidate.
-        }
-      }
-
-      if (selectedStatus != null && selectedStatus >= 200 && selectedStatus < 400) {
-        message = 'Speaker reachable at ${selectedUri!.path} (HTTP $selectedStatus).';
-        _networkSpeakerPathController.text = selectedUri.path;
-        await _saveNetworkSpeakerConfig(reschedule: false);
-      } else if (anyHttpResponse && selectedStatus == 404) {
-        message =
-            'Device is reachable but endpoint path is not found (404). '
-            'If this is a Google/Chromecast speaker, direct HTTP /play is not supported. '
-            'Use a compatible local speaker endpoint app/service and set its path.';
-      } else if (anyHttpResponse && selectedStatus != null) {
-        message = 'Device responded with HTTP $selectedStatus. Check endpoint path/auth.';
-      }
+      message = await NotificationService.instance.testSelectedSpeakerNow(
+        routeOverride: _speakerRoute,
+      );
     } catch (e) {
-      message = 'Could not reach speaker endpoint: $e';
+      message = 'Trigger failed: $e';
     }
 
     if (!mounted) return;
@@ -516,9 +635,20 @@ class _SettingsPageState extends State<SettingsPage> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: [
-        'mp3', 'wav', 'm4a', 'aac', 'ogg',
-        'flac', 'opus', '3gp', 'amr', 'wma',
-        'aiff', 'aif', 'mp4', 'mkv',
+        'mp3',
+        'wav',
+        'm4a',
+        'aac',
+        'ogg',
+        'flac',
+        'opus',
+        '3gp',
+        'amr',
+        'wma',
+        'aiff',
+        'aif',
+        'mp4',
+        'mkv',
       ],
       allowMultiple: false,
     );
@@ -556,7 +686,10 @@ class _SettingsPageState extends State<SettingsPage> {
 
     // ExoPlayer (audioplayers v6 on Android) does not support WMA or AIFF.
     // Detect early and surface a friendly message instead of a silent failure.
-    final ext = path_lib.extension(customPath).toLowerCase().replaceFirst('.', '');
+    final ext = path_lib
+        .extension(customPath)
+        .toLowerCase()
+        .replaceFirst('.', '');
     const androidUnsupported = {'wma', 'aiff', 'aif'};
     if (defaultTargetPlatform == TargetPlatform.android &&
         androidUnsupported.contains(ext)) {
@@ -592,9 +725,9 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (e) {
       await player.dispose();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not play audio: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not play audio: $e')));
     }
   }
 
@@ -673,417 +806,896 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(
-            // WCAG 4.1.2: announce loading state
-            semanticsLabel: 'Loading settings',
+  String _speakerRouteLabel() {
+    switch (_speakerRoute) {
+      case NotificationService.speakerPhoneSpeaker:
+        return 'Phone speaker';
+      case NotificationService.speakerGoogleCast:
+        return 'Google/Chromecast speaker';
+      default:
+        return 'Phone speaker';
+    }
+  }
+
+  String _alertSettingsSummary() {
+    final route = _speakerRouteLabel();
+    if (_speakerRoute == NotificationService.speakerGoogleCast) {
+      final castState = _castConnected ? 'Connected' : 'Not connected';
+      if (_preferredCastSpeakerName.isNotEmpty) {
+        return '$route • $castState • $_preferredCastSpeakerName';
+      }
+      return '$route • $castState';
+    }
+    return route;
+  }
+
+  String _permissionSummary() {
+    return 'Location ${_locationPermissionLabel()} • Notifications ${_notificationPermissionLabel()}';
+  }
+
+  String _batterySummary() {
+    if (!_supportsBatteryOptimizationPermission) {
+      return 'Not required on this platform';
+    }
+    return _batteryPermissionLabel();
+  }
+
+  Future<bool> _loadBoolSetting(String key, {bool fallback = false}) async {
+    final stored = await DBHelper.getSetting(key);
+    if (stored == null) {
+      return fallback;
+    }
+    return stored.toLowerCase() == 'true';
+  }
+
+  Future<void> _saveBoolSetting(String key, bool value) async {
+    await DBHelper.setSetting(key, value.toString());
+  }
+
+  Future<void> _setOverrideMute(bool value) async {
+    await _saveBoolSetting(_overrideMuteKey, value);
+    if (!mounted) return;
+    setState(() => _overrideMute = value);
+  }
+
+  Future<void> _setShowHijriDate(bool value) async {
+    await _saveBoolSetting(_showHijriDateKey, value);
+    if (!mounted) return;
+    setState(() => _showHijriDate = value);
+  }
+
+  Future<void> _showStickyStatusBarAlertDialog() async {
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Sticky Status Bar Alert'),
+        content: RadioGroup<String>(
+          groupValue: _stickyStatusBarAlert,
+          onChanged: (value) => Navigator.of(dialogContext).pop(value),
+          child: const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RadioListTile<String>(
+                value: 'None',
+                title: Text('None'),
+              ),
+            ],
           ),
         ),
-      );
-    }
+      ),
+    );
+    if (selected == null) return;
+    await DBHelper.setSetting(_stickyStatusBarAlertKey, selected);
+    if (!mounted) return;
+    setState(() => _stickyStatusBarAlert = selected);
+  }
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
+  Future<void> _showHijriCorrectionDialog() async {
+    final selected = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Hijri Correction'),
+        content: RadioGroup<int>(
+          groupValue: _hijriCorrection,
+          onChanged: (newValue) => Navigator.of(dialogContext).pop(newValue),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final value in [-2, -1, 0, 1, 2])
+                RadioListTile<int>(
+                  value: value,
+                  title: Text(value == 0 ? 'No correction' : '$value day(s)'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selected == null) return;
+    await DBHelper.setSetting(_hijriCorrectionKey, selected.toString());
+    if (!mounted) return;
+    setState(() => _hijriCorrection = selected);
+  }
+
+  Future<void> _showLanguageDialog() async {
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Language'),
+        content: RadioGroup<String>(
+          groupValue: _languageLabel,
+          onChanged: (value) => Navigator.of(dialogContext).pop(value),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final language in const ['English'])
+                RadioListTile<String>(
+                  value: language,
+                  title: Text(language),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selected == null) return;
+    await DBHelper.setSetting(_languageKey, selected);
+    if (!mounted) return;
+    setState(() => _languageLabel = selected);
+  }
+
+  Future<void> _showCalculationMethodDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Calculation Method'),
+        content: const Text(
+          'Current calculation method: ISNA (North-America)\nAsr method: Hanafi',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showComingSoonMessage(String label) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$label settings are not configured yet.')),
+    );
+  }
+
+  void _openAlertSettingsSheet() {
+    _refreshCastConnectionState();
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _buildBottomSheetScaffold(
+        title: 'Alert Settings',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Select where Athan notifications should play and test the route directly.',
+              style: TextStyle(color: _secondaryText),
+            ),
+            const SizedBox(height: 16),
+            RadioGroup<String>(
+              groupValue: _speakerRoute,
+              onChanged: (value) {
+                if (value != null) {
+                  _updateSpeakerRoute(value);
+                }
+              },
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // WCAG 2.4.6: mark as heading for screen-reader navigation
-                  Semantics(
-                    header: true,
-                    child: const Text(
-                      'Permissions',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  ListTile(
+                children: const [
+                  RadioListTile<String>(
+                    activeColor: _sectionAccent,
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.location_on_outlined),
-                    title: const Text('Location'),
-                    subtitle: Text(_locationPermissionLabel()),
-                    trailing: FilledButton(
-                      onPressed: _requestLocationPermission,
-                      child: const Text('Review'),
+                    title: Text(
+                      'Phone',
+                      style: TextStyle(color: _primaryText),
                     ),
+                    value: NotificationService.speakerPhoneSpeaker,
                   ),
-                  ListTile(
+                  RadioListTile<String>(
+                    activeColor: _sectionAccent,
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.notifications_outlined),
-                    title: const Text('Notifications'),
-                    subtitle: Text(_notificationPermissionLabel()),
-                    trailing: FilledButton(
-                      onPressed: _requestNotificationPermission,
-                      child: const Text('Review'),
+                    title: Text(
+                      'Google/ChromeCast Speaker',
+                      style: TextStyle(color: _primaryText),
                     ),
-                  ),
-                  if (_supportsBatteryOptimizationPermission)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.battery_charging_full_outlined),
-                      title: const Text('Battery Optimization'),
-                      subtitle: Text(_batteryPermissionLabel()),
-                      trailing: FilledButton(
-                        onPressed: _requestBatteryOptimizationPermission,
-                        child: const Text('Unrestrict'),
-                      ),
-                    ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: openAppSettings,
-                    icon: const Icon(Icons.open_in_new),
-                    label: const Text('Open app settings'),
+                    value: NotificationService.speakerGoogleCast,
                   ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            if (_speakerRoute == NotificationService.speakerGoogleCast) ...[
+              const SizedBox(height: 12),
+              Row(
                 children: [
-                  // WCAG 2.4.6: mark as heading for screen-reader navigation
-                  Semantics(
-                    header: true,
-                    child: const Text(
-                      'Athan Sound Preferences',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Your selections are stored and applied to upcoming prayer reminders. '
-                    'On Android, you can also choose a custom audio file from your phone.',
-                  ),
-                  const SizedBox(height: 16),
-                  // ── Play Adhan On... ──────────────────────────────────
-                  const Text(
-                    'Play Adhan On...',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  RadioListTile<String>(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Phone'),
-                    value: NotificationService.speakerPhoneSpeaker,
-                    groupValue: _speakerRoute,
-                    onChanged: (v) {
-                      if (v != null) _updateSpeakerRoute(v);
-                    },
-                  ),
-                  RadioListTile<String>(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Google/ChromeCast Speaker'),
-                    value: NotificationService.speakerGoogleCast,
-                    groupValue: _speakerRoute,
-                    onChanged: (v) {
-                      if (v != null) _updateSpeakerRoute(v);
-                    },
-                  ),
-                  RadioListTile<String>(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Legacy IP Endpoint'),
-                    value: NotificationService.speakerNetworkIp,
-                    groupValue: _speakerRoute,
-                    onChanged: (v) {
-                      if (v != null) _updateSpeakerRoute(v);
-                    },
-                  ),
-                  if (_speakerRoute == NotificationService.speakerGoogleCast) ...[
-                    const SizedBox(height: 12),
-                    Row(
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const GoogleCastButton(size: 32),
+                        Text(
+                          _castConnected
+                              ? 'Cast connected. You can test playback now.'
+                              : 'Tap Select Speaker to choose your cast device.',
+                          style: const TextStyle(color: _primaryText),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _castConnected
-                                ? 'Cast connected. Tap Test Cast Audio to play Athan.'
-                                : 'Tap the Cast icon to select your Google speaker.',
+                        if (_preferredCastSpeakerName.isNotEmpty)
+                          Text(
+                            'Preferred speaker: $_preferredCastSpeakerName',
+                            style: const TextStyle(
+                              color: _secondaryText,
+                              fontSize: 12,
+                            ),
+                          ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Cast state: $_lastCastState',
+                          style: const TextStyle(
+                            color: _secondaryText,
+                            fontSize: 12,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _googleCastMediaUrlController,
-                      decoration: const InputDecoration(
-                        labelText: 'Cast Media URL (MP3/AAC)',
-                        hintText: 'https://example.com/athan.mp3',
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: (_) => _saveGoogleCastMediaUrl(),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _testGoogleCastPlayback,
-                            icon: const Icon(Icons.cast_connected),
-                            label: const Text('Test Cast Audio'),
-                          ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    debugPrint('Cast chooser: Select Speaker tapped');
+                    final shown = await GoogleChromeCast.showCastDialog();
+                    debugPrint('Cast chooser: showCastDialog returned $shown');
+                    if (!mounted) return;
+                    if (!shown) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Could not open Cast chooser dialog.'),
                         ),
-                        const SizedBox(width: 8),
-                        OutlinedButton.icon(
-                          onPressed: () => _castController.stop(),
+                      );
+                      return;
+                    }
+                    await Future.delayed(const Duration(seconds: 1));
+                    await _refreshCastConnectionState();
+                  },
+                  icon: const Icon(Icons.cast_connected),
+                  label: const Text('Select Speaker'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _googleCastMediaUrlController,
+                style: const TextStyle(color: _primaryText),
+                decoration: _sheetInputDecoration(
+                  'Cast Media URL (MP3/AAC)',
+                  hint: 'https://example.com/athan.mp3',
+                ),
+                onChanged: (_) => _saveGoogleCastMediaUrl(),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _testGoogleCastPlayback,
+                      icon: const Icon(Icons.cast_connected),
+                      label: const Text('Test Cast Audio'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => _castController.stop(),
+                    icon: const Icon(Icons.stop),
+                    label: const Text('Stop'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _refreshCastConnectionState,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Refresh Cast State'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _testKnownGoodCastPlayback,
+                  icon: const Icon(Icons.music_note_outlined),
+                  label: const Text('Test Known-Good MP3'),
+                ),
+              ),
+              if (_castDiagnostics.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Debug: $_castDiagnostics',
+                  style: const TextStyle(
+                    color: _secondaryText,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              const Text(
+                'Discover speakers on your Wi-Fi, then tap the Cast icon to connect.',
+                style: TextStyle(color: _secondaryText, fontSize: 12),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _isScanningNetwork ? null : _scanLocalNetwork,
+                  icon: _isScanningNetwork
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.wifi_find),
+                  label: Text(
+                    _isScanningNetwork
+                        ? 'Scanning local network...'
+                        : 'Scan local network for Chromecast',
+                  ),
+                ),
+              ),
+              if (_discoveredCastDevices.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: _discoveredCastDevices.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final device = _discoveredCastDevices[index];
+                      return ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(
+                          Icons.speaker_group_outlined,
+                          color: _sectionAccent,
+                        ),
+                        title: Text(
+                          device.name,
+                          style: const TextStyle(color: _primaryText),
+                        ),
+                        subtitle: Text(
+                          '${device.model} • ${device.ip}',
+                          style: const TextStyle(color: _secondaryText),
+                        ),
+                        trailing: TextButton(
+                          onPressed: () async {
+                            await DBHelper.setSetting(
+                              _preferredCastSpeakerNameKey,
+                              device.name,
+                            );
+                            if (!mounted) return;
+                            setState(() => _preferredCastSpeakerName = device.name);
+                            ScaffoldMessenger.of(this.context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Selected ${device.name}. Use the Cast icon above to connect without leaving this page.',
+                                ),
+                              ),
+                            );
+                          },
+                          child: const Text('Use'),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ],
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _testPrayerTriggerNow,
+                icon: const Icon(Icons.notifications_active_outlined),
+                label: const Text('Test Prayer Trigger Now'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openMoreSettingsSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _buildBottomSheetScaffold(
+        title: 'More Prayer Settings',
+        child: Column(
+          children: [
+            for (final prayer in _prayerNames) ...[
+              _buildToneEditor(prayer),
+              const SizedBox(height: 12),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomSheetScaffold({
+    required String title,
+    required Widget child,
+  }) {
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.82,
+      minChildSize: 0.55,
+      maxChildSize: 0.95,
+      builder: (context, scrollController) => Container(
+        decoration: const BoxDecoration(
+          color: _surfaceBackground,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+          children: [
+            Center(
+              child: Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: _dividerColor,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: const TextStyle(
+                color: _primaryText,
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 16),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _sheetInputDecoration(String label, {String? hint}) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      labelStyle: const TextStyle(color: _secondaryText),
+      hintStyle: const TextStyle(color: _secondaryText),
+      filled: true,
+      fillColor: AppPalette.panel,
+      enabledBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: _dividerColor),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: _sectionAccent),
+        borderRadius: BorderRadius.circular(12),
+      ),
+    );
+  }
+
+  Widget _buildToneEditor(String prayer) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppPalette.panel,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _dividerColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            prayer,
+            style: const TextStyle(
+              color: _primaryText,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            initialValue: _tonePreferences[prayer],
+            dropdownColor: _surfaceBackground,
+            style: const TextStyle(color: _primaryText),
+            decoration: _sheetInputDecoration('Tone'),
+            items: _allToneOptions
+                .map(
+                  (tone) => DropdownMenuItem<String>(
+                    value: tone,
+                    child: Text(
+                      tone,
+                      style: const TextStyle(color: _primaryText),
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) async {
+              if (value == null) return;
+              if (value == _customFileTone && !kIsWeb) {
+                await _pickCustomToneForPrayer(prayer);
+                return;
+              }
+              await _updateTone(prayer, value);
+            },
+          ),
+          if (_tonePreferences[prayer] == _customFileTone && !kIsWeb) ...[
+            const SizedBox(height: 10),
+            Text(
+              _customToneFileNames[prayer]!.isEmpty
+                  ? 'No custom file selected'
+                  : 'Selected: ${_customToneFileNames[prayer]}',
+              style: const TextStyle(color: _secondaryText, fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (_customToneFileNames[prayer]!.isNotEmpty)
+                  _playingPrayer == prayer
+                      ? OutlinedButton.icon(
+                          onPressed: _stopPlayback,
                           icon: const Icon(Icons.stop),
                           label: const Text('Stop'),
+                        )
+                      : OutlinedButton.icon(
+                          onPressed: () => _playCustomTone(prayer),
+                          icon: const Icon(Icons.play_arrow),
+                          label: const Text('Preview'),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Note: Chromecast requires a URL it can fetch directly. '
-                      'Local phone files are not playable on Cast without hosting.',
-                      style: TextStyle(color: Colors.black54, fontSize: 12),
-                    ),
-                  ],
-                  if (_speakerRoute == NotificationService.speakerNetworkIp) ...[
-                    const SizedBox(height: 12),
-                    // Show currently saved IP if any
-                    if (_networkSpeakerIpController.text.trim().isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text(
-                          _networkSpeakerIpController.text.trim(),
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    // Scanned device list
-                    if (_scannedDevices.isNotEmpty)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Discovered devices:',
-                            style: TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 4),
-                          for (final device in _scannedDevices)
-                            ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: const Icon(Icons.speaker),
-                              title: Text(device),
-                              trailing: TextButton(
-                                child: const Text('Select'),
-                                onPressed: () {
-                                  final parts = device.split(':');
-                                  _networkSpeakerIpController.text = parts[0];
-                                  if (parts.length > 1) {
-                                    _networkSpeakerPortController.text = parts[1];
-                                  }
-                                  _saveNetworkSpeakerConfig(reschedule: false);
-                                  setState(() {});
-                                },
-                              ),
-                            ),
-                          const SizedBox(height: 8),
-                        ],
-                      ),
-                    // Manual IP fields
-                    TextField(
-                      controller: _networkSpeakerIpController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Speaker IP Address',
-                        hintText: 'e.g. 192.168.1.45',
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: (_) => _saveNetworkSpeakerConfig(reschedule: false),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _networkSpeakerPortController,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Port',
-                              hintText: '80',
-                              border: OutlineInputBorder(),
-                            ),
-                            onChanged: (_) => _saveNetworkSpeakerConfig(reschedule: false),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          flex: 2,
-                          child: TextField(
-                            controller: _networkSpeakerPathController,
-                            decoration: const InputDecoration(
-                              labelText: 'Endpoint Path',
-                              hintText: '/play',
-                              border: OutlineInputBorder(),
-                            ),
-                            onChanged: (_) => _saveNetworkSpeakerConfig(reschedule: false),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _isScanningNetwork ? null : _scanLocalNetwork,
-                            icon: _isScanningNetwork
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Icon(Icons.wifi_find),
-                            label: Text(
-                              _isScanningNetwork
-                                  ? 'Scanning...'
-                                  : 'Choose Speaker',
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        OutlinedButton.icon(
-                          onPressed: _testNetworkSpeaker,
-                          icon: const Icon(Icons.wifi_tethering),
-                          label: const Text('Test'),
-                        ),
-                      ],
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  for (final prayer in _prayerNames)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          DropdownButtonFormField<String>(
-                            initialValue: _tonePreferences[prayer],
-                            decoration: InputDecoration(
-                              labelText: prayer,
-                              border: const OutlineInputBorder(),
-                            ),
-                            items: _allToneOptions
-                                .map(
-                                  (tone) => DropdownMenuItem<String>(
-                                    value: tone,
-                                    child: Text(tone),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (value) async {
-                              if (value == null) return;
-                              if (value == _customFileTone && !kIsWeb) {
-                                await _pickCustomToneForPrayer(prayer);
-                                return;
-                              }
-                              _updateTone(prayer, value);
-                            },
-                          ),
-                          if (_tonePreferences[prayer] == _customFileTone &&
-                              !kIsWeb)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8, left: 4),
-                              child: Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                children: [
-                  Text(
-                    _customToneFileNames[prayer]!.isEmpty
-                        ? 'No custom file selected'
-                        : 'Selected: ${_customToneFileNames[prayer]}',
-                    // WCAG 1.4.3: Color(0xFF616161) ~5.6:1 on white (passes AA)
-                    style: const TextStyle(
-                      color: Color(0xFF616161),
-                      fontSize: 12,
-                    ),
-                  ),
-                                  if (_customToneFileNames[prayer]!.isNotEmpty)
-                                    _playingPrayer == prayer
-                                        ? OutlinedButton.icon(
-                                            onPressed: _stopPlayback,
-                                            icon: const Icon(Icons.stop, color: Colors.red),
-                                            label: const Text('Stop'),
-                                          )
-                                        : OutlinedButton.icon(
-                                            onPressed: () => _playCustomTone(prayer),
-                                            icon: const Icon(Icons.play_arrow),
-                                            label: const Text('Preview'),
-                                          ),
-                                  OutlinedButton(
-                                    onPressed: () =>
-                                        _pickCustomToneForPrayer(prayer),
-                                    child: const Text('Change file'),
-                                  ),
-                                  TextButton(
-                                    onPressed: () =>
-                                        _clearCustomToneForPrayer(prayer),
-                                    child: const Text('Use Beep'),
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
+                OutlinedButton(
+                  onPressed: () => _pickCustomToneForPrayer(prayer),
+                  child: const Text('Change file'),
+                ),
+                TextButton(
+                  onPressed: () => _clearCustomToneForPrayer(prayer),
+                  child: const Text('Use Beep'),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPageHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Settings',
+            style: TextStyle(
+              color: _primaryText,
+              fontSize: 32,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.8,
             ),
           ),
+          const SizedBox(height: 6),
+          const Text(
+            'Prayer notifications, device behavior, and date preferences.',
+            style: TextStyle(color: _secondaryText, fontSize: 14, height: 1.35),
+          ),
           const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // WCAG 2.4.6: mark as heading
-                  Semantics(
-                    header: true,
-                    child: const Text(
-                      'Reliability Roadmap',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'The next implementation pass will add background Athan scheduling in 3-day batches and connect these tone preferences to real prayer notifications.',
-                  ),
-                ],
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildStatusChip(
+                Icons.notifications_active_outlined,
+                'Alerts',
+                _speakerRouteLabel(),
               ),
+              _buildStatusChip(
+                Icons.location_on_outlined,
+                'Access',
+                _locationPermissionLabel(),
+              ),
+              _buildStatusChip(
+                Icons.battery_charging_full_outlined,
+                'Battery',
+                _supportsBatteryOptimizationPermission
+                    ? (_batteryOptimizationPermission ==
+                              PermissionStatus.granted
+                          ? 'Unrestricted'
+                          : 'Managed')
+                    : 'Default',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(IconData icon, String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: _surfaceHighlight,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _dividerColor),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: _sectionAccent),
+          const SizedBox(width: 8),
+          Text(
+            '$label: $value',
+            style: const TextStyle(
+              color: _primaryText,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
       ),
     );
   }
+
+  Widget _buildSectionLabel(String label) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: _sectionAccent,
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.7,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionCard(List<Widget> children) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: _surfaceBackground,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _dividerColor),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 18,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _buildSettingRow({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    Widget? trailing,
+    VoidCallback? onTap,
+    bool enabled = true,
+  }) {
+    final titleColor = enabled ? _primaryText : Colors.white38;
+    final subtitleColor = enabled ? _secondaryText : AppPalette.textMuted;
+    final resolvedTrailing =
+        trailing ??
+        ((enabled && onTap != null)
+            ? const Icon(
+                Icons.chevron_right_rounded,
+                color: _secondaryText,
+                size: 24,
+              )
+            : null);
+
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(18),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: enabled ? _iconBackground : AppPalette.surfaceHighlight,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                icon,
+                color: enabled ? Colors.white : Colors.white30,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: titleColor,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 13,
+                        height: 1.3,
+                        color: subtitleColor,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (resolvedTrailing != null) ...[
+              const SizedBox(width: 12),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: resolvedTrailing,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRowDivider() {
+    return const Divider(height: 1, color: _dividerColor, indent: 72);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: _pageBackground,
+        body: Center(
+          child: CircularProgressIndicator(semanticsLabel: 'Loading settings'),
+        ),
+      );
+    }
+
+    final batteryEnabled =
+        _batteryOptimizationPermission == PermissionStatus.granted;
+
+    return Scaffold(
+      backgroundColor: _pageBackground,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(0, 10, 0, 32),
+          children: [
+            _buildPageHeader(),
+            _buildSectionLabel('Permissions'),
+            _buildSectionCard([
+              _buildSettingRow(
+                icon: Icons.location_on_outlined,
+                title: 'Manage Locations',
+                subtitle: _permissionSummary(),
+                onTap: _requestLocationPermission,
+              ),
+              _buildRowDivider(),
+              _buildSettingRow(
+                icon: Icons.notifications_active_outlined,
+                title: 'Notification Access',
+                subtitle: _notificationPermissionLabel(),
+                onTap: _requestNotificationPermission,
+              ),
+            ]),
+            _buildSectionLabel('Prayer Times'),
+            _buildSectionCard([
+              _buildSettingRow(
+                icon: Icons.volume_up_outlined,
+                title: 'Override Mute',
+                subtitle: 'Play Athan even when the phone is muted.',
+                trailing: Switch(
+                  value: _overrideMute,
+                  onChanged: _setOverrideMute,
+                  activeThumbColor: _sectionAccent,
+                ),
+              ),
+              _buildRowDivider(),
+              _buildSettingRow(
+                icon: Icons.battery_charging_full_outlined,
+                title: 'Ignore Battery Optimizations',
+                subtitle: _batterySummary(),
+                onTap: _requestBatteryOptimizationPermission,
+                trailing: Checkbox(
+                  value: batteryEnabled,
+                  onChanged: (_) => _requestBatteryOptimizationPermission(),
+                  activeColor: _sectionAccent,
+                  checkColor: _pageBackground,
+                  side: const BorderSide(color: _secondaryText),
+                ),
+              ),
+              _buildRowDivider(),
+              _buildSettingRow(
+                icon: Icons.cast_connected_outlined,
+                title: 'Alert Settings',
+                subtitle: _alertSettingsSummary(),
+                onTap: _openAlertSettingsSheet,
+              ),
+              _buildRowDivider(),
+              _buildSettingRow(
+                icon: Icons.auto_awesome_outlined,
+                title: 'Calculation Method',
+                subtitle: 'ISNA (North-America) • Hanafi Asr',
+                onTap: _showCalculationMethodDialog,
+              ),
+              _buildRowDivider(),
+              _buildSettingRow(
+                icon: Icons.tune_outlined,
+                title: 'More...',
+                subtitle: 'Per-prayer tones and custom audio files',
+                onTap: _openMoreSettingsSheet,
+              ),
+            ]),
+            _buildSectionLabel('Hijri'),
+            _buildSectionCard([
+              _buildSettingRow(
+                icon: Icons.calendar_month_outlined,
+                title: 'Show Hijri Date',
+                subtitle: 'Display the Hijri date on the main prayer view.',
+                trailing: Switch(
+                  value: _showHijriDate,
+                  onChanged: _setShowHijriDate,
+                  activeThumbColor: _sectionAccent,
+                ),
+              ),
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CastNetworkDevice {
+  const _CastNetworkDevice({
+    required this.name,
+    required this.model,
+    required this.ip,
+  });
+
+  final String name;
+  final String model;
+  final String ip;
 }

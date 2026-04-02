@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
+import 'app_palette.dart';
 import 'db_helper.dart';
 import 'mosque_service.dart';
 
@@ -53,8 +54,9 @@ class _MasjidPageState extends State<MasjidPage> {
     try {
       Position? pos = await Geolocator.getLastKnownPosition();
       pos ??= await Geolocator.getCurrentPosition(
-        locationSettings:
-            const LocationSettings(accuracy: LocationAccuracy.high),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
       );
       if (!mounted) return;
       _userLat = pos.latitude;
@@ -130,18 +132,18 @@ class _MasjidPageState extends State<MasjidPage> {
     });
     await _loadSaved();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${m.name} saved.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${m.name} saved.')));
   }
 
   Future<void> _removeMasjid(String id, String name) async {
     await DBHelper.deleteMasjid(id);
     await _loadSaved();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$name removed.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$name removed.')));
   }
 
   bool _isSaved(String id) => _savedMasjids.any((m) => m['id'] == id);
@@ -151,7 +153,8 @@ class _MasjidPageState extends State<MasjidPage> {
     const R = 6371.0;
     final dLat = (m.lat - _userLat!) * math.pi / 180;
     final dLng = (m.lng - _userLng!) * math.pi / 180;
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+    final a =
+        math.sin(dLat / 2) * math.sin(dLat / 2) +
         math.cos(_userLat! * math.pi / 180) *
             math.cos(m.lat * math.pi / 180) *
             math.sin(dLng / 2) *
@@ -163,9 +166,71 @@ class _MasjidPageState extends State<MasjidPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      body: Stack(
-        fit: StackFit.expand,
+      body: Column(
         children: [
+          Material(
+            color: AppPalette.panel,
+            elevation: 4,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                child: Row(
+                  children: [
+                    _CircleMapButton(
+                      icon: Icons.arrow_back,
+                      onPressed:
+                          widget.onBack ??
+                          () => Navigator.of(context).maybePop(),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Material(
+                        color: AppPalette.surface,
+                        borderRadius: BorderRadius.circular(14),
+                        elevation: 0,
+                        child: TextField(
+                          controller: _searchController,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: const InputDecoration(
+                            hintText: 'Search for a masjid, or a city',
+                            hintStyle: TextStyle(
+                              color: AppPalette.textMuted,
+                            ),
+                            prefixIcon: Icon(
+                              Icons.search,
+                              color: AppPalette.textMuted,
+                            ),
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            filled: false,
+                            contentPadding: EdgeInsets.symmetric(
+                              vertical: 14,
+                            ),
+                          ),
+                          textInputAction: TextInputAction.search,
+                          onSubmitted: _fetchByQuery,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _CircleMapButton(
+                      icon: Icons.my_location,
+                      onPressed: () {
+                        _searchController.clear();
+                        _fetchByGPS();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
           // â”€â”€ Full-screen map â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           FlutterMap(
             mapController: _mapController,
@@ -173,12 +238,11 @@ class _MasjidPageState extends State<MasjidPage> {
               initialCenter: _mapCenter,
               initialZoom: 13,
               onMapReady: () => setState(() => _mapReady = true),
-              onTap: (_, __) => setState(() => _selectedMasjid = null),
+              onTap: (_, _) => setState(() => _selectedMasjid = null),
             ),
             children: [
               TileLayer(
-                urlTemplate:
-                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.example.athan_call_to_success',
               ),
               MarkerLayer(
@@ -218,10 +282,7 @@ class _MasjidPageState extends State<MasjidPage> {
                 MarkerLayer(
                   markers: [
                     Marker(
-                      point: LatLng(
-                        _selectedMasjid!.lat,
-                        _selectedMasjid!.lng,
-                      ),
+                      point: LatLng(_selectedMasjid!.lat, _selectedMasjid!.lng),
                       width: 180,
                       height: 40,
                       alignment: Alignment.topCenter,
@@ -231,7 +292,7 @@ class _MasjidPageState extends State<MasjidPage> {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: AppPalette.surface,
                           borderRadius: BorderRadius.circular(8),
                           boxShadow: const [
                             BoxShadow(color: Colors.black26, blurRadius: 4),
@@ -240,7 +301,7 @@ class _MasjidPageState extends State<MasjidPage> {
                         child: Text(
                           _selectedMasjid!.name,
                           style: const TextStyle(
-                            color: Colors.black87,
+                            color: AppPalette.textPrimary,
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
                           ),
@@ -252,58 +313,6 @@ class _MasjidPageState extends State<MasjidPage> {
                 ),
             ],
           ),
-
-          // â”€â”€ Top bar overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-              child: Row(
-                children: [
-                  _CircleMapButton(
-                    icon: Icons.arrow_back,
-                    onPressed: widget.onBack ??
-                        () => Navigator.of(context).maybePop(),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Material(
-                      color: Colors.black87,
-                      borderRadius: BorderRadius.circular(14),
-                      elevation: 4,
-                      child: TextField(
-                        controller: _searchController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(
-                          hintText: 'Search for a mosque, or a city',
-                          hintStyle: TextStyle(color: Colors.white54),
-                          prefixIcon:
-                              Icon(Icons.search, color: Colors.white54),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          filled: false,
-                          contentPadding:
-                              EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        textInputAction: TextInputAction.search,
-                        onSubmitted: _fetchByQuery,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _CircleMapButton(
-                    icon: Icons.my_location,
-                    onPressed: () {
-                      _searchController.clear();
-                      _fetchByGPS();
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // â”€â”€ Bottom drawer sheet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           DraggableScrollableSheet(
             initialChildSize: 0.35,
             minChildSize: 0.12,
@@ -332,7 +341,7 @@ class _MasjidPageState extends State<MasjidPage> {
                         width: 36,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: Colors.white24,
+                          color: AppPalette.textMuted,
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -340,7 +349,7 @@ class _MasjidPageState extends State<MasjidPage> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                       child: Text(
-                        'Mosques around you',
+                        'Masjids around you',
                         style: theme.textTheme.titleMedium?.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -356,13 +365,16 @@ class _MasjidPageState extends State<MasjidPage> {
           ),
         ],
       ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildList(ScrollController scrollController) {
     if (_isLoading) {
       return const Center(
-        child: CircularProgressIndicator(semanticsLabel: 'Loading mosques'),
+        child: CircularProgressIndicator(semanticsLabel: 'Loading masjids'),
       );
     }
     if (_error != null) {
@@ -375,8 +387,8 @@ class _MasjidPageState extends State<MasjidPage> {
               const Icon(
                 Icons.error_outline,
                 size: 40,
-                color: Colors.redAccent,
-                semanticLabel: 'Error loading mosques',
+                color: AppPalette.danger,
+                semanticLabel: 'Error loading masjids',
               ),
               const SizedBox(height: 12),
               Text(
@@ -396,13 +408,13 @@ class _MasjidPageState extends State<MasjidPage> {
       );
     }
     if (_results.isEmpty) {
-      return const Center(child: Text('No mosques found in this area.'));
+      return const Center(child: Text('No masjids found in this area.'));
     }
     return ListView.separated(
       controller: scrollController,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       itemCount: _results.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
+      separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, i) {
         final m = _results[i];
         final saved = _isSaved(m.id);
@@ -434,7 +446,7 @@ class _CircleMapButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.black87,
+      color: AppPalette.panel,
       shape: const CircleBorder(),
       elevation: 4,
       child: InkWell(
@@ -476,8 +488,8 @@ class _MasjidCard extends StatelessWidget {
     final subtitleColor = theme.listTileTheme.subtitleTextStyle?.color;
     final distText = distanceKm > 0
         ? (distanceKm < 1
-            ? '${(distanceKm * 1000).round()} m'
-            : '${distanceKm.toStringAsFixed(2)} km')
+              ? '${(distanceKm * 1000).round()} m'
+              : '${distanceKm.toStringAsFixed(2)} km')
         : '';
 
     return InkWell(
@@ -523,14 +535,15 @@ class _MasjidCard extends StatelessWidget {
                         const SizedBox(width: 3),
                         Text(
                           distText,
-                          style:
-                              TextStyle(fontSize: 12, color: subtitleColor),
+                          style: TextStyle(fontSize: 12, color: subtitleColor),
                         ),
                         if (masjid.address.isNotEmpty)
                           Text(
                             '  Â·  ',
                             style: TextStyle(
-                                fontSize: 12, color: subtitleColor),
+                              fontSize: 12,
+                              color: subtitleColor,
+                            ),
                           ),
                       ],
                       if (masjid.address.isNotEmpty)
@@ -538,7 +551,9 @@ class _MasjidCard extends StatelessWidget {
                           child: Text(
                             masjid.address,
                             style: TextStyle(
-                                fontSize: 12, color: subtitleColor),
+                              fontSize: 12,
+                              color: subtitleColor,
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -551,15 +566,14 @@ class _MasjidCard extends StatelessWidget {
                       child: OutlinedButton(
                         onPressed: onRemove,
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.redAccent,
-                          side: const BorderSide(color: Colors.redAccent),
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 8),
+                          foregroundColor: AppPalette.danger,
+                          side: const BorderSide(color: AppPalette.danger),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                        child: const Text('Remove this mosque'),
+                        child: const Text('Remove this masjid'),
                       ),
                     )
                   else
@@ -567,12 +581,10 @@ class _MasjidCard extends StatelessWidget {
                       width: double.infinity,
                       child: OutlinedButton.icon(
                         onPressed: onSave,
-                        icon:
-                            const Icon(Icons.bookmark_border, size: 16),
-                        label: const Text('Save mosque'),
+                        icon: const Icon(Icons.bookmark_border, size: 16),
+                        label: const Text('Save masjid'),
                         style: OutlinedButton.styleFrom(
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 8),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -587,5 +599,4 @@ class _MasjidCard extends StatelessWidget {
       ),
     );
   }
-
 }

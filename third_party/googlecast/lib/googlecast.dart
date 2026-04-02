@@ -59,6 +59,38 @@ class GoogleChromeCast {
       throw Exception(e);
     }
   }
+
+  static Future<bool> isConnected() async {
+    try {
+      final connected = await _channel.invokeMethod<bool>('isConnected');
+      return connected ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<Map<String, dynamic>> debugState() async {
+    try {
+      final state = await _channel.invokeMapMethod<String, dynamic>('debugState');
+      return state ?? <String, dynamic>{};
+    } catch (e) {
+      return <String, dynamic>{'error': e.toString()};
+    }
+  }
+
+  static Future<bool> showCastDialog() async {
+    try {
+      final shown = await _channel.invokeMethod<bool>('showCastDialog');
+      return shown ?? false;
+    } catch (e) {
+      // Keep a clear signal in logs when native chooser cannot be shown.
+      // ignore: avoid_print
+      print('showCastDialog failed: $e');
+      return false;
+    }
+  }
+
+  static Future<void> startDiscovery() async {}
 }
 
 class Googlecast {

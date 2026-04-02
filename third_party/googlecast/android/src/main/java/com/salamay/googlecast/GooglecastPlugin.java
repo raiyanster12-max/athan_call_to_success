@@ -6,9 +6,13 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.util.Log;
+import android.view.ContextThemeWrapper;
+
+import androidx.mediarouter.app.MediaRouteChooserDialog;
 import androidx.annotation.NonNull;
 import com.salamay.googlecast.ChromeCastViewFactory;
 import com.salamay.googlecast.Model.AudioData;
+import com.google.android.gms.cast.framework.CastButtonFactory;
 import com.google.android.gms.cast.framework.CastContext;
 
 import java.util.HashMap;
@@ -51,16 +55,42 @@ public class GooglecastPlugin implements FlutterPlugin, MethodCallHandler,Activi
   public void onMethodCall(@NonNull MethodCall call, @NonNull Result result) {
     if (call.method.equals("getPlatformVersion")) {
       result.success("Android " + android.os.Build.VERSION.RELEASE);
+    } else if(call.method.equals("isConnected")) {
+      result.success(chromeCastSession != null && chromeCastSession.isConnected());
+    } else if(call.method.equals("debugState")) {
+      HashMap<String, Object> data = new HashMap<>();
+      if (chromeCastSession == null) {
+        data.put("initialized", false);
+        data.put("connected", false);
+        data.put("hasSession", false);
+        data.put("hasRemoteMediaClient", false);
+        data.put("playbackState", "UNKNOWN");
+      } else {
+        data.put("initialized", true);
+        data.put("connected", chromeCastSession.isConnected());
+        data.put("hasSession", chromeCastSession.hasSession());
+        data.put("hasRemoteMediaClient", chromeCastSession.hasRemoteMediaClient());
+        data.put("playbackState", chromeCastSession.playbackStateName());
+      }
+      result.success(data);
+    } else if(call.method.equals("showCastDialog")) {
+      showCastDialog(result);
     }else if(call.method.equals("loadAudio")){
       if(call.hasArgument("url")){
         loadAudio(call);
+        result.success(true);
+      } else {
+        result.error("BAD_ARGS", "Missing required arg: url", null);
       }
     }else if(call.method.equals("playAudio")){
       playAudio();
+      result.success(true);
     }else if(call.method.equals("pauseAudio")){
       pauseAudio();
+      result.success(true);
     }else if(call.method.equals("stopAudio")){
       stopMedia();
+      result.success(true);
     }
     else {
       result.notImplemented();
@@ -70,7 +100,18 @@ public class GooglecastPlugin implements FlutterPlugin, MethodCallHandler,Activi
 
   @Override
   public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
-    chromeCastSession.endSession();
+    if (chromeCastSession != null) {
+      chromeCastSession.endSession();
+    }
+    if (channel != null) {
+      channel.setMethodCallHandler(null);
+    }
+    if (connectionstatechanenel != null) {
+      connectionstatechanenel.setStreamHandler(null);
+    }
+    if (messagestatechannel != null) {
+      messagestatechannel.setStreamHandler(null);
+    }
   }
 
   @Override
@@ -92,11 +133,18 @@ public class GooglecastPlugin implements FlutterPlugin, MethodCallHandler,Activi
   public void freeResources(){
     Log.i(TAG,"ON DETACHED TO ACTIVITY");
     try{
-      activity.getApplicationContext().unregisterReceiver(br);
-      channel.setMethodCallHandler(null);
-      connectionstatechanenel.setStreamHandler(null);
-      messagestatechannel.setStreamHandler(null);
-      chromeCastSession.removeSessionListener();
+      if (activity != null && br != null) {
+        activity.getApplicationContext().unregisterReceiver(br);
+      }
+      if (connectionstatechanenel != null) {
+        connectionstatechanenel.setStreamHandler(null);
+      }
+      if (messagestatechannel != null) {
+        messagestatechannel.setStreamHandler(null);
+      }
+      if (chromeCastSession != null) {
+        chromeCastSession.removeSessionListener();
+      }
       activity = null;
     }catch (Exception e){
       Log.i(TAG,e.toString());
@@ -143,6 +191,35 @@ public class GooglecastPlugin implements FlutterPlugin, MethodCallHandler,Activi
   }
   private void stopMedia(){
     chromeCastSession.stopMedia();
+  }
+
+  private void showCastDialog(@NonNull Result result) {
+    try {
+      if (activity == null) {
+        Log.e(TAG, "showCastDialog: activity is null");
+        result.error("NO_ACTIVITY", "Activity is not attached", null);
+        return;
+      }
+
+      Log.i(TAG, "showCastDialog: launching chooser dialog");
+      activity.runOnUiThread(() -> {
+        try {
+          final ContextThemeWrapper themedContext =
+                  new ContextThemeWrapper(activity, R.style.GoogleCastChooserDialogTheme);
+          final MediaRouteChooserDialog chooserDialog = new MediaRouteChooserDialog(themedContext);
+          chooserDialog.setRouteSelector(CastContext.getSharedInstance(activity).getMergedSelector());
+          chooserDialog.show();
+          Log.i(TAG, "showCastDialog: chooser displayed");
+          result.success(true);
+        } catch (Exception e) {
+          Log.e(TAG, "showCastDialog failed", e);
+          result.error("SHOW_DIALOG_FAILED", e.toString(), null);
+        }
+      });
+    } catch (Exception e) {
+      Log.e(TAG, "showCastDialog outer failure", e);
+      result.error("SHOW_DIALOG_FAILED", e.toString(), null);
+    }
   }
 
 

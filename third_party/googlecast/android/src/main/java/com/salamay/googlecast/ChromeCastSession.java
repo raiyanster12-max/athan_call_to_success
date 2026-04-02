@@ -20,6 +20,8 @@ import com.google.android.gms.common.api.Status;
 import com.google.android.gms.common.images.WebImage;
 import com.salamay.googlecast.Model.AudioData;
 
+import java.util.Locale;
+
 import io.flutter.plugin.common.EventChannel;
 
 public class ChromeCastSession implements EventChannel.StreamHandler{
@@ -64,71 +66,96 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
         mCastSession = null;
     }
 
+    public boolean isConnected(){
+        return mCastSession != null && mCastSession.isConnected();
+    }
+
+    public boolean hasSession(){
+        return mCastSession != null;
+    }
+
+    public boolean hasRemoteMediaClient(){
+        return remoteMediaClient != null;
+    }
+
+    public String playbackStateName(){
+        return playerStateName(PLAYBACKSTATE);
+    }
+
     public void loadMedia(AudioData audioData){
         Log.i(TAG,"LOAD MEDIA");
         Log.i(TAG,audioData.getAudioUrl());
-        if(mCastSession!=null){
-            MediaMetadata audioMetaData = new MediaMetadata(MediaMetadata.MEDIA_TYPE_MUSIC_TRACK);
-            audioMetaData.putString(MediaMetadata.KEY_TITLE, audioData.getTitle());
-            if(audioData.getSubtitle()!=null){
-                audioMetaData.putString(MediaMetadata.KEY_SUBTITLE, audioData.getSubtitle());
-            }
-            if(audioData.getImgUrl()!=null){
-                audioMetaData.addImage(new WebImage(Uri.parse(audioData.getImgUrl())));
-            }
-            MediaInfo mediaInfo = new MediaInfo.Builder(audioData.getAudioUrl())
-                    .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
-                    .setContentType("audio/mp3")
-                    .setMetadata(audioMetaData)
-                    .build();
-            PendingResult<RemoteMediaClient.MediaChannelResult> s=remoteMediaClient.load(new MediaLoadRequestData.Builder().setMediaInfo(mediaInfo).setAutoplay(true).build());
-            s.addStatusListener(new PendingResult.StatusListener() {
-                @Override
-                public void onComplete(@NonNull Status status) {
-                    System.out.println(status.getStatus());
-                    int STATUS_CODE=status.getStatusCode();
-                    System.out.println(status.getStatusCode());
-                   if(STATUS_CODE==2100||STATUS_CODE==2001||STATUS_CODE==2104||STATUS_CODE==7){
-                       Intent intent=new Intent();
-                       intent.setAction(ACTION);
-                       intent.putExtra("message","ERROR");
-                       Log.i(TAG,"SENDING BROADCAST: STATUS ERROR");
-                       context.sendBroadcast(intent);
-                   }
-                }
-            });
+        if(mCastSession==null || remoteMediaClient==null){
+            broadcastMessage("NO_CAST_SESSION");
+            return;
         }
+
+        MediaMetadata audioMetaData = new MediaMetadata(MediaMetadata.MEDIA_TYPE_MUSIC_TRACK);
+        audioMetaData.putString(MediaMetadata.KEY_TITLE, audioData.getTitle());
+        if(audioData.getSubtitle()!=null){
+            audioMetaData.putString(MediaMetadata.KEY_SUBTITLE, audioData.getSubtitle());
+        }
+        if(audioData.getImgUrl()!=null){
+            audioMetaData.addImage(new WebImage(Uri.parse(audioData.getImgUrl())));
+        }
+
+        final String contentType = inferContentType(audioData.getAudioUrl());
+        broadcastMessage("LOAD_REQUEST(" + contentType + ")");
+
+        MediaInfo mediaInfo = new MediaInfo.Builder(audioData.getAudioUrl())
+                .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
+                .setContentType(contentType)
+                .setMetadata(audioMetaData)
+                .build();
+        PendingResult<RemoteMediaClient.MediaChannelResult> s=remoteMediaClient.load(
+                new MediaLoadRequestData.Builder().setMediaInfo(mediaInfo).setAutoplay(true).build()
+        );
+        s.addStatusListener(new PendingResult.StatusListener() {
+            @Override
+            public void onComplete(@NonNull Status status) {
+                int statusCode = status.getStatusCode();
+                String details = "LOAD_STATUS(" + statusCode + ":" + describeStatusCode(statusCode) + ")";
+                Log.i(TAG, details);
+                broadcastMessage(details);
+                if(!status.isSuccess()){
+                    broadcastMessage("ERROR(" + statusCode + ":" + describeStatusCode(statusCode) + ")");
+                }
+            }
+        });
     }
 
     public void playMedia(){
         Log.i(TAG,"PLAY MEDIA");
-        if(mCastSession!=null){
-            if (remoteMediaClient != null) {
-                if(PLAYBACKSTATE!=BUFFERING||PLAYBACKSTATE!=LOADING){
-                    remoteMediaClient.play();
-                }
+        if(mCastSession!=null && remoteMediaClient != null){
+            if(PLAYBACKSTATE!=BUFFERING && PLAYBACKSTATE!=LOADING){
+                remoteMediaClient.play();
+            } else {
+                broadcastMessage("PLAY_BLOCKED(" + playerStateName(PLAYBACKSTATE) + ")");
             }
+        } else {
+            broadcastMessage("PLAY_ERROR(NO_CAST_SESSION)");
         }
     }
     
     public void pauseMedia(){
         Log.i(TAG,"PAUSE MEDIA");
-        if(mCastSession!=null){
-            if (remoteMediaClient != null) {
-                if(PLAYBACKSTATE!=BUFFERING||PLAYBACKSTATE!=LOADING){
-                    remoteMediaClient.pause();
-                    Log.i(TAG,"PAUSED");
-                }
-
+        if(mCastSession!=null && remoteMediaClient != null){
+            if(PLAYBACKSTATE!=BUFFERING && PLAYBACKSTATE!=LOADING){
+                remoteMediaClient.pause();
+                Log.i(TAG,"PAUSED");
+            } else {
+                broadcastMessage("PAUSE_BLOCKED(" + playerStateName(PLAYBACKSTATE) + ")");
             }
+        } else {
+            broadcastMessage("PAUSE_ERROR(NO_CAST_SESSION)");
         }
     }
     public void stopMedia(){
         Log.i(TAG,"STOP MEDIA");
-        if(mCastSession!=null){
-            if (remoteMediaClient != null) {
-                remoteMediaClient.stop();
-            }
+        if(mCastSession!=null && remoteMediaClient != null){
+            remoteMediaClient.stop();
+        } else {
+            broadcastMessage("STOP_ERROR(NO_CAST_SESSION)");
         }
     }
 
@@ -150,7 +177,10 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
     public void startSession(CastSession castSession){
         mCastSession = castSession;
         remoteMediaClient = castSession.getRemoteMediaClient();
-        assert remoteMediaClient != null;
+        if(remoteMediaClient == null){
+            broadcastMessage("NO_REMOTE_MEDIA_CLIENT");
+            return;
+        }
         remoteMediaClient.registerCallback(new RemoteMediaClient.Callback() {
             @Override
             public void onStatusUpdated() {
@@ -160,40 +190,42 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
         });
         if(connectionEvent!=null){
             if (mCastSession.isConnected()){
-
+                broadcastMessage("SESSION_CONNECTED");
                 connectionEvent.success(true);
             }else{
+                broadcastMessage("SESSION_NOT_CONNECTED");
                 connectionEvent.success(false);
             }
         }
     }
     public void updateStatus(){
+        if(remoteMediaClient==null){
+            broadcastMessage("NO_REMOTE_MEDIA_CLIENT");
+            return;
+        }
         int playerState=remoteMediaClient.getPlayerState();
         PLAYBACKSTATE=playerState;
         System.out.println(PLAYBACKSTATE);
-        Intent intent=new Intent();
-        intent.setAction(ACTION);
         if(playerState==IDLE){
-            intent.putExtra("message","IDLE");
+            broadcastMessage("IDLE");
             Log.i(TAG,"SENDING BROADCAST: STATUS IDLE");
         }else if(playerState==PLAYING){
-            intent.putExtra("message","PLAYING");
+            broadcastMessage("PLAYING");
             Log.i(TAG,"SENDING BROADCAST: STATUS PLAYING");
         }else if(playerState==PAUSED){
-            intent.putExtra("message","PAUSED");
+            broadcastMessage("PAUSED");
             Log.i(TAG,"SENDING BROADCAST: STATUS PAUSED");
         }else if(playerState==BUFFERING){
-            intent.putExtra("message","BUFFERING");
+            broadcastMessage("BUFFERING");
             Log.i(TAG,"SENDING BROADCAST: STATUS BUFFERING");
             playMedia();
         }else if(playerState==LOADING){
-            intent.putExtra("message","LOADING");
+            broadcastMessage("LOADING");
             Log.i(TAG,"SENDING BROADCAST: STATUS LOADING");
         }else if(playerState==UNKNOWN){
-            intent.putExtra("message","UNKNOWN");
+            broadcastMessage("UNKNOWN");
             Log.i(TAG,"SENDING BROADCAST: STATUS UNKNOWN");
         }
-        context.sendBroadcast(intent);
     }
     private class ChromeCastSessionListener implements SessionManagerListener<CastSession>{
 
@@ -211,6 +243,7 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
         @Override
         public void onSessionStartFailed(@NonNull CastSession castSession, int i) {
             Log.i(TAG,"SESSION START FAILED "+String.valueOf(i));
+            broadcastMessage("SESSION_START_FAILED(" + i + ")");
         }
 
 
@@ -223,11 +256,13 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
         @Override
         public void onSessionStarting(@NonNull CastSession castSession) {
             Log.i(TAG,"SESSION STARTING");
+            broadcastMessage("SESSION_STARTING");
         }
 
         @Override
         public void onSessionSuspended(@NonNull CastSession castSession, int i) {
             Log.i(TAG,"SESSION SUSPENDED");
+            broadcastMessage("SESSION_SUSPENDED(" + i + ")");
         }
 
         @Override
@@ -235,6 +270,7 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
             Log.i(TAG,"SESSION ENDED");
             mCastSession=castSession;
             remoteMediaClient=mCastSession.getRemoteMediaClient();
+            broadcastMessage("SESSION_ENDED(" + i + ")");
             if(connectionEvent!=null){
                 connectionEvent.success(false);
             }
@@ -247,9 +283,80 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
 
         @Override
         public void onSessionResumeFailed(@NonNull CastSession castSession, int i) {
+            broadcastMessage("SESSION_RESUME_FAILED(" + i + ")");
             if(connectionEvent!=null){
                 connectionEvent.success(false);
             }
+        }
+    }
+
+    private void broadcastMessage(String message){
+        Intent intent=new Intent();
+        intent.setAction(ACTION);
+        intent.putExtra("message",message);
+        context.sendBroadcast(intent);
+    }
+
+    private String inferContentType(String url){
+        if(url == null){
+            return "audio/mpeg";
+        }
+        String normalized = url.toLowerCase(Locale.US);
+        if(normalized.contains(".m3u8")) return "application/x-mpegURL";
+        if(normalized.contains(".aac")) return "audio/aac";
+        if(normalized.contains(".m4a")) return "audio/mp4";
+        if(normalized.contains(".ogg")) return "audio/ogg";
+        if(normalized.contains(".wav")) return "audio/wav";
+        if(normalized.contains(".flac")) return "audio/flac";
+        return "audio/mpeg";
+    }
+
+    private String describeStatusCode(int code){
+        switch (code){
+            case 0:
+                return "SUCCESS";
+            case 7:
+                return "NETWORK_ERROR";
+            case 8:
+                return "INTERNAL_ERROR";
+            case 13:
+                return "ERROR";
+            case 14:
+                return "INTERRUPTED";
+            case 15:
+                return "TIMEOUT";
+            case 2001:
+                return "AUTHENTICATION_EXPIRED";
+            case 2100:
+                return "FAILED";
+            case 2101:
+                return "CANCELED";
+            case 2102:
+                return "NOT_ALLOWED";
+            case 2103:
+                return "REPLACED";
+            case 2104:
+                return "MESSAGE_SEND_BUFFER_TOO_FULL";
+            default:
+                return "CODE_" + code;
+        }
+    }
+
+    private String playerStateName(int state){
+        switch (state){
+            case IDLE:
+                return "IDLE";
+            case PLAYING:
+                return "PLAYING";
+            case PAUSED:
+                return "PAUSED";
+            case BUFFERING:
+                return "BUFFERING";
+            case LOADING:
+                return "LOADING";
+            case UNKNOWN:
+            default:
+                return "UNKNOWN";
         }
     }
 }

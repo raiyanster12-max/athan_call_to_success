@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="GoogleCastButtonTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">#FFFFFFFF</item>
+        <item name="android:colorBackground">#FFFFFFFF</item>
+        <item name="colorPrimary">#111111</item>
+        <item name="colorPrimaryDark">#111111</item>
+        <item name="colorAccent">#111111</item>
+    </style>
+
+    <style name="GoogleCastChooserDialogTheme" parent="Theme.AppCompat.Light.Dialog.Alert">
+        <item name="android:windowBackground">#FFFFFFFF</item>
+        <item name="android:colorBackground">#FFFFFFFF</item>
+        <item name="colorPrimary">#111111</item>
+        <item name="colorPrimaryDark">#111111</item>
+        <item name="colorAccent">#111111</item>
+    </style>
+</resources>

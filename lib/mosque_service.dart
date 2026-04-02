@@ -29,9 +29,10 @@ class MosqueLookupException implements Exception {
 }
 
 class MosqueService {
-  static const int _defaultRadiusMeters = 16093; // 10 miles
+  static const int _defaultRadiusMeters = 24140; // 15 miles
+  // NOTE: no (?i) prefix — Overpass uses ,i flag on the filter instead
   static const String _nameRegex =
-      '(?i)(masjid|mosque|islamic|muslim|musalla|mushalla|husseini|islamic society)';
+      'masjid|mosque|islamic|muslim|musalla|mushalla|masjed|jami|jamia|jame|al-masjid|jumah|jumuah|prayer hall|salah center|islamic center|islamic centre|icna|isna|msa |al islam|noor|nur|ummah|deen|tabligh|foundation|islamic society|muslim association|muslim community|islamic foundation|muslim foundation|muslim federation|baitul|dar ul|darul|ijtima';
   static const String _userAgent =
       'athan_call_to_success/1.0 (contact: app-local)';
   static const List<String> _overpassUrls = [
@@ -50,26 +51,44 @@ class MosqueService {
   }) async {
     final query =
         '''
-[out:json][timeout:25];
+[out:json][timeout:35];
 (
   node["amenity"="place_of_worship"]["religion"="muslim"](around:$radiusMeters,$lat,$lng);
   way["amenity"="place_of_worship"]["religion"="muslim"](around:$radiusMeters,$lat,$lng);
   relation["amenity"="place_of_worship"]["religion"="muslim"](around:$radiusMeters,$lat,$lng);
+  node["amenity"="place_of_worship"]["denomination"="sunni"](around:$radiusMeters,$lat,$lng);
+  way["amenity"="place_of_worship"]["denomination"="sunni"](around:$radiusMeters,$lat,$lng);
+  relation["amenity"="place_of_worship"]["denomination"="sunni"](around:$radiusMeters,$lat,$lng);
+    node["office"="religious"]["religion"="muslim"](around:$radiusMeters,$lat,$lng);
+    way["office"="religious"]["religion"="muslim"](around:$radiusMeters,$lat,$lng);
+    relation["office"="religious"]["religion"="muslim"](around:$radiusMeters,$lat,$lng);
   node["amenity"="mosque"](around:$radiusMeters,$lat,$lng);
   way["amenity"="mosque"](around:$radiusMeters,$lat,$lng);
   relation["amenity"="mosque"](around:$radiusMeters,$lat,$lng);
+  node["amenity"="prayer_hall"](around:$radiusMeters,$lat,$lng);
+  way["amenity"="prayer_hall"](around:$radiusMeters,$lat,$lng);
+  relation["amenity"="prayer_hall"](around:$radiusMeters,$lat,$lng);
   node["building"="mosque"](around:$radiusMeters,$lat,$lng);
   way["building"="mosque"](around:$radiusMeters,$lat,$lng);
   relation["building"="mosque"](around:$radiusMeters,$lat,$lng);
   node["amenity"="community_centre"]["religion"="muslim"](around:$radiusMeters,$lat,$lng);
   way["amenity"="community_centre"]["religion"="muslim"](around:$radiusMeters,$lat,$lng);
   relation["amenity"="community_centre"]["religion"="muslim"](around:$radiusMeters,$lat,$lng);
-  node["amenity"="place_of_worship"]["name"~"$_nameRegex"](around:$radiusMeters,$lat,$lng);
-  way["amenity"="place_of_worship"]["name"~"$_nameRegex"](around:$radiusMeters,$lat,$lng);
-  relation["amenity"="place_of_worship"]["name"~"$_nameRegex"](around:$radiusMeters,$lat,$lng);
-  node["amenity"="community_centre"]["name"~"$_nameRegex"](around:$radiusMeters,$lat,$lng);
-  way["amenity"="community_centre"]["name"~"$_nameRegex"](around:$radiusMeters,$lat,$lng);
-  relation["amenity"="community_centre"]["name"~"$_nameRegex"](around:$radiusMeters,$lat,$lng);
+  node["amenity"="place_of_worship"]["name"~"$_nameRegex",i](around:$radiusMeters,$lat,$lng);
+  way["amenity"="place_of_worship"]["name"~"$_nameRegex",i](around:$radiusMeters,$lat,$lng);
+  relation["amenity"="place_of_worship"]["name"~"$_nameRegex",i](around:$radiusMeters,$lat,$lng);
+  node["amenity"="community_centre"]["name"~"$_nameRegex",i](around:$radiusMeters,$lat,$lng);
+  way["amenity"="community_centre"]["name"~"$_nameRegex",i](around:$radiusMeters,$lat,$lng);
+  relation["amenity"="community_centre"]["name"~"$_nameRegex",i](around:$radiusMeters,$lat,$lng);
+  node["name"~"$_nameRegex",i]["amenity"](around:$radiusMeters,$lat,$lng);
+  way["name"~"$_nameRegex",i]["amenity"](around:$radiusMeters,$lat,$lng);
+  relation["name"~"$_nameRegex",i]["amenity"](around:$radiusMeters,$lat,$lng);
+  node["name"~"$_nameRegex",i]["building"](around:$radiusMeters,$lat,$lng);
+  way["name"~"$_nameRegex",i]["building"](around:$radiusMeters,$lat,$lng);
+  relation["name"~"$_nameRegex",i]["building"](around:$radiusMeters,$lat,$lng);
+  node["name"~"$_nameRegex",i]["office"](around:$radiusMeters,$lat,$lng);
+  way["name"~"$_nameRegex",i]["office"](around:$radiusMeters,$lat,$lng);
+  relation["name"~"$_nameRegex",i]["office"](around:$radiusMeters,$lat,$lng);
 );
 out center;
 ''';
@@ -87,7 +106,7 @@ out center;
               },
               body: query,
             )
-            .timeout(const Duration(seconds: 12));
+            .timeout(const Duration(seconds: 40));
 
         if (response.statusCode != 200) {
           if (response.statusCode >= 500 ||
@@ -142,7 +161,14 @@ out center;
 
     for (final element in elements) {
       final tags = (element['tags'] as Map<String, dynamic>?) ?? {};
-      final name = ((tags['name:en'] as String?) ?? (tags['name'] as String?))
+      // Prefer English name, then any Latin-script variant, then Arabic/Urdu, then place type
+      final name = ((tags['name:en'] as String?) ??
+              (tags['name'] as String?) ??
+              (tags['name:ar'] as String?) ??
+              (tags['name:ur'] as String?) ??
+              (tags['name:tr'] as String?) ??
+              (tags['alt_name'] as String?) ??
+              _inferPlaceName(tags))
           ?.trim();
       if (name == null || name.isEmpty) continue;
 
@@ -180,6 +206,23 @@ out center;
     return results;
   }
 
+  /// Returns a human-readable placeholder name when no explicit name tag is set.
+  String? _inferPlaceName(Map<String, dynamic> tags) {
+    final amenity = tags['amenity'] as String?;
+    final building = tags['building'] as String?;
+    final religion = tags['religion'] as String?;
+    final denomination = tags['denomination'] as String?;
+    if (amenity == 'mosque' || building == 'mosque') return 'Masjid';
+    if (amenity == 'prayer_hall') return 'Prayer Hall';
+    if (religion == 'muslim') {
+      if (denomination != null && denomination.isNotEmpty) {
+        return '${denomination[0].toUpperCase()}${denomination.substring(1)} Masjid';
+      }
+      return 'Islamic Place of Worship';
+    }
+    return null;
+  }
+
   Future<List<MasjidResult>> _fetchFromNominatim({
     required double lat,
     required double lng,
@@ -199,10 +242,15 @@ out center;
       'masjid',
       'mosque',
       'islamic center',
+      'islamic centre',
       'islamic society',
       'musalla',
       'muslim center',
-      'husseini',
+      'jama masjid',
+      'prayer hall',
+      'jummah',
+      'icna',
+      'isna',
     ];
     final results = <MasjidResult>[];
 
@@ -212,7 +260,7 @@ out center;
           'format': 'jsonv2',
           'q': q,
           'bounded': '1',
-          'limit': '70',
+          'limit': '100',
           'addressdetails': '1',
           'viewbox': '$left,$top,$right,$bottom',
         },
@@ -277,7 +325,7 @@ out center;
             if (name.isEmpty) continue;
 
             final distance = _distanceMeters(lat, lng, lat2, lng2);
-            if (distance > radiusMeters * 1.35) {
+            if (distance > radiusMeters * 1.5) {
               continue;
             }
 
