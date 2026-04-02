@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:hijri_date/hijri.dart';
 import 'package:intl/intl.dart';
 
+import 'app_palette.dart';
 import 'masjid_page.dart';
-import 'qibla_page.dart';
-import 'settings_page.dart';
+
 
 class MorePage extends StatefulWidget {
   const MorePage({super.key});
@@ -23,20 +23,8 @@ class _MorePageState extends State<MorePage> {
   String get _selectedHijriLabel =>
       HijriDate.fromDate(_selectedDate).toFormat('DDDD, MMMM dd, yyyy');
 
-  void _openSettings(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const SettingsPage()),
-    );
-  }
-
   void _openMasjidFinder(BuildContext context) {
     setState(() => _showMasjidFinder = true);
-  }
-
-  void _openQiblaCompass(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const QiblaPage()),
-    );
   }
 
   void _setSelectedDate(DateTime date) {
@@ -61,82 +49,84 @@ class _MorePageState extends State<MorePage> {
     }
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('More'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Settings',
-            onPressed: () => _openSettings(context),
-          ),
-        ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Calendar View',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Selected: $_selectedGregorianLabel',
-                    style: const TextStyle(color: Colors.black87),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    _selectedHijriLabel,
-                    style: const TextStyle(color: Colors.black54),
-                  ),
-                  const SizedBox(height: 12),
-                  CalendarDatePicker(
-                    initialDate: _selectedDate,
-                    firstDate: DateTime(2000),
-                    lastDate: DateTime(2100),
-                    onDateChanged: _setSelectedDate,
-                  ),
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: OutlinedButton.icon(
-                      onPressed: _jumpToToday,
-                      icon: const Icon(Icons.today_outlined),
-                      label: const Text('Today'),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: AppPalette.backgroundGradient,
+        ),
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Calendar View',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Selected: $_selectedGregorianLabel',
+                      style: const TextStyle(color: AppPalette.textSecondary),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _selectedHijriLabel,
+                      style: const TextStyle(color: AppPalette.textMuted),
+                    ),
+                    const SizedBox(height: 12),
+                    Theme(
+                      data: Theme.of(context).copyWith(
+                        colorScheme: Theme.of(context).colorScheme.copyWith(
+                          primary: AppPalette.accent,
+                          onSurface: AppPalette.textPrimary,
+                        ),
+                      ),
+                      child: CalendarDatePicker(
+                        initialDate: _selectedDate,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                        onDateChanged: _setSelectedDate,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: OutlinedButton.icon(
+                        onPressed: _jumpToToday,
+                        icon: const Icon(Icons.today_outlined),
+                        label: const Text('Today'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.mosque_outlined),
+                    title: const Text('Masjid Finder'),
+                    subtitle: const Text('Find nearby and saved masjids'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _openMasjidFinder(context),
                   ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.explore_outlined),
-                  title: const Text('Qibla Compass'),
-                  subtitle: const Text('Find the direction of prayer'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _openQiblaCompass(context),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.mosque_outlined),
-                  title: const Text('Masjid Finder'),
-                  subtitle: const Text('Find nearby and saved masjids'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _openMasjidFinder(context),
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

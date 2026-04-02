@@ -30,6 +30,9 @@ class MosqueLookupException implements Exception {
 
 class MosqueService {
   static const int _defaultRadiusMeters = 24140; // 15 miles
+  // NOTE: no (?i) prefix — Overpass uses ,i flag on the filter instead
+  static const String _nameRegex =
+      'masjid|mosque|islamic|muslim|musalla|mushalla|masjed|jami|jamia|jame|al-masjid|jumah|jumuah|prayer hall|salah center|islamic center|islamic centre|icna|isna|msa |al islam|noor|nur|ummah|deen|tabligh|foundation|islamic society|muslim association|muslim community|islamic foundation|muslim foundation|muslim federation|baitul|dar ul|darul|ijtima';
   static const String _userAgent =
       'athan_call_to_success/1.0 (contact: app-local)';
   static const List<String> _overpassUrls = [
@@ -44,22 +47,48 @@ class MosqueService {
     double lat,
     double lng, {
     int radiusMeters = _defaultRadiusMeters,
+    String? zipcode,
   }) async {
-    final query = '''
-[out:json][timeout:25];
+    final query =
+        '''
+[out:json][timeout:35];
 (
   node["amenity"="place_of_worship"]["religion"="muslim"](around:$radiusMeters,$lat,$lng);
   way["amenity"="place_of_worship"]["religion"="muslim"](around:$radiusMeters,$lat,$lng);
   relation["amenity"="place_of_worship"]["religion"="muslim"](around:$radiusMeters,$lat,$lng);
+  node["amenity"="place_of_worship"]["denomination"="sunni"](around:$radiusMeters,$lat,$lng);
+  way["amenity"="place_of_worship"]["denomination"="sunni"](around:$radiusMeters,$lat,$lng);
+  relation["amenity"="place_of_worship"]["denomination"="sunni"](around:$radiusMeters,$lat,$lng);
+    node["office"="religious"]["religion"="muslim"](around:$radiusMeters,$lat,$lng);
+    way["office"="religious"]["religion"="muslim"](around:$radiusMeters,$lat,$lng);
+    relation["office"="religious"]["religion"="muslim"](around:$radiusMeters,$lat,$lng);
   node["amenity"="mosque"](around:$radiusMeters,$lat,$lng);
   way["amenity"="mosque"](around:$radiusMeters,$lat,$lng);
   relation["amenity"="mosque"](around:$radiusMeters,$lat,$lng);
+  node["amenity"="prayer_hall"](around:$radiusMeters,$lat,$lng);
+  way["amenity"="prayer_hall"](around:$radiusMeters,$lat,$lng);
+  relation["amenity"="prayer_hall"](around:$radiusMeters,$lat,$lng);
   node["building"="mosque"](around:$radiusMeters,$lat,$lng);
   way["building"="mosque"](around:$radiusMeters,$lat,$lng);
   relation["building"="mosque"](around:$radiusMeters,$lat,$lng);
-  node["amenity"="place_of_worship"]["name"~"(?i)(masjid|mosque|islamic|muslim)"](around:$radiusMeters,$lat,$lng);
-  way["amenity"="place_of_worship"]["name"~"(?i)(masjid|mosque|islamic|muslim)"](around:$radiusMeters,$lat,$lng);
-  relation["amenity"="place_of_worship"]["name"~"(?i)(masjid|mosque|islamic|muslim)"](around:$radiusMeters,$lat,$lng);
+  node["amenity"="community_centre"]["religion"="muslim"](around:$radiusMeters,$lat,$lng);
+  way["amenity"="community_centre"]["religion"="muslim"](around:$radiusMeters,$lat,$lng);
+  relation["amenity"="community_centre"]["religion"="muslim"](around:$radiusMeters,$lat,$lng);
+  node["amenity"="place_of_worship"]["name"~"$_nameRegex",i](around:$radiusMeters,$lat,$lng);
+  way["amenity"="place_of_worship"]["name"~"$_nameRegex",i](around:$radiusMeters,$lat,$lng);
+  relation["amenity"="place_of_worship"]["name"~"$_nameRegex",i](around:$radiusMeters,$lat,$lng);
+  node["amenity"="community_centre"]["name"~"$_nameRegex",i](around:$radiusMeters,$lat,$lng);
+  way["amenity"="community_centre"]["name"~"$_nameRegex",i](around:$radiusMeters,$lat,$lng);
+  relation["amenity"="community_centre"]["name"~"$_nameRegex",i](around:$radiusMeters,$lat,$lng);
+  node["name"~"$_nameRegex",i]["amenity"](around:$radiusMeters,$lat,$lng);
+  way["name"~"$_nameRegex",i]["amenity"](around:$radiusMeters,$lat,$lng);
+  relation["name"~"$_nameRegex",i]["amenity"](around:$radiusMeters,$lat,$lng);
+  node["name"~"$_nameRegex",i]["building"](around:$radiusMeters,$lat,$lng);
+  way["name"~"$_nameRegex",i]["building"](around:$radiusMeters,$lat,$lng);
+  relation["name"~"$_nameRegex",i]["building"](around:$radiusMeters,$lat,$lng);
+  node["name"~"$_nameRegex",i]["office"](around:$radiusMeters,$lat,$lng);
+  way["name"~"$_nameRegex",i]["office"](around:$radiusMeters,$lat,$lng);
+  relation["name"~"$_nameRegex",i]["office"](around:$radiusMeters,$lat,$lng);
 );
 out center;
 ''';
@@ -77,7 +106,7 @@ out center;
               },
               body: query,
             )
-            .timeout(const Duration(seconds: 12));
+            .timeout(const Duration(seconds: 40));
 
         if (response.statusCode != 200) {
           if (response.statusCode >= 500 ||
@@ -108,6 +137,7 @@ out center;
       lat: lat,
       lng: lng,
       radiusMeters: radiusMeters,
+      zipcode: zipcode,
     );
 
     final merged = _mergeAndSortByDistance(
@@ -131,22 +161,33 @@ out center;
 
     for (final element in elements) {
       final tags = (element['tags'] as Map<String, dynamic>?) ?? {};
-      final name = ((tags['name:en'] as String?) ?? (tags['name'] as String?))
+      // Prefer English name, then any Latin-script variant, then Arabic/Urdu, then place type
+      final name = ((tags['name:en'] as String?) ??
+              (tags['name'] as String?) ??
+              (tags['name:ar'] as String?) ??
+              (tags['name:ur'] as String?) ??
+              (tags['name:tr'] as String?) ??
+              (tags['alt_name'] as String?) ??
+              _inferPlaceName(tags))
           ?.trim();
       if (name == null || name.isEmpty) continue;
 
-      final double? lat2 = (element['lat'] as num?)?.toDouble() ??
+      final double? lat2 =
+          (element['lat'] as num?)?.toDouble() ??
           (element['center']?['lat'] as num?)?.toDouble();
-      final double? lng2 = (element['lon'] as num?)?.toDouble() ??
+      final double? lng2 =
+          (element['lon'] as num?)?.toDouble() ??
           (element['center']?['lon'] as num?)?.toDouble();
       if (lat2 == null || lng2 == null) continue;
 
       final street = tags['addr:street'] as String? ?? '';
       final city = tags['addr:city'] as String? ?? '';
       final fallbackAddress = tags['addr:full'] as String? ?? '';
-      final address = [street, city, fallbackAddress]
-          .where((s) => s.isNotEmpty)
-          .join(', ');
+      final address = [
+        street,
+        city,
+        fallbackAddress,
+      ].where((s) => s.isNotEmpty).join(', ');
 
       final id = '${element['type']}_${element['id']}';
       if (!seenIds.add(id)) continue;
@@ -165,10 +206,28 @@ out center;
     return results;
   }
 
+  /// Returns a human-readable placeholder name when no explicit name tag is set.
+  String? _inferPlaceName(Map<String, dynamic> tags) {
+    final amenity = tags['amenity'] as String?;
+    final building = tags['building'] as String?;
+    final religion = tags['religion'] as String?;
+    final denomination = tags['denomination'] as String?;
+    if (amenity == 'mosque' || building == 'mosque') return 'Masjid';
+    if (amenity == 'prayer_hall') return 'Prayer Hall';
+    if (religion == 'muslim') {
+      if (denomination != null && denomination.isNotEmpty) {
+        return '${denomination[0].toUpperCase()}${denomination.substring(1)} Masjid';
+      }
+      return 'Islamic Place of Worship';
+    }
+    return null;
+  }
+
   Future<List<MasjidResult>> _fetchFromNominatim({
     required double lat,
     required double lng,
     required int radiusMeters,
+    String? zipcode,
   }) async {
     final latDelta = radiusMeters / 111320.0;
     final cosLat = math.cos(lat * math.pi / 180).abs().clamp(0.1, 1.0);
@@ -179,62 +238,111 @@ out center;
     final top = (lat + latDelta).toStringAsFixed(6);
     final bottom = (lat - latDelta).toStringAsFixed(6);
 
-    final queries = ['masjid', 'mosque', 'islamic center'];
+    final queries = [
+      'masjid',
+      'mosque',
+      'islamic center',
+      'islamic centre',
+      'islamic society',
+      'musalla',
+      'muslim center',
+      'jama masjid',
+      'prayer hall',
+      'jummah',
+      'icna',
+      'isna',
+    ];
     final results = <MasjidResult>[];
 
     for (final q in queries) {
-      try {
-        final uri = Uri.https('nominatim.openstreetmap.org', '/search', {
+      final attempts = <Map<String, String>>[
+        {
           'format': 'jsonv2',
           'q': q,
           'bounded': '1',
-          'limit': '50',
+          'limit': '100',
           'addressdetails': '1',
           'viewbox': '$left,$top,$right,$bottom',
-        });
+        },
+      ];
 
-        final response = await http.get(uri, headers: {
-          'User-Agent': _userAgent,
-          'Accept': 'application/json',
-        }).timeout(const Duration(seconds: 8));
+      if (zipcode != null && zipcode.trim().isNotEmpty) {
+        attempts.addAll([
+          {
+            'format': 'jsonv2',
+            'q': '$q $zipcode',
+            'bounded': '1',
+            'limit': '80',
+            'addressdetails': '1',
+            'viewbox': '$left,$top,$right,$bottom',
+          },
+          {
+            'format': 'jsonv2',
+            'q': '$q $zipcode',
+            'limit': '80',
+            'addressdetails': '1',
+          },
+        ]);
+      }
 
-        if (response.statusCode != 200) {
-          continue;
-        }
+      for (final params in attempts) {
+        try {
+          final uri = Uri.https(
+            'nominatim.openstreetmap.org',
+            '/search',
+            params,
+          );
 
-        final data = json.decode(response.body) as List<dynamic>;
-        for (final item in data) {
-          final map = item as Map<String, dynamic>;
-          final latText = map['lat'] as String?;
-          final lonText = map['lon'] as String?;
-          final lat2 = double.tryParse(latText ?? '');
-          final lng2 = double.tryParse(lonText ?? '');
-          if (lat2 == null || lng2 == null) continue;
+          final response = await http
+              .get(
+                uri,
+                headers: {
+                  'User-Agent': _userAgent,
+                  'Accept': 'application/json',
+                },
+              )
+              .timeout(const Duration(seconds: 8));
 
-          final name =
-              (map['name'] as String?)?.trim().isNotEmpty == true
-                  ? (map['name'] as String).trim()
-                  : ((map['display_name'] as String?) ?? '').split(',').first.trim();
-          if (name.isEmpty) continue;
-
-          final distance = _distanceMeters(lat, lng, lat2, lng2);
-          if (distance > radiusMeters * 1.15) {
+          if (response.statusCode != 200) {
             continue;
           }
 
-          final id = 'nominatim_${map['osm_type']}_${map['osm_id']}';
-          results.add(
-            MasjidResult(
-              id: id,
-              name: name,
-              address: (map['display_name'] as String?) ?? '',
-              lat: lat2,
-              lng: lng2,
-            ),
-          );
+          final data = json.decode(response.body) as List<dynamic>;
+          for (final item in data) {
+            final map = item as Map<String, dynamic>;
+            final latText = map['lat'] as String?;
+            final lonText = map['lon'] as String?;
+            final lat2 = double.tryParse(latText ?? '');
+            final lng2 = double.tryParse(lonText ?? '');
+            if (lat2 == null || lng2 == null) continue;
+
+            final name = (map['name'] as String?)?.trim().isNotEmpty == true
+                ? (map['name'] as String).trim()
+                : ((map['display_name'] as String?) ?? '')
+                      .split(',')
+                      .first
+                      .trim();
+            if (name.isEmpty) continue;
+
+            final distance = _distanceMeters(lat, lng, lat2, lng2);
+            if (distance > radiusMeters * 1.5) {
+              continue;
+            }
+
+            final id = 'nominatim_${map['osm_type']}_${map['osm_id']}';
+            results.add(
+              MasjidResult(
+                id: id,
+                name: name,
+                address: (map['display_name'] as String?) ?? '',
+                lat: lat2,
+                lng: lng2,
+              ),
+            );
+          }
+        } catch (_) {
+          // Ignore individual fallback failures and continue.
         }
-      } catch (_) {
-        // Ignore individual fallback failures and continue.
       }
     }
 
@@ -251,7 +359,8 @@ out center;
 
     for (final list in lists) {
       for (final item in list) {
-        final key = '${item.name.toLowerCase()}_${item.lat.toStringAsFixed(4)}_${item.lng.toStringAsFixed(4)}';
+        final key =
+            '${item.name.toLowerCase()}_${item.lat.toStringAsFixed(4)}_${item.lng.toStringAsFixed(4)}';
         if (!seen.add(key)) continue;
         merged.add(item);
       }
@@ -272,12 +381,97 @@ out center;
     final rLat1 = lat1 * math.pi / 180.0;
     final rLat2 = lat2 * math.pi / 180.0;
 
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+    final a =
+        math.sin(dLat / 2) * math.sin(dLat / 2) +
         math.cos(rLat1) *
             math.cos(rLat2) *
             math.sin(dLon / 2) *
             math.sin(dLon / 2);
     final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
     return earthRadius * c;
+  }
+
+  /// Geocodes a zip code, city name, or free-text location query to (lat, lng).
+  /// Falls back to [geocodeZipcode] for 5-digit US zip codes.
+  Future<({double lat, double lng})> geocodeQuery(String query) async {
+    final q = query.trim();
+    if (RegExp(r'^\d{5}(-\d{4})?$').hasMatch(q)) {
+      return geocodeZipcode(q);
+    }
+    final uri = Uri.https('nominatim.openstreetmap.org', '/search', {
+      'format': 'jsonv2',
+      'q': q,
+      'limit': '1',
+      'addressdetails': '1',
+    });
+    try {
+      final response = await http
+          .get(uri, headers: {'User-Agent': _userAgent, 'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode != 200) {
+        throw MosqueLookupException(
+          'Could not find "$q" (HTTP ${response.statusCode}).',
+        );
+      }
+      final data = json.decode(response.body) as List<dynamic>;
+      if (data.isEmpty) {
+        throw MosqueLookupException(
+          '"$q" was not found. Please check the name and try again.',
+        );
+      }
+      final item = data.first as Map<String, dynamic>;
+      return (
+        lat: double.parse(item['lat'] as String),
+        lng: double.parse(item['lon'] as String),
+      );
+    } on MosqueLookupException {
+      rethrow;
+    } catch (e) {
+      throw MosqueLookupException('Failed to find location: $e');
+    }
+  }
+
+  /// Geocodes a US zip code to (lat, lng) using the Nominatim API.
+  /// Throws [MosqueLookupException] if the zip code cannot be resolved.
+  Future<({double lat, double lng})> geocodeZipcode(String zipcode) async {
+    final uri = Uri.https('nominatim.openstreetmap.org', '/search', {
+      'format': 'jsonv2',
+      'postalcode': zipcode.trim(),
+      'countrycodes': 'us',
+      'limit': '1',
+    });
+
+    try {
+      final response = await http
+          .get(
+            uri,
+            headers: {'User-Agent': _userAgent, 'Accept': 'application/json'},
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode != 200) {
+        throw MosqueLookupException(
+          'Could not look up that zip code (HTTP ${response.statusCode}).',
+        );
+      }
+
+      final data = json.decode(response.body) as List<dynamic>;
+      if (data.isEmpty) {
+        throw MosqueLookupException(
+          'Zip code "$zipcode" was not found. Please check and try again.',
+        );
+      }
+
+      final item = data.first as Map<String, dynamic>;
+      final lat = double.parse(item['lat'] as String);
+      final lng = double.parse(item['lon'] as String);
+      return (lat: lat, lng: lng);
+    } on MosqueLookupException {
+      rethrow;
+    } catch (e) {
+      throw MosqueLookupException(
+        'Failed to look up zip code: ${e.toString()}',
+      );
+    }
   }
 }

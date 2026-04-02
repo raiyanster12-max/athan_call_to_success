@@ -17,7 +17,7 @@ class NextPrayerInfo {
 class PrayerService {
   static CalculationParameters _buildParameters() {
     final params = CalculationMethod.north_america.getParameters();
-    params.madhab = Madhab.shafi;
+    params.madhab = Madhab.hanafi;
     return params;
   }
 

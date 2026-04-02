@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:geolocator/geolocator.dart';
 
+import 'app_palette.dart';
+
 class QiblaPage extends StatefulWidget {
   const QiblaPage({super.key});
 
@@ -42,7 +44,8 @@ class _QiblaPageState extends State<QiblaPage> {
     if (perm == LocationPermission.denied ||
         perm == LocationPermission.deniedForever) {
       setState(() {
-        _error = 'Location permission is required to calculate the Qibla direction.';
+        _error =
+            'Location permission is required to calculate the Qibla direction.';
         _calibrating = false;
       });
       return;
@@ -51,13 +54,15 @@ class _QiblaPageState extends State<QiblaPage> {
     Position position;
     try {
       position = await Geolocator.getCurrentPosition(
-        locationSettings:
-            const LocationSettings(accuracy: LocationAccuracy.medium),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+        ),
       );
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = 'Could not get your location.\nPlease make sure location is enabled and try again.';
+        _error =
+            'Could not get your location.\nPlease make sure location is enabled and try again.';
         _calibrating = false;
       });
       return;
@@ -65,8 +70,9 @@ class _QiblaPageState extends State<QiblaPage> {
 
     if (!mounted) return;
 
-    final bearing =
-        Qibla(Coordinates(position.latitude, position.longitude)).direction;
+    final bearing = Qibla(
+      Coordinates(position.latitude, position.longitude),
+    ).direction;
 
     setState(() {
       _qiblaBearing = bearing;
@@ -102,9 +108,7 @@ class _QiblaPageState extends State<QiblaPage> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Background gradient
           const _GradientBackground(),
-          // Subtle world-map grid overlay (top half only)
           const CustomPaint(painter: _MapGridPainter()),
           SafeArea(
             child: Column(
@@ -146,11 +150,18 @@ class _QiblaPageState extends State<QiblaPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.explore_off, color: Colors.white54, size: 56),
+              const Icon(
+                Icons.explore_off,
+                color: AppPalette.textMuted,
+                size: 56,
+              ),
               const SizedBox(height: 20),
               Text(
                 _error!,
-                style: const TextStyle(color: Colors.white70, fontSize: 16),
+                style: const TextStyle(
+                  color: AppPalette.textSecondary,
+                  fontSize: 16,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 28),
@@ -159,7 +170,7 @@ class _QiblaPageState extends State<QiblaPage> {
                 icon: const Icon(Icons.refresh),
                 label: const Text('Try Again'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4CAF50),
+                  backgroundColor: AppPalette.accent,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 28,
@@ -180,7 +191,9 @@ class _QiblaPageState extends State<QiblaPage> {
         children: [
           const SizedBox(height: 28),
           Text(
-            _calibrating ? 'Finding your location…' : 'Your Qibla has been activated',
+            _calibrating
+                ? 'Finding your location…'
+                : 'Your Qibla has been activated',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 22,
@@ -193,9 +206,12 @@ class _QiblaPageState extends State<QiblaPage> {
             _calibrating
                 ? 'Please wait'
                 : kIsWeb
-                    ? 'Direction shown · device compass not available in browser'
-                    : 'Tap to Continue',
-            style: const TextStyle(color: Colors.white70, fontSize: 14),
+                ? 'Direction shown · device compass not available in browser'
+                : 'Tap to Continue',
+            style: const TextStyle(
+              color: AppPalette.textSecondary,
+              fontSize: 14,
+            ),
             textAlign: TextAlign.center,
           ),
           const Spacer(),
@@ -205,7 +221,7 @@ class _QiblaPageState extends State<QiblaPage> {
             Text(
               '${_qiblaBearing!.toStringAsFixed(1)}° from North',
               style: const TextStyle(
-                color: Color(0xFF4CAF50),
+                color: AppPalette.accent,
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
               ),
@@ -232,20 +248,15 @@ class _QiblaPageState extends State<QiblaPage> {
         child: Stack(
           alignment: Alignment.topCenter,
           children: [
-            // Kaaba badge
             _KaabaBadge(size: badgeSize),
-            // Green stalk
             Positioned(
               top: badgeSize - 1,
               child: Container(
                 width: 3,
                 height: stalkHeight + 2,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF4CAF50),
-                ),
+                decoration: const BoxDecoration(color: AppPalette.accent),
               ),
             ),
-            // Compass disc
             Positioned(
               top: badgeSize + stalkHeight,
               child: CustomPaint(
@@ -253,7 +264,6 @@ class _QiblaPageState extends State<QiblaPage> {
                 painter: _CompassPainter(),
               ),
             ),
-            // Loading indicator (until location is found)
             if (_calibrating)
               Positioned(
                 top: badgeSize + stalkHeight + compassDiameter / 2 - 20,
@@ -261,7 +271,7 @@ class _QiblaPageState extends State<QiblaPage> {
                   width: 40,
                   height: 40,
                   child: CircularProgressIndicator(
-                    color: Color(0xFF4CAF50),
+                    color: AppPalette.accent,
                     strokeWidth: 3,
                   ),
                 ),
@@ -273,7 +283,7 @@ class _QiblaPageState extends State<QiblaPage> {
   }
 }
 
-// ── Kaaba badge ──────────────────────────────────────────────────────────────
+// ── Kaaba badge ────────────────────────────────────────────────────────────
 
 class _KaabaBadge extends StatelessWidget {
   const _KaabaBadge({required this.size});
@@ -287,23 +297,21 @@ class _KaabaBadge extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: Colors.white,
-        border: Border.all(color: const Color(0xFF4CAF50), width: 2.5),
+        border: Border.all(color: AppPalette.accent, width: 2.5),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF4CAF50).withValues(alpha: 0.5),
+            color: AppPalette.accent.withValues(alpha: 0.5),
             blurRadius: 10,
             spreadRadius: 2,
           ),
         ],
       ),
-      child: const Center(
-        child: Text('🕋', style: TextStyle(fontSize: 26)),
-      ),
+      child: const Center(child: Text('🕋', style: TextStyle(fontSize: 26))),
     );
   }
 }
 
-// ── Compass disc painter ──────────────────────────────────────────────────────
+// ── Compass disc painter ───────────────────────────────────────────────────
 
 class _CompassPainter extends CustomPainter {
   @override
@@ -311,7 +319,6 @@ class _CompassPainter extends CustomPainter {
     final c = Offset(size.width / 2, size.height / 2);
     final r = size.width / 2;
 
-    // Outer glow halo
     canvas.drawCircle(
       c,
       r,
@@ -322,16 +329,14 @@ class _CompassPainter extends CustomPainter {
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
     );
 
-    // Disc fill
     canvas.drawCircle(
       c,
       r - 4,
       Paint()
-        ..color = const Color(0xFF2A2A2A)
+        ..color = AppPalette.surface
         ..style = PaintingStyle.fill,
     );
 
-    // Outer border ring
     canvas.drawCircle(
       c,
       r - 4,
@@ -341,25 +346,15 @@ class _CompassPainter extends CustomPainter {
         ..strokeWidth = 2,
     );
 
-    // Inner decorative rings
     _ring(canvas, c, r * 0.84);
     _ring(canvas, c, r * 0.61);
-
-    // Tick marks
     _drawTicks(canvas, c, r);
-
-    // Islamic geometric star pattern
     _drawStarPattern(canvas, c, r * 0.50);
-
-    // Green Qibla needle (points up toward Kaaba badge)
     _drawNeedle(canvas, c, r);
-
-    // Cardinal labels
     _drawCardinals(canvas, c, r);
 
-    // Center dot
     canvas.drawCircle(c, 9, Paint()..color = Colors.white);
-    canvas.drawCircle(c, 6, Paint()..color = const Color(0xFF4CAF50));
+    canvas.drawCircle(c, 6, Paint()..color = AppPalette.accent);
   }
 
   void _ring(Canvas canvas, Offset c, double r) {
@@ -419,14 +414,12 @@ class _CompassPainter extends CustomPainter {
   }
 
   void _drawNeedle(Canvas canvas, Offset c, double r) {
-    // Upper diamond half (bright green — points toward Qibla/Kaaba)
     final upper = Path()
       ..moveTo(c.dx, c.dy - r * 0.72)
       ..lineTo(c.dx + r * 0.085, c.dy)
       ..lineTo(c.dx - r * 0.085, c.dy)
       ..close();
 
-    // Lower diamond half (dark green — points away)
     final lower = Path()
       ..moveTo(c.dx, c.dy + r * 0.55)
       ..lineTo(c.dx + r * 0.085, c.dy)
@@ -436,7 +429,7 @@ class _CompassPainter extends CustomPainter {
     canvas.drawPath(
       upper,
       Paint()
-        ..color = const Color(0xFF4CAF50)
+        ..color = AppPalette.accent
         ..style = PaintingStyle.fill,
     );
     canvas.drawPath(
@@ -450,7 +443,7 @@ class _CompassPainter extends CustomPainter {
     canvas.drawPath(
       lower,
       Paint()
-        ..color = const Color(0xFF1B5E20)
+        ..color = AppPalette.surfaceHighlight
         ..style = PaintingStyle.fill,
     );
     canvas.drawPath(
@@ -492,7 +485,7 @@ class _CompassPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// ── Background ────────────────────────────────────────────────────────────────
+// ── Background ─────────────────────────────────────────────────────────────
 
 class _GradientBackground extends StatelessWidget {
   const _GradientBackground();
@@ -500,19 +493,7 @@ class _GradientBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFF1B4332),
-            Color(0xFF0F2D23),
-            Color(0xFF0A1A2A),
-            Color(0xFF050E1A),
-          ],
-          stops: [0.0, 0.35, 0.60, 1.0],
-        ),
-      ),
+      decoration: const BoxDecoration(gradient: AppPalette.backgroundGradient),
     );
   }
 }
