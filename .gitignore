@@ -43,6 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+/artifacts/android/
 
 # Web build artifacts (SQLite WASM worker generated during web builds)
 web/sqflite_sw.js
