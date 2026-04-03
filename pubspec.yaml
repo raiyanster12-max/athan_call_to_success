@@ -21,7 +21,20 @@ dependencies:
   cupertino_icons: ^1.0.6
   adhan: ^2.0.0+1
   intl: ^0.20.2
-  quran: ^1.3.0
+  quran: ^1.4.1
+  quran_library: ^3.2.0
+  flutter_compass: ^0.8.0
+  flutter_local_notifications: ^17.2.3
+  timezone: ^0.9.4
+  flutter_timezone: ^4.1.1
+  file_picker: ^8.1.2
+  audioplayers: ^6.0.0
+  audioplayers_platform_interface: ^7.1.1
+  google_fonts: ^6.2.1
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.0
+  googlecast:
+    path: third_party/googlecast
 
 dev_dependencies:
   flutter_test:
@@ -38,10 +51,13 @@ flutter_launcher_icons:
   # Using a relative path is safer for Flutter projects
   image_path: "assets/icon/athan_app_icon.png"
   adaptive_icon_background: "#00796B"
-
 flutter:
   uses-material-design: true
 
   # This section is REQUIRED for the image to show up in your Dart code
   assets:
     - assets/icon/athan_app_icon.png
+    - assets/audio/athan_beep.wav
+    - assets/audio/athan_muezzin_1.mp3
+    - assets/audio/athan_muezzin_2.mp3
+    - assets/audio/athan_abbu_athan.mp3

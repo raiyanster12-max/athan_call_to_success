@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:hijri_date/hijri.dart';
 import 'package:intl/intl.dart';
 
+import 'app_palette.dart';
 import 'db_helper.dart';
-import 'settings_page.dart';
 
 class TrackerPage extends StatefulWidget {
   const TrackerPage({super.key});
@@ -76,8 +76,7 @@ class _TrackerPageState extends State<TrackerPage> {
     return dates;
   }
 
-  String _ramadanStorageKey(int year) =>
-      '$_ramadanStatusStoragePrefix$year';
+  String _ramadanStorageKey(int year) => '$_ramadanStatusStoragePrefix$year';
 
   Future<Map<String, String>> _loadRamadanStatuses(int year) async {
     final raw = await DBHelper.getSetting(_ramadanStorageKey(year));
@@ -146,8 +145,10 @@ class _TrackerPageState extends State<TrackerPage> {
       _ramadanStatuses.values.where((status) => status == 'missed').length;
 
   int get _ramadanPendingCount =>
-      (_ramadanDates.length - _ramadanDoneCount - _ramadanMissedCount)
-          .clamp(0, _ramadanDates.length);
+      (_ramadanDates.length - _ramadanDoneCount - _ramadanMissedCount).clamp(
+        0,
+        _ramadanDates.length,
+      );
 
   List<List<DateTime?>> _buildRamadanCalendarRows() {
     if (_ramadanDates.isEmpty) return const <List<DateTime?>>[];
@@ -182,55 +183,76 @@ class _TrackerPageState extends State<TrackerPage> {
     final isToday = DateUtils.isSameDay(date, _today);
 
     IconData? statusIcon;
-    Color statusColor = const Color(0xFF607D8B);
-    Color backgroundColor = Colors.white;
+    Color statusColor = AppPalette.textMuted;
+    Color backgroundColor = AppPalette.surface;
 
+    // WCAG 4.1.2: determine semantic status label for screen readers
+    String statusLabel;
     if (status == 'done') {
       statusIcon = Icons.check_circle;
-      statusColor = const Color(0xFF2E7D32);
-      backgroundColor = const Color(0xFFE9F6EC);
+      statusColor = AppPalette.accent;
+      backgroundColor = AppPalette.surfaceRaised;
+      statusLabel = 'Fast observed';
     } else if (status == 'missed') {
       statusIcon = Icons.cancel;
-      statusColor = const Color(0xFFC62828);
-      backgroundColor = const Color(0xFFFBEAEA);
+      statusColor = AppPalette.danger;
+      backgroundColor = const Color(0xFF4A1E36);
+      statusLabel = 'Fast missed';
+    } else {
+      statusLabel = 'Fast status not recorded';
     }
 
-    return InkWell(
-      onTap: () => _toggleRamadanStatus(date),
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        margin: const EdgeInsets.all(3),
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        decoration: BoxDecoration(
-          color: backgroundColor,
+    final int hijriDay = HijriDate.fromDate(date).hDay;
+    final String gregDateLabel = DateFormat('MMMM d').format(date);
+
+    return Semantics(
+      button: true,
+      label:
+          '${isToday ? 'Today, ' : ''}$gregDateLabel, Ramadan day $hijriDay: $statusLabel',
+      hint: 'Activate to change status',
+      child: ExcludeSemantics(
+        child: InkWell(
+          onTap: () => _toggleRamadanStatus(date),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isToday ? const Color(0xFF00796B) : Colors.black12,
-            width: isToday ? 1.5 : 1,
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '${HijriDate.fromDate(date).hDay}',
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
+          child: Container(
+            margin: const EdgeInsets.all(3),
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            decoration: BoxDecoration(
+              color: backgroundColor,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isToday ? AppPalette.accent : AppPalette.outline,
+                width: isToday ? 1.5 : 1,
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              DateFormat('MMM d').format(date),
-              style: const TextStyle(fontSize: 11, color: Colors.black54),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${HijriDate.fromDate(date).hDay}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  DateFormat('MMM d').format(date),
+                  // WCAG 1.4.3: accessible contrast on dark background
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppPalette.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Icon(
+                  statusIcon ?? Icons.radio_button_unchecked,
+                  size: 16,
+                  color: statusColor,
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
-            Icon(
-              statusIcon ?? Icons.radio_button_unchecked,
-              size: 16,
-              color: statusColor,
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -256,15 +278,15 @@ class _TrackerPageState extends State<TrackerPage> {
           children: [
             Text(
               'Ramadan Tracker ($_currentYear)',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
+            // WCAG 1.4.3: accessible contrast for instruction text
             const Text(
               'Tap each day to cycle: pending -> done -> missed -> pending.',
-              style: TextStyle(color: Colors.black54),
+              style: TextStyle(color: AppPalette.textSecondary),
             ),
             const SizedBox(height: 12),
             Wrap(
@@ -277,15 +299,32 @@ class _TrackerPageState extends State<TrackerPage> {
               ],
             ),
             const SizedBox(height: 10),
+            // WCAG 4.1.2: accessible column headers with full day names for screen readers
             Row(
               children: const [
-                Expanded(child: Center(child: Text('Mon'))),
-                Expanded(child: Center(child: Text('Tue'))),
-                Expanded(child: Center(child: Text('Wed'))),
-                Expanded(child: Center(child: Text('Thu'))),
-                Expanded(child: Center(child: Text('Fri'))),
-                Expanded(child: Center(child: Text('Sat'))),
-                Expanded(child: Center(child: Text('Sun'))),
+                Expanded(
+                  child: Center(child: Text('Mon', semanticsLabel: 'Monday')),
+                ),
+                Expanded(
+                  child: Center(child: Text('Tue', semanticsLabel: 'Tuesday')),
+                ),
+                Expanded(
+                  child: Center(
+                    child: Text('Wed', semanticsLabel: 'Wednesday'),
+                  ),
+                ),
+                Expanded(
+                  child: Center(child: Text('Thu', semanticsLabel: 'Thursday')),
+                ),
+                Expanded(
+                  child: Center(child: Text('Fri', semanticsLabel: 'Friday')),
+                ),
+                Expanded(
+                  child: Center(child: Text('Sat', semanticsLabel: 'Saturday')),
+                ),
+                Expanded(
+                  child: Center(child: Text('Sun', semanticsLabel: 'Sunday')),
+                ),
               ],
             ),
             const SizedBox(height: 6),
@@ -306,90 +345,78 @@ class _TrackerPageState extends State<TrackerPage> {
     );
   }
 
-  void _openSettings() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const SettingsPage()),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Tracker'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Settings',
-            onPressed: _openSettings,
-          ),
-        ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _loadTrackerData,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.checklist, color: Color(0xFF00796B)),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Prayer Tracker',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Today',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '$_completedCount of ${_trackedPrayers.length} prayers logged',
-                          ),
-                          const SizedBox(height: 12),
-                          for (final prayer in _trackedPrayers)
-                            CheckboxListTile(
-                              value: _prayerStatuses[prayer] ?? false,
-                              contentPadding: EdgeInsets.zero,
-                              activeColor: const Color(0xFF00796B),
-                              title: Text(prayer),
-                              controlAffinity: ListTileControlAffinity.leading,
-                              onChanged: (value) {
-                                if (value == null) return;
-                                _togglePrayer(prayer, value);
-                              },
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: AppPalette.backgroundGradient,
+        ),
+        child: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(
+                  semanticsLabel: 'Loading tracker data',
+                ),
+              )
+            : RefreshIndicator(
+                onRefresh: _loadTrackerData,
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.checklist,
+                                  color: AppPalette.accent,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Prayer Tracker',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.bold),
+                                ),
+                              ],
                             ),
-                        ],
+                            const SizedBox(height: 12),
+                            Text(
+                              'Today — $_completedCount of ${_trackedPrayers.length} prayers logged',
+                              style: const TextStyle(
+                                color: AppPalette.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            for (final prayer in _trackedPrayers)
+                              CheckboxListTile(
+                                value: _prayerStatuses[prayer] ?? false,
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(prayer),
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
+                                onChanged: (value) {
+                                  if (value == null) return;
+                                  _togglePrayer(prayer, value);
+                                },
+                              ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildRamadanTrackerCard(),
-                ],
+                    const SizedBox(height: 12),
+                    _buildRamadanTrackerCard(),
+                  ],
+                ),
               ),
-            ),
+      ),
     );
   }
 }
