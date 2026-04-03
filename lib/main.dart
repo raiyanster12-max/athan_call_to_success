@@ -488,7 +488,6 @@ class _HomePageState extends State<HomePage> {
     final now = DateTime.now();
     final all = [
       _PrayerEntry('Fajr', times.fajr),
-      _PrayerEntry('Sunrise', times.sunrise),
       _PrayerEntry('Dhuhr', times.dhuhr),
       _PrayerEntry('Asr', times.asr),
       _PrayerEntry('Maghrib', times.maghrib),
@@ -513,6 +512,31 @@ class _HomePageState extends State<HomePage> {
       return '${parts[0]} $shortMonth, ${parts[2]}';
     }
     return full;
+  }
+
+  String get _todayDateLabel {
+    return DateFormat('EEE, MMM d, yyyy').format(_now);
+  }
+
+  String _nextPrayerCountdownLabel() {
+    final position = _currentPosition;
+    if (position == null) {
+      return '';
+    }
+
+    final nextPrayer = PrayerService.getNextPrayer(
+      position.latitude,
+      position.longitude,
+    );
+    final diff = nextPrayer.time.difference(DateTime.now());
+    final totalMinutes = diff.inMinutes < 0 ? 0 : diff.inMinutes;
+    final hours = totalMinutes ~/ 60;
+    final minutes = totalMinutes % 60;
+
+    if (hours > 0) {
+      return 'Next prayer in ${hours}h ${minutes}m';
+    }
+    return 'Next prayer in ${minutes}m';
   }
 
   @override
@@ -554,13 +578,27 @@ class _HomePageState extends State<HomePage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            _hijriShortLabel,
-            style: const TextStyle(
-              color: AppPalette.textSecondary,
-              fontSize: 14,
-              fontWeight: FontWeight.w400,
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _hijriShortLabel,
+                style: const TextStyle(
+                  color: AppPalette.textSecondary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _todayDateLabel,
+                style: const TextStyle(
+                  color: AppPalette.textMuted,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
           ),
           IconButton(
             icon: const Icon(Icons.menu, color: Colors.white),
@@ -573,14 +611,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildHeroSection(_PrayerEntry? current, {required double heroHeight}) {
-    final now = DateTime.now();
-    String elapsed = '';
-    if (current != null) {
-      final diff = now.difference(current.time);
-      final h = diff.inHours;
-      final m = diff.inMinutes.remainder(60);
-      elapsed = h > 0 ? '${h}h ${m}m ago' : '${m}m ago';
-    }
+    final countdown = _nextPrayerCountdownLabel();
     final textTopPadding = (heroHeight * 0.28).clamp(80.0, 120.0);
     final textBottomPadding = (heroHeight * 0.12).clamp(20.0, 36.0);
     final cloudTop = (heroHeight * 0.48).clamp(108.0, 150.0);
@@ -613,10 +644,10 @@ class _HomePageState extends State<HomePage> {
                           height: 1.0,
                         ),
                       ),
-                      if (elapsed.isNotEmpty) ...[
+                      if (countdown.isNotEmpty) ...[
                         const SizedBox(height: 6),
                         Text(
-                          elapsed,
+                          countdown,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 22,

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:quran/quran.dart' as quran;
 
 import 'app_palette.dart';
@@ -156,7 +157,7 @@ class _QuranPageState extends State<QuranPage> {
   int? _lastReadSurah;
   String _searchQuery = '';
   bool _isLoading = true;
-  bool _ascending = true;
+  final bool _ascending = true;
   _QuranBrowseMode _browseMode = _QuranBrowseMode.chapters;
 
   @override
@@ -596,89 +597,6 @@ class _QuranPageState extends State<QuranPage> {
     );
   }
 
-  Widget _buildUtilityStrip() {
-    return Row(
-      children: [
-        Expanded(
-          child: InkWell(
-            onTap: () => setState(() => _ascending = !_ascending),
-            borderRadius: BorderRadius.circular(14),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                children: [
-                  Icon(
-                    _ascending
-                        ? Icons.arrow_upward_rounded
-                        : Icons.arrow_downward_rounded,
-                    color: _quranSoftText,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 10),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'SORT BY',
-                        style: TextStyle(
-                          color: _quranSoftText,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        _ascending ? 'ASCENDING' : 'DESCENDING',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.track_changes_outlined,
-                  color: _quranSoftText,
-                  size: 20,
-                ),
-                const SizedBox(width: 10),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'SHOWN PROGRESS',
-                      style: TextStyle(
-                        color: _quranSoftText,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      'READING',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildEmptyState(String message) {
     return Container(
       width: double.infinity,
@@ -737,21 +655,21 @@ class _QuranPageState extends State<QuranPage> {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(18, 18, 12, 16),
+                padding: const EdgeInsets.fromLTRB(14, 12, 10, 10),
                 child: Row(
                   children: [
                     SizedBox(
-                      width: 28,
+                      width: 24,
                       child: Text(
                         surah.number.toString(),
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 18,
+                          fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -760,45 +678,37 @@ class _QuranPageState extends State<QuranPage> {
                             surah.name,
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 16,
+                              fontSize: 14,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 3),
                           Text(
-                            '${surah.verseCount} Verses',
+                            '${surah.verseCount} Verses • ${surah.revelationLabel}',
                             style: const TextStyle(
                               color: _quranMutedText,
-                              fontSize: 13,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            surah.revelationLabel,
-                            style: const TextStyle(
-                              color: _quranMutedText,
-                              fontSize: 13,
+                              fontSize: 12,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
                           surah.arabicName,
                           textDirection: TextDirection.rtl,
-                          style: const TextStyle(
+                          style: GoogleFonts.scheherazadeNew(
                             color: Colors.white,
-                            fontSize: 26,
+                            fontSize: 20,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(height: 4),
                         IconButton(
                           visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
                           tooltip: isFavorite
                               ? 'Remove bookmark'
                               : 'Add bookmark',
@@ -818,7 +728,7 @@ class _QuranPageState extends State<QuranPage> {
                 ),
               ),
               Container(
-                height: 6,
+                height: 4,
                 decoration: const BoxDecoration(
                   color: _quranPanelSoft,
                   borderRadius: BorderRadius.vertical(
@@ -969,8 +879,6 @@ class _QuranPageState extends State<QuranPage> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  _buildPinnedReadCard(),
-                  const SizedBox(height: 14),
                   _buildSearchField(),
                   const SizedBox(height: 20),
                   _buildRecentlyReadSection(),
@@ -985,8 +893,6 @@ class _QuranPageState extends State<QuranPage> {
                   ),
                   const SizedBox(height: 16),
                   _buildBrowseModeSelector(),
-                  const SizedBox(height: 14),
-                  _buildUtilityStrip(),
                   const SizedBox(height: 14),
                   content,
                 ],
@@ -1059,15 +965,79 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
   List<_AyahContent> _verses = <_AyahContent>[];
   bool _isLoading = true;
   bool _showTranslation = true;
-  bool _showTransliteration = true;
-  bool _showTafsir = true;
-  bool _isReciting = false;
+  bool _showSurahControls = false;
   int _selectedAyah = 1;
   int _lastReadAyah = 1;
   Duration _readingDuration = Duration.zero;
-  quran.Reciter _selectedReciter = quran.Reciter.arAlafasy;
+  double _arabicFontSize = 36;
+  double _translationFontSize = 18;
+  bool _showTajweed = false;
 
   String get _lastReadAyahKey => 'quran_last_read_ayah_${widget.surah.number}';
+
+  /// Builds a list of [TextSpan]s for [text] with basic Tajweed color-coding.
+  /// Rules applied (standard colour convention):
+  ///  • Madd (ا/و/ي followed by ّ or sukun-context) — blue
+  ///  • Qalqalah letters (ق ط ب ج د) — orange
+  ///  • Ghunna / Shaddah on ن or م — green
+  ///  • Idgham / Ikhfa / Iqlab markers (tanwin + specific letters) — purple
+  /// Everything else is rendered in the default text colour.
+  static List<TextSpan> _tajweedSpans(String text, double fontSize) {
+    // Each rule: pattern → color
+    final rules = <(RegExp, Color)>[
+      // Qalqalah letters (ق ط ب ج د) with sukun
+      (RegExp(r'[قطبجد]ْ'), const Color(0xFFFF9800)),
+      // Shaddah on ن or م (Ghunna)
+      (RegExp(r'[نم]ّ'), const Color(0xFF4CAF50)),
+      // Any madd carrier (long vowels: alef + fatha-madda, or waw/ya with sukun)
+      (RegExp(r'[اوي]ٓ|[اوي]ّ|ٱ'), const Color(0xFF42A5F5)),
+      // Tanwin (any harakat doubled) – idgham/ikhfa context
+      (RegExp(r'[\u064B\u064C\u064D]'), const Color(0xFF9C27B0)),
+    ];
+
+    if (text.isEmpty) return [TextSpan(text: text)];
+
+    // Build spans by splitting on rule boundaries.
+    // Font is inherited from the parent RichText's TextSpan style.
+    final spans = <TextSpan>[];
+    int pos = 0;
+    while (pos < text.length) {
+      // Find the earliest match among all rules
+      int earliestStart = text.length;
+      Match? earliestMatch;
+      Color? earliestColor;
+      for (final (pattern, color) in rules) {
+        final m = pattern.firstMatch(text.substring(pos));
+        if (m != null) {
+          final absStart = pos + m.start;
+          if (absStart < earliestStart) {
+            earliestStart = absStart;
+            earliestMatch = m;
+            earliestColor = color;
+          }
+        }
+      }
+      if (earliestMatch == null) {
+        // No more matches — rest is plain
+        spans.add(TextSpan(text: text.substring(pos)));
+        break;
+      }
+      // Plain text before match
+      if (earliestStart > pos) {
+        spans.add(TextSpan(text: text.substring(pos, earliestStart)));
+      }
+      // Colored match — override only color, inherit font from parent
+      spans.add(TextSpan(
+        text: earliestMatch.group(0),
+        style: TextStyle(
+          color: earliestColor,
+          fontWeight: FontWeight.w600,
+        ),
+      ));
+      pos = earliestStart + earliestMatch.group(0)!.length;
+    }
+    return spans;
+  }
 
   @override
   void initState() {
@@ -1075,10 +1045,6 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
     _verseCount = quran.getVerseCount(widget.surah.number);
     _verseKeys = List<GlobalKey>.generate(_verseCount, (_) => GlobalKey());
     _loadReaderState();
-    _reciterPlayer.onPlayerComplete.listen((_) {
-      if (!mounted) return;
-      setState(() => _isReciting = false);
-    });
     _readingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(() {
@@ -1109,7 +1075,6 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
       return _AyahContent(
         ayahNumber: ayah,
         arabic: arabicVerse,
-        transliteration: _romanizeArabic(arabicVerse),
         translation: quran.getVerseTranslation(
           widget.surah.number,
           ayah,
@@ -1169,83 +1134,20 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
     );
   }
 
-  String _romanizeArabic(String input) {
-    const map = {
-      'ا': 'a',
-      'أ': 'a',
-      'إ': 'i',
-      'آ': 'aa',
-      'ب': 'b',
-      'ت': 't',
-      'ث': 'th',
-      'ج': 'j',
-      'ح': 'h',
-      'خ': 'kh',
-      'د': 'd',
-      'ذ': 'dh',
-      'ر': 'r',
-      'ز': 'z',
-      'س': 's',
-      'ش': 'sh',
-      'ص': 's',
-      'ض': 'd',
-      'ط': 't',
-      'ظ': 'z',
-      'ع': 'a',
-      'غ': 'gh',
-      'ف': 'f',
-      'ق': 'q',
-      'ك': 'k',
-      'ل': 'l',
-      'م': 'm',
-      'ن': 'n',
-      'ه': 'h',
-      'و': 'w',
-      'ي': 'y',
-      'ى': 'a',
-      'ة': 'h',
-      'ئ': 'y',
-      'ؤ': 'w',
-      'ء': '\'',
-      ' ': ' ',
-    };
-
-    final buffer = StringBuffer();
-    for (final rune in input.runes) {
-      final char = String.fromCharCode(rune);
-      if (map.containsKey(char)) {
-        buffer.write(map[char]);
-      } else if (RegExp(r'[0-9]').hasMatch(char)) {
-        continue;
-      }
-    }
-
-    final normalized = buffer.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (normalized.isEmpty) {
-      return 'Transliteration unavailable';
-    }
-    return normalized[0].toUpperCase() + normalized.substring(1);
-  }
-
-  Future<void> _toggleRecitation() async {
+  Future<void> _playAyahRecitation(int ayahNumber) async {
     try {
-      if (_isReciting) {
-        await _reciterPlayer.pause();
-        if (mounted) setState(() => _isReciting = false);
-        return;
-      }
-
-      final url = quran.getAudioURLBySurah(
+      await _reciterPlayer.stop();
+      final url = quran.getAudioURLByVerse(
         widget.surah.number,
-        reciter: _selectedReciter,
+        ayahNumber,
+        reciter: quran.Reciter.arAlafasy,
       );
       await _reciterPlayer.play(UrlSource(url));
-      if (mounted) setState(() => _isReciting = true);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Recitation failed: $e')));
+      ).showSnackBar(SnackBar(content: Text('Ayah recitation failed: $e')));
     }
   }
 
@@ -1256,18 +1158,6 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
       duration: const Duration(milliseconds: 320),
       curve: Curves.easeOut,
     );
-  }
-
-  void _cycleReciter() {
-    const reciters = [
-      quran.Reciter.arAlafasy,
-      quran.Reciter.arHusary,
-      quran.Reciter.arMaherMuaiqly,
-      quran.Reciter.arShaatree,
-    ];
-    final index = reciters.indexOf(_selectedReciter);
-    final next = reciters[(index + 1) % reciters.length];
-    setState(() => _selectedReciter = next);
   }
 
   double get _readingGoalProgress {
@@ -1281,9 +1171,44 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
     return 'Reading goal: $completed/$_readingGoalMinutes mins';
   }
 
-  String get _surahArabicName => quran.getSurahNameArabic(widget.surah.number);
-
   bool get _showBasmala => widget.surah.number != 9;
+
+  String _displayArabicForAyah(_AyahContent ayah) {
+    if (!_showBasmala || ayah.ayahNumber != 1) {
+      return ayah.arabic;
+    }
+
+    final words = ayah.arabic.trim().split(RegExp(r'\s+'));
+    if (words.length < 4) {
+      return ayah.arabic;
+    }
+
+    final normalizedHead = words
+        .take(4)
+        .map(_normalizeArabicToken)
+        .toList(growable: false);
+    const normalizedBasmala = ['بسم', 'الله', 'الرحمن', 'الرحيم'];
+
+    var isBasmalaPrefix = true;
+    for (int i = 0; i < normalizedBasmala.length; i++) {
+      if (normalizedHead[i] != normalizedBasmala[i]) {
+        isBasmalaPrefix = false;
+        break;
+      }
+    }
+
+    if (!isBasmalaPrefix) {
+      return ayah.arabic;
+    }
+
+    return words.skip(4).join(' ').trim();
+  }
+
+  String _normalizeArabicToken(String token) {
+    return token
+        .replaceAll(RegExp(r'[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u0640]'), '')
+        .replaceAll(RegExp(r'[^\u0621-\u064A]'), '');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1294,65 +1219,14 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(title: Text(widget.surah.displayTitle)),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: SizedBox(
-        width: double.infinity,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                FloatingActionButton.small(
-                  heroTag: 'quran-scroll-top',
-                  backgroundColor: AppPalette.surfaceRaised,
-                  foregroundColor: Colors.white,
-                  onPressed: _scrollToTop,
-                  tooltip: 'Back to top',
-                  child: const Icon(Icons.keyboard_arrow_up_rounded),
-                ),
-                const SizedBox(width: 10),
-                FloatingActionButton.small(
-                  heroTag: 'quran-toggle-translation',
-                  backgroundColor: AppPalette.surfaceRaised,
-                  foregroundColor: _showTranslation
-                      ? AppPalette.accent
-                      : Colors.white,
-                  onPressed: () {
-                    setState(() => _showTranslation = !_showTranslation);
-                  },
-                  tooltip: 'Toggle translation',
-                  child: const Icon(Icons.translate_rounded),
-                ),
-                const SizedBox(width: 10),
-                FloatingActionButton.small(
-                  heroTag: 'quran-toggle-tafsir',
-                  backgroundColor: AppPalette.surfaceRaised,
-                  foregroundColor: _showTafsir
-                      ? AppPalette.accent
-                      : Colors.white,
-                  onPressed: () {
-                    setState(() => _showTafsir = !_showTafsir);
-                  },
-                  tooltip: 'Toggle tafsir',
-                  child: Icon(
-                    _showTafsir
-                        ? Icons.visibility_rounded
-                        : Icons.visibility_off_rounded,
-                  ),
-                ),
-              ],
-            ),
-            FloatingActionButton.large(
-              heroTag: 'quran-recitation',
-              backgroundColor: const Color(0xFF65DA98),
-              foregroundColor: Colors.white,
-              onPressed: _toggleRecitation,
-              child: Icon(
-                _isReciting ? Icons.pause_rounded : Icons.play_arrow_rounded,
-              ),
-            ),
-          ],
-        ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: FloatingActionButton.small(
+        heroTag: 'quran-scroll-top',
+        backgroundColor: AppPalette.surfaceRaised,
+        foregroundColor: Colors.white,
+        onPressed: _scrollToTop,
+        tooltip: 'Back to top',
+        child: const Icon(Icons.keyboard_arrow_up_rounded),
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -1370,109 +1244,14 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppPalette.outline),
-                        color: AppPalette.panel,
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  widget.surah.name,
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Page ${widget.surah.pageNumber} | Juz ${widget.surah.juzNumber}',
-                                  style: const TextStyle(
-                                    color: AppPalette.textSecondary,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: _cycleReciter,
-                            tooltip: 'Change reciter',
-                            icon: const Icon(Icons.record_voice_over_outlined),
-                          ),
-                        ],
+                    Text(
+                      'Page ${widget.surah.pageNumber} | Juz ${widget.surah.juzNumber}',
+                      style: const TextStyle(
+                        color: AppPalette.textSecondary,
+                        fontSize: 13,
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppPalette.outline),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white70,
-                                width: 1.8,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: Colors.white24),
-                              ),
-                              child: Text(
-                                _surahArabicName,
-                                textAlign: TextAlign.center,
-                                textDirection: TextDirection.rtl,
-                                style: const TextStyle(
-                                  fontSize: 38,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white70,
-                                width: 1.8,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 6),
                     Text(
                       widget.surah.meaning,
                       style: const TextStyle(
@@ -1480,98 +1259,126 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                         fontSize: 14,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _readingGoalLabel,
-                            style: const TextStyle(
-                              fontSize: 13,
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        setState(() => _showSurahControls = !_showSurahControls);
+                      },
+                      icon: Icon(
+                        _showSurahControls
+                            ? Icons.tune_rounded
+                            : Icons.tune_outlined,
+                      ),
+                      label: Text(
+                        _showSurahControls ? 'Hide Surah Controls' : 'Show Surah Controls',
+                      ),
+                    ),
+                    if (_showSurahControls) ...[
+                      const SizedBox(height: 10),
+                      // ── Arabic font size ─────────────────────────────────
+                      _ControlRow(
+                        label: 'Arabic',
+                        value: _arabicFontSize.round(),
+                        onDecrease: () => setState(() {
+                          _arabicFontSize =
+                              (_arabicFontSize - 2).clamp(28, 52).toDouble();
+                        }),
+                        onIncrease: () => setState(() {
+                          _arabicFontSize =
+                              (_arabicFontSize + 2).clamp(28, 52).toDouble();
+                        }),
+                      ),
+                      const SizedBox(height: 4),
+                      // ── Translation font size + toggle ───────────────────
+                      _ControlRow(
+                        label: 'Translation',
+                        value: _translationFontSize.round(),
+                        onDecrease: () => setState(() {
+                          _translationFontSize = (_translationFontSize - 1)
+                              .clamp(14, 26)
+                              .toDouble();
+                        }),
+                        onIncrease: () => setState(() {
+                          _translationFontSize = (_translationFontSize + 1)
+                              .clamp(14, 26)
+                              .toDouble();
+                        }),
+                        trailing: Switch(
+                          value: _showTranslation,
+                          onChanged: (v) =>
+                              setState(() => _showTranslation = v),
+                          activeThumbColor: AppPalette.accent,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      // ── Tajweed ──────────────────────────────────────────
+                      Row(
+                        children: [
+                          const SizedBox(width: 4),
+                          const Text(
+                            'Tajweed',
+                            style: TextStyle(
                               color: AppPalette.textSecondary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ),
-                        TextButton.icon(
-                          onPressed: _cycleReciter,
-                          icon: const Icon(Icons.record_voice_over_outlined),
-                          label: const Text('Reciter'),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 6),
-                              LinearProgressIndicator(
-                                value: _readingGoalProgress,
-                                minHeight: 7,
-                                borderRadius: BorderRadius.circular(6),
-                                backgroundColor: AppPalette.outline,
-                                color: AppPalette.accent,
-                              ),
-                            ],
+                          const Spacer(),
+                          Switch(
+                            value: _showTajweed,
+                            onChanged: (v) =>
+                                setState(() => _showTajweed = v),
+                            activeThumbColor: AppPalette.accent,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        DropdownButton<int>(
-                          value: _selectedAyah,
-                          underline: const SizedBox.shrink(),
-                          items: List<DropdownMenuItem<int>>.generate(
-                            _verseCount,
-                            (index) {
-                              final ayah = index + 1;
-                              return DropdownMenuItem<int>(
-                                value: ayah,
-                                child: Text(
-                                  'Ayah ${widget.surah.number}:$ayah',
-                                ),
-                              );
+                        ],
+                      ),
+                      const Divider(height: 12),
+                      // ── Ayah jump + last read ────────────────────────────
+                      Row(
+                        children: [
+                          const Text(
+                            'Jump to',
+                            style: TextStyle(
+                              color: AppPalette.textMuted,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          DropdownButton<int>(
+                            value: _selectedAyah,
+                            underline: const SizedBox.shrink(),
+                            items: List<DropdownMenuItem<int>>.generate(
+                              _verseCount,
+                              (index) {
+                                final ayah = index + 1;
+                                return DropdownMenuItem<int>(
+                                  value: ayah,
+                                  child: Text(
+                                    'Ayah ${widget.surah.number}:$ayah',
+                                  ),
+                                );
+                              },
+                            ),
+                            onChanged: (value) {
+                              if (value == null) return;
+                              _scrollToAyah(value);
                             },
                           ),
-                          onChanged: (value) {
-                            if (value == null) return;
-                            _scrollToAyah(value);
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        FilterChip(
-                          selected: _showTransliteration,
-                          label: const Text('Transliteration'),
-                          onSelected: (enabled) {
-                            setState(() => _showTransliteration = enabled);
-                          },
-                        ),
-                        FilterChip(
-                          selected: _showTranslation,
-                          label: const Text('Translation'),
-                          onSelected: (enabled) {
-                            setState(() => _showTranslation = enabled);
-                          },
-                        ),
-                        FilterChip(
-                          selected: _showTafsir,
-                          label: const Text('Tafsir'),
-                          onSelected: (enabled) {
-                            setState(() => _showTafsir = enabled);
-                          },
-                        ),
-                        Chip(
-                          label: Text(
+                          const Spacer(),
+                          Text(
                             'Last read: ${widget.surah.number}:$_lastReadAyah',
+                            style: const TextStyle(
+                              color: AppPalette.textMuted,
+                              fontSize: 12,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1592,11 +1399,15 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                   quran.basmala,
                   textAlign: TextAlign.center,
                   textDirection: TextDirection.rtl,
-                  style: const TextStyle(fontSize: 34, height: 1.5),
+                  style: GoogleFonts.scheherazadeNew(
+                    fontSize: 34,
+                    height: 1.5,
+                  ),
                 ),
               ),
             ..._verses.map((ayah) {
               final isCurrent = ayah.ayahNumber == _selectedAyah;
+              final ayahArabicDisplay = _displayArabicForAyah(ayah);
               return Container(
                 key: _verseKeys[ayah.ayahNumber - 1],
                 margin: const EdgeInsets.only(bottom: 10),
@@ -1632,55 +1443,51 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                         ],
                       ),
                       const SizedBox(height: 6),
-                      Text(
-                        ayah.arabic,
-                        textAlign: TextAlign.right,
+                      Wrap(
+                        alignment: WrapAlignment.end,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        runSpacing: 8,
                         textDirection: TextDirection.rtl,
-                        style: const TextStyle(fontSize: 34, height: 1.75),
+                        children: [
+                          for (final word
+                              in ayahArabicDisplay
+                                  .split(RegExp(r'\s+'))
+                                  .where((w) => w.trim().isNotEmpty))
+                            GestureDetector(
+                              onTap: () => _playAyahRecitation(ayah.ayahNumber),
+                              child: _showTajweed
+                                  ? RichText(
+                                      textDirection: TextDirection.rtl,
+                                      text: TextSpan(
+                                        style: GoogleFonts.scheherazadeNew(
+                                          fontSize: _arabicFontSize,
+                                          height: 1.75,
+                                        ),
+                                        children: _tajweedSpans(
+                                            word, _arabicFontSize),
+                                      ),
+                                    )
+                                  : Text(
+                                      word,
+                                      textDirection: TextDirection.rtl,
+                                      style: GoogleFonts.scheherazadeNew(
+                                        fontSize: _arabicFontSize,
+                                        height: 1.75,
+                                      ),
+                                    ),
+                            ),
+                        ],
                       ),
-                      if (_showTransliteration) ...[
-                        const SizedBox(height: 10),
-                        Text(
-                          ayah.transliteration,
-                          textAlign: TextAlign.left,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            color: Colors.white,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
                       if (_showTranslation) ...[
                         const SizedBox(height: 12),
                         Text(
                           ayah.translation,
                           textAlign: TextAlign.left,
-                          style: const TextStyle(
-                            fontSize: 18,
+                          style: TextStyle(
+                            fontSize: _translationFontSize,
                             color: AppPalette.textSecondary,
                             height: 1.5,
-                          ),
-                        ),
-                      ],
-                      if (_showTafsir) ...[
-                        const SizedBox(height: 10),
-                        const Text(
-                          'Tafsir',
-                          style: TextStyle(
-                            color: AppPalette.textMuted,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.4,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          ayah.translation,
-                          textAlign: TextAlign.left,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: AppPalette.textSecondary,
-                            height: 1.45,
                           ),
                         ),
                       ],
@@ -1700,12 +1507,67 @@ class _AyahContent {
   const _AyahContent({
     required this.ayahNumber,
     required this.arabic,
-    required this.transliteration,
     required this.translation,
   });
 
   final int ayahNumber;
   final String arabic;
-  final String transliteration;
   final String translation;
+}
+
+/// A labelled font-size control row used inside Surah Controls panel.
+/// Shows:  [Label]  [−]  [value]  [+]  [optional trailing widget]
+class _ControlRow extends StatelessWidget {
+  const _ControlRow({
+    required this.label,
+    required this.value,
+    required this.onDecrease,
+    required this.onIncrease,
+    this.trailing,
+  });
+
+  final String label;
+  final int value;
+  final VoidCallback onDecrease;
+  final VoidCallback onIncrease;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const SizedBox(width: 4),
+        SizedBox(
+          width: 90,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: AppPalette.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          onPressed: onDecrease,
+          icon: const Icon(Icons.remove_circle_outline, size: 20),
+        ),
+        SizedBox(
+          width: 28,
+          child: Text(
+            '$value',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 13, color: AppPalette.textSecondary),
+          ),
+        ),
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          onPressed: onIncrease,
+          icon: const Icon(Icons.add_circle_outline, size: 20),
+        ),
+        if (trailing != null) ...[const Spacer(), trailing!],
+      ],
+    );
+  }
 }

@@ -5,6 +5,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:googlecast/CastController.dart';
 import 'package:googlecast/googlecast.dart';
 import 'package:intl/intl.dart';
@@ -25,6 +26,7 @@ Future<void> onDidReceiveBackgroundNotificationResponse(
   NotificationResponse response,
 ) async {
   // Re-initialise timezone data because this runs in a fresh isolate.
+  // We cannot reliably call platform timezone plugins from this isolate.
   tz.initializeTimeZones();
   await NotificationService.instance._triggerNetworkSpeakerIfConfigured(
     payload: response.payload,
@@ -51,8 +53,9 @@ class NotificationService {
   ];
 
   static const String _toneBeep = 'Beep';
-  static const String _toneMuezzin1 = 'Muezzin Voice 1';
-  static const String _toneMuezzin2 = 'Muezzin Voice 2';
+  static const String _toneMuezzin1 = 'Muezzin Voice 1 with Fajr Athan';
+  static const String _toneMuezzin2 = 'Muezzin Voice 2 with Mishary Alafasi';
+  static const String _toneAbbuAthan = 'Abbu_Athan';
   static const String toneCustomFile = 'Custom File';
   static const String speakerPhoneSpeaker = 'Phone Speaker (Alarm Stream)';
   static const String speakerGoogleCast = 'Google/Chromecast Speaker';
@@ -74,7 +77,7 @@ class NotificationService {
   Future<void> initialize() async {
     if (kIsWeb || _initialized) return;
 
-    tz.initializeTimeZones();
+    await _configureLocalTimezone();
 
     const androidInit = AndroidInitializationSettings('@mipmap/launcher_icon');
     const iosInit = DarwinInitializationSettings();
@@ -108,11 +111,23 @@ class NotificationService {
     _initialized = true;
   }
 
+  Future<void> _configureLocalTimezone() async {
+    tz.initializeTimeZones();
+
+    try {
+      final timezoneName = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(timezoneName));
+    } catch (e) {
+      // Keep tz.local as-is (typically UTC) when platform timezone lookup fails.
+      debugPrint('Timezone setup fallback: $e');
+    }
+  }
+
   // ───────────────────────────────────────────────────────────────────────────
   // Android notification channels
   // ───────────────────────────────────────────────────────────────────────────
 
-  static const int _channelVersion = 3;
+  static const int _channelVersion = 5;
   static const String _channelVersionKey = 'notification_channel_version';
 
   Future<void> _ensureAndroidToneChannels() async {
@@ -136,19 +151,27 @@ class NotificationService {
       ),
       AndroidNotificationChannel(
         'athan_tone_muezzin_1',
-        'Athan Tone: Muezzin Voice 1',
-        description: 'Prayer reminders with Muezzin Voice 1 tone',
+        'Athan Tone: Muezzin Voice 1 with Fajr Athan',
+        description: 'Prayer reminders with Muezzin Voice 1 with Fajr Athan tone',
         importance: Importance.max,
         playSound: true,
         sound: RawResourceAndroidNotificationSound('athan_muezzin_1'),
       ),
       AndroidNotificationChannel(
         'athan_tone_muezzin_2',
-        'Athan Tone: Muezzin Voice 2',
-        description: 'Prayer reminders with Muezzin Voice 2 tone',
+        'Athan Tone: Muezzin Voice 2 with Mishary Alafasi',
+        description: 'Prayer reminders with Muezzin Voice 2 with Mishary Alafasi tone',
         importance: Importance.max,
         playSound: true,
         sound: RawResourceAndroidNotificationSound('athan_muezzin_2'),
+      ),
+      AndroidNotificationChannel(
+        'athan_tone_abbu_athan',
+        'Athan Tone: Abbu_Athan',
+        description: 'Prayer reminders with Abbu_Athan tone',
+        importance: Importance.max,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('athan_abbu_athan'),
       ),
     ];
 
@@ -184,8 +207,10 @@ class NotificationService {
 
     final toneMap = await _loadPrayerTonePreferences();
     final speakerRoute = await _loadSpeakerRoutePreference();
+    final scheduleMode = await _resolveAndroidScheduleMode();
     final now = DateTime.now();
     final formatter = DateFormat('h:mm a');
+    var scheduledCount = 0;
 
     for (int dayOffset = 0; dayOffset < _batchDays; dayOffset++) {
       final date =
@@ -203,25 +228,57 @@ class NotificationService {
           speakerRoute: speakerRoute,
         );
 
-        await _plugin.zonedSchedule(
-          _notificationIdFor(prayer.name, prayer.time),
-          '${prayer.name} Prayer Time',
-          'It is ${formatter.format(prayer.time)}. Time for ${prayer.name}.',
-          tz.TZDateTime.from(prayer.time, tz.local),
-          details,
-          androidScheduleMode: AndroidScheduleMode.alarmClock,
-          uiLocalNotificationDateInterpretation:
-              UILocalNotificationDateInterpretation.absoluteTime,
-          payload: '${prayer.name}|${prayer.time.toIso8601String()}',
-        );
+        try {
+          await _plugin.zonedSchedule(
+            _notificationIdFor(prayer.name, prayer.time),
+            _notificationTitleForPrayer(prayer.name),
+            _notificationBodyForPrayer(prayer.name),
+            tz.TZDateTime.from(prayer.time, tz.local),
+            details,
+            androidScheduleMode: scheduleMode,
+            uiLocalNotificationDateInterpretation:
+                UILocalNotificationDateInterpretation.absoluteTime,
+            payload: '${prayer.name}|${prayer.time.toIso8601String()}',
+          );
+          scheduledCount++;
+        } catch (e) {
+          debugPrint(
+            'Failed to schedule ${prayer.name} at ${prayer.time.toIso8601String()}: $e',
+          );
+        }
       }
     }
+
+    debugPrint(
+      'Prayer notifications scheduled: $scheduledCount using $scheduleMode',
+    );
 
     final batchEnd = DateTime(now.year, now.month, now.day)
         .add(const Duration(days: _batchDays));
     await DBHelper.setSetting(_batchEndKey, batchEnd.toIso8601String());
     await DBHelper.setSetting(_lastLatKey, latitude.toString());
     await DBHelper.setSetting(_lastLngKey, longitude.toString());
+  }
+
+  Future<AndroidScheduleMode> _resolveAndroidScheduleMode() async {
+    final androidPlugin = _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+
+    if (androidPlugin == null) {
+      return AndroidScheduleMode.inexactAllowWhileIdle;
+    }
+
+    try {
+      final canScheduleExact =
+          await androidPlugin.canScheduleExactNotifications() ?? false;
+      return canScheduleExact
+          ? AndroidScheduleMode.exactAllowWhileIdle
+          : AndroidScheduleMode.inexactAllowWhileIdle;
+    } catch (e) {
+      debugPrint('Exact alarm capability check failed: $e');
+      return AndroidScheduleMode.inexactAllowWhileIdle;
+    }
   }
 
   Future<void> refreshBatchIfNeeded() async {
@@ -282,7 +339,28 @@ class NotificationService {
     await initialize();
     final route = routeOverride ?? await _loadSpeakerRoutePreference();
     final prayerName = await _resolvePrayerNameForTrigger(prayerOverride);
+    final storedToneRaw =
+      await DBHelper.getSetting('alarm_tone_${prayerName.toLowerCase()}');
+    final normalizedTone = _normalizeToneName(storedToneRaw);
     final toneSelection = await _resolveToneSelection(prayerName);
+
+    // Always post a local notification so the test mirrors real prayer alerts.
+    try {
+      final details = await _buildNotificationDetailsForPrayer(
+        prayerName: prayerName,
+        tone: normalizedTone,
+        speakerRoute: route,
+      );
+      await _plugin.show(
+        DateTime.now().millisecondsSinceEpoch.remainder(1 << 31),
+        _notificationTitleForPrayer(prayerName, isTest: true),
+        _notificationBodyForPrayer(prayerName),
+        details,
+        payload: '$prayerName|${DateTime.now().toIso8601String()}|test',
+      );
+    } catch (e) {
+      debugPrint('Test notification show failed: $e');
+    }
 
     if (route == speakerGoogleCast) {
       if (defaultTargetPlatform != TargetPlatform.android) {
@@ -297,7 +375,8 @@ class NotificationService {
 
       try {
         await _triggerGoogleCastIfConfigured(prayerName: prayerName);
-        return 'Playing ${toneSelection.label} for $prayerName on Google/Chromecast.';
+        return 'Playing ${toneSelection.label} for $prayerName on Google/Chromecast '
+            '(saved="$storedToneRaw", resolved="$normalizedTone").';
       } catch (e) {
         return 'Cast command failed: $e';
       }
@@ -306,7 +385,8 @@ class NotificationService {
     if (route == speakerPhoneSpeaker) {
       try {
         await _playToneLocallyForTest(toneSelection);
-        return 'Playing ${toneSelection.label} for $prayerName on this phone.';
+        return 'Playing ${toneSelection.label} for $prayerName on this phone '
+            '(saved="$storedToneRaw", resolved="$normalizedTone").';
       } catch (e) {
         return 'Phone playback failed: $e';
       }
@@ -432,9 +512,46 @@ class NotificationService {
     final map = <String, String>{};
     for (final prayer in _supportedPrayers) {
       final key = 'alarm_tone_${prayer.toLowerCase()}';
-      map[prayer] = await DBHelper.getSetting(key) ?? _toneBeep;
+      final storedTone = await DBHelper.getSetting(key);
+      map[prayer] = _normalizeToneName(storedTone);
     }
     return map;
+  }
+
+  String _normalizeToneName(String? tone) {
+    final value = (tone ?? '').trim();
+    if (value.isEmpty) return _toneBeep;
+
+    final lower = value.toLowerCase();
+    if (lower == _toneBeep.toLowerCase() || lower == 'default' || lower == 'beep tone') {
+      return _toneBeep;
+    }
+    if (lower == _toneMuezzin1.toLowerCase() ||
+        lower == 'muezzin voice 1' ||
+        lower == 'muezzin 1' ||
+        lower == 'muezzin voice1' ||
+        lower == 'muezzin_voice_1') {
+      return _toneMuezzin1;
+    }
+    if (lower == _toneMuezzin2.toLowerCase() ||
+        lower == 'muezzin voice 2' ||
+        lower == 'muezzin 2' ||
+        lower == 'muezzin voice2' ||
+        lower == 'muezzin_voice_2') {
+      return _toneMuezzin2;
+    }
+    if (lower == _toneAbbuAthan.toLowerCase() ||
+        lower == 'abbu athan' ||
+        lower == 'abbu_athan') {
+      return _toneAbbuAthan;
+    }
+    if (lower == toneCustomFile.toLowerCase() ||
+        lower == 'custom' ||
+        lower == 'custom tone') {
+      return toneCustomFile;
+    }
+
+    return _toneBeep;
   }
 
   Future<String> _resolvePrayerNameForTrigger(String? prayerOverride) async {
@@ -447,6 +564,17 @@ class NotificationService {
     final longitude = double.tryParse(await DBHelper.getSetting(_lastLngKey) ?? '');
     if (latitude != null && longitude != null) {
       return PrayerService.getNextPrayer(latitude, longitude).name;
+    }
+
+    // Settings-page trigger can run before location has been stored.
+    // In that case, prefer a prayer that actually has a non-default tone
+    // so "Test Prayer Trigger Now" reflects user configuration.
+    for (final prayer in _supportedPrayers) {
+      final storedTone = await DBHelper.getSetting('alarm_tone_${prayer.toLowerCase()}');
+      final normalizedTone = _normalizeToneName(storedTone);
+      if (normalizedTone != _toneBeep) {
+        return prayer;
+      }
     }
 
     return _supportedPrayers.first;
@@ -470,23 +598,31 @@ class NotificationService {
   }
 
   Future<_ToneSelection> _resolveToneSelection(String prayerName) async {
-    final tone = await DBHelper.getSetting('alarm_tone_${prayerName.toLowerCase()}') ??
-        _toneBeep;
+    final tone = _normalizeToneName(
+      await DBHelper.getSetting('alarm_tone_${prayerName.toLowerCase()}'),
+    );
 
     switch (tone) {
       case _toneMuezzin1:
         return const _ToneSelection.asset(
           label: _toneMuezzin1,
-          assetKey: 'assets/audio/athan_muezzin_1.wav',
-          contentType: 'audio/wav',
-          fileName: 'athan_muezzin_1.wav',
+          assetKey: 'assets/audio/athan_muezzin_1.mp3',
+          contentType: 'audio/mpeg',
+          fileName: 'athan_muezzin_1.mp3',
         );
       case _toneMuezzin2:
         return const _ToneSelection.asset(
           label: _toneMuezzin2,
-          assetKey: 'assets/audio/athan_muezzin_2.wav',
-          contentType: 'audio/wav',
-          fileName: 'athan_muezzin_2.wav',
+          assetKey: 'assets/audio/athan_muezzin_2.mp3',
+          contentType: 'audio/mpeg',
+          fileName: 'athan_muezzin_2.mp3',
+        );
+      case _toneAbbuAthan:
+        return const _ToneSelection.asset(
+          label: _toneAbbuAthan,
+          assetKey: 'assets/audio/athan_abbu_athan.mp3',
+          contentType: 'audio/mpeg',
+          fileName: 'athan_abbu_athan.mp3',
         );
       case toneCustomFile:
         final customPath = await DBHelper.getSetting(
@@ -526,8 +662,12 @@ class NotificationService {
   Future<void> _playToneLocallyForTest(_ToneSelection selection) async {
     final previousPlayer = _testAudioPlayer;
     if (previousPlayer != null) {
-      await previousPlayer.stop();
-      await previousPlayer.dispose();
+      try {
+        await previousPlayer.stop();
+      } catch (_) {}
+      try {
+        await previousPlayer.dispose();
+      } catch (_) {}
     }
 
     final player = AudioPlayer();
@@ -536,7 +676,7 @@ class NotificationService {
       if (identical(_testAudioPlayer, player)) {
         _testAudioPlayer = null;
       }
-      unawaited(player.dispose());
+      unawaited(player.dispose().catchError((_) {}));
     });
 
     if (selection.assetKey != null) {
@@ -763,6 +903,15 @@ class NotificationService {
     );
   }
 
+  String _notificationBodyForPrayer(String prayerName) {
+    return 'It\'s time for $prayerName, come to success.';
+  }
+
+  String _notificationTitleForPrayer(String prayerName, {bool isTest = false}) {
+    if (isTest) return 'Test Athan Reminder';
+    return 'Athan Reminder';
+  }
+
   (String, String, RawResourceAndroidNotificationSound?, String?)
       _tonePlatformConfig(String tone) {
     switch (tone) {
@@ -776,8 +925,15 @@ class NotificationService {
       case _toneMuezzin2:
         return (
           'athan_tone_muezzin_2',
-          'Muezzin 2',
+          'Muezzin 2 with Mishary Alafasi',
           const RawResourceAndroidNotificationSound('athan_muezzin_2'),
+          null
+        );
+      case _toneAbbuAthan:
+        return (
+          'athan_tone_abbu_athan',
+          'Abbu_Athan',
+          const RawResourceAndroidNotificationSound('athan_abbu_athan'),
           null
         );
       default:

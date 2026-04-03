@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -9,7 +7,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:googlecast/CastController.dart';
 import 'package:googlecast/googlecast.dart';
-import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path_lib;
 import 'package:permission_handler/permission_handler.dart';
 
@@ -35,26 +32,20 @@ class _SettingsPageState extends State<SettingsPage> {
 
   static const List<String> _toneOptions = [
     'Beep',
-    'Muezzin Voice 1',
-    'Muezzin Voice 2',
+    'Muezzin Voice 1 with Fajr Athan',
+    'Muezzin Voice 2 with Mishary Alafasi',
+    'Abbu_Athan',
   ];
-  static const String _knownGoodCastTestUrl =
-      'https://download.samplelib.com/mp3/sample-3s.mp3';
 
   static const String _customFileTone = NotificationService.toneCustomFile;
   static const String _speakerRouteKey = 'notification_speaker_route';
   static const String _googleCastMediaUrlKey =
       NotificationService.googleCastMediaUrlKey;
-    static const String _preferredCastSpeakerNameKey =
+  static const String _preferredCastSpeakerNameKey =
       'preferred_cast_speaker_name';
   static const String _overrideMuteKey = 'settings_override_mute';
   static const String _showHijriDateKey = 'settings_show_hijri_date';
-  static const String _stickyStatusBarAlertKey =
-      'settings_sticky_status_bar_alert';
-  static const String _languageKey = 'settings_language';
-  static const String _hijriCorrectionKey = 'settings_hijri_correction';
-  static const String _alwaysShowLockscreenKey =
-      'settings_always_show_lockscreen';
+  static const String _autoTestPrayerValue = '__auto_next__';
 
   static const Color _pageBackground = AppPalette.backgroundTop;
   static const Color _surfaceBackground = AppPalette.surface;
@@ -91,16 +82,10 @@ class _SettingsPageState extends State<SettingsPage> {
   StreamSubscription<String?>? _castMessageSub;
   bool _castConnected = false;
   String _lastCastState = 'Not connected';
-  String _castDiagnostics = '';
   String _preferredCastSpeakerName = '';
-  bool _isScanningNetwork = false;
-  List<_CastNetworkDevice> _discoveredCastDevices = [];
   bool _overrideMute = true;
   bool _showHijriDate = true;
-  bool _alwaysShowOnLockscreen = false;
-  String _stickyStatusBarAlert = 'None';
-  String _languageLabel = 'English';
-  int _hijriCorrection = 0;
+  String _testPrayerSelection = _autoTestPrayerValue;
 
   bool get _supportsBatteryOptimizationPermission =>
       defaultTargetPlatform == TargetPlatform.android;
@@ -158,186 +143,13 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
     final connected = await GoogleChromeCast.isConnected();
-    final debug = await GoogleChromeCast.debugState();
-    final diagnostics = debug['error'] != null
-      ? 'plugin_error=${debug['error']}'
-      : (debug.isEmpty
-          ? 'no_debug_data'
-          : 'initialized=${debug['initialized']} | '
-            'session=${debug['hasSession']} | '
-            'remote=${debug['hasRemoteMediaClient']} | '
-            'playback=${debug['playbackState']}');
     if (!mounted) return;
     setState(() {
       _castConnected = connected;
-      _castDiagnostics = diagnostics;
       if (!connected && _lastCastState == 'Not connected') {
         _lastCastState = 'Not connected';
       }
     });
-  }
-
-  // ── Network scanner ────────────────────────────────────────────────────────
-
-  Future<String?> _getLocalSubnet() async {
-    try {
-      final interfaces = await NetworkInterface.list(
-        type: InternetAddressType.IPv4,
-        includeLoopback: false,
-      );
-      for (final iface in interfaces) {
-        for (final addr in iface.addresses) {
-          if (!addr.isLoopback) {
-            final parts = addr.address.split('.');
-            if (parts.length == 4) {
-              return '${parts[0]}.${parts[1]}.${parts[2]}';
-            }
-          }
-        }
-      }
-    } catch (_) {}
-    return null;
-  }
-
-  Future<bool> _ensureCastScanPermission() async {
-    if (defaultTargetPlatform != TargetPlatform.android) {
-      return true;
-    }
-
-    final proceed = await _showPermissionDialog(
-      title: 'Nearby Device Access',
-      message:
-          'To discover Google/Chromecast speakers on your local network, allow nearby Wi-Fi device access when prompted.',
-    );
-    if (!proceed) {
-      return false;
-    }
-
-    final status = await Permission.nearbyWifiDevices.request();
-    if (status == PermissionStatus.granted ||
-        status == PermissionStatus.limited) {
-      return true;
-    }
-
-    if (!mounted) return false;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Nearby Wi-Fi permission is needed to scan for Chromecast speakers.',
-        ),
-      ),
-    );
-    return false;
-  }
-
-  Future<_CastNetworkDevice?> _probeCastHost(String ip) async {
-    Socket socket;
-    try {
-      socket = await Socket.connect(
-        ip,
-        8008,
-        timeout: const Duration(milliseconds: 350),
-      );
-    } catch (_) {
-      return null;
-    }
-    await socket.close();
-
-    final uri = Uri(
-      scheme: 'http',
-      host: ip,
-      port: 8008,
-      path: '/setup/eureka_info',
-      queryParameters: const {'params': 'name,device_info'},
-    );
-
-    try {
-      final resp = await http
-          .get(uri, headers: {'Accept': 'application/json'})
-          .timeout(const Duration(milliseconds: 650));
-      if (resp.statusCode != 200) {
-        return null;
-      }
-
-      final decoded = jsonDecode(resp.body);
-      if (decoded is! Map<String, dynamic>) {
-        return null;
-      }
-
-      final name = (decoded['name'] ?? '').toString().trim();
-      final info = decoded['device_info'];
-      final model = info is Map ? (info['model_name'] ?? '').toString() : '';
-      if (name.isEmpty) {
-        return null;
-      }
-
-      return _CastNetworkDevice(
-        name: name,
-        model: model.isEmpty ? 'Google/Chromecast Speaker' : model,
-        ip: ip,
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<void> _scanLocalNetwork() async {
-    if (_isScanningNetwork) return;
-
-    final hasPermission = await _ensureCastScanPermission();
-    if (!hasPermission) return;
-
-    setState(() {
-      _isScanningNetwork = true;
-      _discoveredCastDevices = [];
-    });
-
-    final subnet = await _getLocalSubnet();
-    if (subnet == null) {
-      if (!mounted) return;
-      setState(() => _isScanningNetwork = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not detect local network.')),
-      );
-      return;
-    }
-
-    const batchSize = 24;
-    final found = <_CastNetworkDevice>[];
-    for (int start = 1; start <= 254; start += batchSize) {
-      final end = (start + batchSize - 1).clamp(1, 254);
-      final batch = <Future<_CastNetworkDevice?>>[];
-      for (int i = start; i <= end; i++) {
-        batch.add(_probeCastHost('$subnet.$i'));
-      }
-      final results = await Future.wait(batch);
-      found.addAll(results.whereType<_CastNetworkDevice>());
-
-      if (!mounted) return;
-      setState(() {
-        _discoveredCastDevices = [...found];
-      });
-    }
-
-    final unique = <String, _CastNetworkDevice>{
-      for (final device in found) device.ip: device,
-    };
-    final sorted = unique.values.toList()
-      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-
-    if (!mounted) return;
-    setState(() {
-      _discoveredCastDevices = sorted;
-      _isScanningNetwork = false;
-    });
-
-    if (sorted.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No Google/Chromecast speakers found on this network.'),
-        ),
-      );
-    }
   }
 
   Future<void> _loadSettings() async {
@@ -366,13 +178,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
     _overrideMute = await _loadBoolSetting(_overrideMuteKey, fallback: true);
     _showHijriDate = await _loadBoolSetting(_showHijriDateKey, fallback: true);
-    _alwaysShowOnLockscreen = await _loadBoolSetting(_alwaysShowLockscreenKey);
-    _stickyStatusBarAlert =
-        await DBHelper.getSetting(_stickyStatusBarAlertKey) ?? 'None';
-    _languageLabel = await DBHelper.getSetting(_languageKey) ?? 'English';
-    _hijriCorrection =
-        int.tryParse(await DBHelper.getSetting(_hijriCorrectionKey) ?? '0') ??
-        0;
 
     for (final prayer in _prayerNames) {
       final storedTone = await DBHelper.getSetting(_toneKey(prayer));
@@ -561,7 +366,7 @@ class _SettingsPageState extends State<SettingsPage> {
           SnackBar(
             content: Text(
               'Cast command sent, but device state is $_lastCastState. '
-              'If the known-good test also fails, the Cast session/plugin path is the problem.',
+              'If cast audio still does not play, the Cast session/plugin path is the problem.',
             ),
           ),
         );
@@ -590,20 +395,18 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Future<void> _testKnownGoodCastPlayback() async {
-    await _playCastUrl(
-      _knownGoodCastTestUrl,
-      title: 'Known Good Cast Test',
-      subtitle: 'Sample MP3 sanity check',
-    );
-  }
-
-  Future<void> _testPrayerTriggerNow() async {
+  Future<void> _testPrayerTriggerNow({
+    String? routeOverride,
+    String? prayerSelectionOverride,
+  }) async {
     await _saveGoogleCastMediaUrl();
-    await DBHelper.setSetting(_speakerRouteKey, _speakerRoute);
+    final activeRoute = routeOverride ?? _speakerRoute;
+    final selectedPrayer = prayerSelectionOverride ?? _testPrayerSelection;
+
+    await DBHelper.setSetting(_speakerRouteKey, activeRoute);
     await _refreshCastConnectionState();
 
-    if (_speakerRoute == NotificationService.speakerGoogleCast &&
+    if (activeRoute == NotificationService.speakerGoogleCast &&
         !_castConnected) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -619,7 +422,9 @@ class _SettingsPageState extends State<SettingsPage> {
     String message;
     try {
       message = await NotificationService.instance.testSelectedSpeakerNow(
-        routeOverride: _speakerRoute,
+        routeOverride: activeRoute,
+        prayerOverride:
+            selectedPrayer == _autoTestPrayerValue ? null : selectedPrayer,
       );
     } catch (e) {
       message = 'Trigger failed: $e';
@@ -708,8 +513,11 @@ class _SettingsPageState extends State<SettingsPage> {
 
     final player = AudioPlayer();
     player.onPlayerComplete.listen((_) {
+      if (identical(_audioPlayer, player)) {
+        _audioPlayer = null;
+      }
       if (mounted) setState(() => _playingPrayer = null);
-      player.dispose();
+      unawaited(player.dispose().catchError((_) {}));
     });
 
     try {
@@ -864,86 +672,6 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _showHijriDate = value);
   }
 
-  Future<void> _showStickyStatusBarAlertDialog() async {
-    final selected = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Sticky Status Bar Alert'),
-        content: RadioGroup<String>(
-          groupValue: _stickyStatusBarAlert,
-          onChanged: (value) => Navigator.of(dialogContext).pop(value),
-          child: const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              RadioListTile<String>(
-                value: 'None',
-                title: Text('None'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (selected == null) return;
-    await DBHelper.setSetting(_stickyStatusBarAlertKey, selected);
-    if (!mounted) return;
-    setState(() => _stickyStatusBarAlert = selected);
-  }
-
-  Future<void> _showHijriCorrectionDialog() async {
-    final selected = await showDialog<int>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Hijri Correction'),
-        content: RadioGroup<int>(
-          groupValue: _hijriCorrection,
-          onChanged: (newValue) => Navigator.of(dialogContext).pop(newValue),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final value in [-2, -1, 0, 1, 2])
-                RadioListTile<int>(
-                  value: value,
-                  title: Text(value == 0 ? 'No correction' : '$value day(s)'),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (selected == null) return;
-    await DBHelper.setSetting(_hijriCorrectionKey, selected.toString());
-    if (!mounted) return;
-    setState(() => _hijriCorrection = selected);
-  }
-
-  Future<void> _showLanguageDialog() async {
-    final selected = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Language'),
-        content: RadioGroup<String>(
-          groupValue: _languageLabel,
-          onChanged: (value) => Navigator.of(dialogContext).pop(value),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final language in const ['English'])
-                RadioListTile<String>(
-                  value: language,
-                  title: Text(language),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (selected == null) return;
-    await DBHelper.setSetting(_languageKey, selected);
-    if (!mounted) return;
-    setState(() => _languageLabel = selected);
-  }
-
   Future<void> _showCalculationMethodDialog() async {
     await showDialog<void>(
       context: context,
@@ -962,21 +690,19 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  void _showComingSoonMessage(String label) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label settings are not configured yet.')),
-    );
-  }
-
   void _openAlertSettingsSheet() {
     _refreshCastConnectionState();
+    var draftSpeakerRoute = _speakerRoute;
+    var draftTestPrayerSelection = _testPrayerSelection;
+
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _buildBottomSheetScaffold(
-        title: 'Alert Settings',
-        child: Column(
+      builder: (_) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) => _buildBottomSheetScaffold(
+          title: 'Alert Settings',
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
@@ -985,10 +711,10 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(height: 16),
             RadioGroup<String>(
-              groupValue: _speakerRoute,
+              groupValue: draftSpeakerRoute,
               onChanged: (value) {
                 if (value != null) {
-                  _updateSpeakerRoute(value);
+                  setSheetState(() => draftSpeakerRoute = value);
                 }
               },
               child: Column(
@@ -1014,7 +740,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ],
               ),
             ),
-            if (_speakerRoute == NotificationService.speakerGoogleCast) ...[
+            if (draftSpeakerRoute == NotificationService.speakerGoogleCast) ...[
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -1050,54 +776,45 @@ class _SettingsPageState extends State<SettingsPage> {
                 ],
               ),
               const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    debugPrint('Cast chooser: Select Speaker tapped');
-                    final shown = await GoogleChromeCast.showCastDialog();
-                    debugPrint('Cast chooser: showCastDialog returned $shown');
-                    if (!mounted) return;
-                    if (!shown) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Could not open Cast chooser dialog.'),
-                        ),
-                      );
-                      return;
-                    }
-                    await Future.delayed(const Duration(seconds: 1));
-                    await _refreshCastConnectionState();
-                  },
-                  icon: const Icon(Icons.cast_connected),
-                  label: const Text('Select Speaker'),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _googleCastMediaUrlController,
-                style: const TextStyle(color: _primaryText),
-                decoration: _sheetInputDecoration(
-                  'Cast Media URL (MP3/AAC)',
-                  hint: 'https://example.com/athan.mp3',
-                ),
-                onChanged: (_) => _saveGoogleCastMediaUrl(),
-              ),
-              const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: _testGoogleCastPlayback,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: () async {
+                        debugPrint('Cast chooser: Select Speaker tapped');
+                        final shown = await GoogleChromeCast.showCastDialog();
+                        debugPrint('Cast chooser: showCastDialog returned $shown');
+                        if (!mounted) return;
+                        if (!shown) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Could not open Cast chooser dialog.'),
+                            ),
+                          );
+                          return;
+                        }
+                        await Future.delayed(const Duration(seconds: 1));
+                        await _refreshCastConnectionState();
+                      },
                       icon: const Icon(Icons.cast_connected),
-                      label: const Text('Test Cast Audio'),
+                      label: const Text('Select Speaker'),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  OutlinedButton.icon(
-                    onPressed: () => _castController.stop(),
-                    icon: const Icon(Icons.stop),
-                    label: const Text('Stop'),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: _testGoogleCastPlayback,
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('Test Cast Audio'),
+                    ),
                   ),
                 ],
               ),
@@ -1110,109 +827,90 @@ class _SettingsPageState extends State<SettingsPage> {
                   label: const Text('Refresh Cast State'),
                 ),
               ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _testKnownGoodCastPlayback,
-                  icon: const Icon(Icons.music_note_outlined),
-                  label: const Text('Test Known-Good MP3'),
-                ),
-              ),
-              if (_castDiagnostics.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Debug: $_castDiagnostics',
-                  style: const TextStyle(
-                    color: _secondaryText,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 12),
-              const Text(
-                'Discover speakers on your Wi-Fi, then tap the Cast icon to connect.',
-                style: TextStyle(color: _secondaryText, fontSize: 12),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _isScanningNetwork ? null : _scanLocalNetwork,
-                  icon: _isScanningNetwork
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.wifi_find),
-                  label: Text(
-                    _isScanningNetwork
-                        ? 'Scanning local network...'
-                        : 'Scan local network for Chromecast',
-                  ),
-                ),
-              ),
-              if (_discoveredCastDevices.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 220),
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: _discoveredCastDevices.length,
-                    separatorBuilder: (_, _) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final device = _discoveredCastDevices[index];
-                      return ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(
-                          Icons.speaker_group_outlined,
-                          color: _sectionAccent,
-                        ),
-                        title: Text(
-                          device.name,
-                          style: const TextStyle(color: _primaryText),
-                        ),
-                        subtitle: Text(
-                          '${device.model} • ${device.ip}',
-                          style: const TextStyle(color: _secondaryText),
-                        ),
-                        trailing: TextButton(
-                          onPressed: () async {
-                            await DBHelper.setSetting(
-                              _preferredCastSpeakerNameKey,
-                              device.name,
-                            );
-                            if (!mounted) return;
-                            setState(() => _preferredCastSpeakerName = device.name);
-                            ScaffoldMessenger.of(this.context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  'Selected ${device.name}. Use the Cast icon above to connect without leaving this page.',
-                                ),
-                              ),
-                            );
-                          },
-                          child: const Text('Use'),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
             ],
             const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _testPrayerTriggerNow,
-                icon: const Icon(Icons.notifications_active_outlined),
-                label: const Text('Test Prayer Trigger Now'),
-              ),
+            DropdownButtonFormField<String>(
+              initialValue: draftTestPrayerSelection,
+              dropdownColor: _surfaceBackground,
+              style: const TextStyle(color: _primaryText),
+              decoration: _sheetInputDecoration('Test prayer'),
+              items: [
+                const DropdownMenuItem<String>(
+                  value: _autoTestPrayerValue,
+                  child: Text(
+                    'Auto (next prayer)',
+                    style: TextStyle(color: _primaryText),
+                  ),
+                ),
+                ..._prayerNames.map(
+                  (prayer) => DropdownMenuItem<String>(
+                    value: prayer,
+                    child: Text(
+                      prayer,
+                      style: const TextStyle(color: _primaryText),
+                    ),
+                  ),
+                ),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setSheetState(() => draftTestPrayerSelection = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => _testPrayerTriggerNow(
+                      routeOverride: draftSpeakerRoute,
+                      prayerSelectionOverride: draftTestPrayerSelection,
+                    ),
+                    icon: const Icon(Icons.notifications_active_outlined),
+                    label: const Text('Test Prayer Trigger Now'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: () => _castController.stop(),
+                  icon: const Icon(Icons.stop),
+                  label: const Text('Stop'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(sheetContext).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () async {
+                      await _updateSpeakerRoute(draftSpeakerRoute);
+                      if (!mounted) return;
+                      setState(() {
+                        _testPrayerSelection = draftTestPrayerSelection;
+                      });
+                      if (!sheetContext.mounted) return;
+                      Navigator.of(sheetContext).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Alert settings saved.')),
+                      );
+                    },
+                    icon: const Icon(Icons.save_outlined),
+                    label: const Text('Save'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -1686,16 +1384,4 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
   }
-}
-
-class _CastNetworkDevice {
-  const _CastNetworkDevice({
-    required this.name,
-    required this.model,
-    required this.ip,
-  });
-
-  final String name;
-  final String model;
-  final String ip;
 }
