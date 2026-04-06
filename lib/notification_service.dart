@@ -777,7 +777,7 @@ class NotificationService {
     if (overrideMute && !kIsWeb && Platform.isAndroid) {
       try {
         await player.setAudioContext(
-          const AudioContext(
+          AudioContext(
             android: AudioContextAndroid(
               usageType: AndroidUsageType.alarm,
               audioFocus: AndroidAudioFocus.gain,
