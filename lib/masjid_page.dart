@@ -33,6 +33,7 @@ class _MasjidPageState extends State<MasjidPage> {
   bool _isLoading = false;
   String? _error;
   int _foundCount = 0;
+  List<MasjidResult> _publicNearbyMosques = const [];
 
   /// UUID of the mosque pinned for prayer notifications (null = none selected).
   String? _selectedMosqueUuid;
@@ -95,6 +96,49 @@ class _MasjidPageState extends State<MasjidPage> {
     );
   }
 
+  Future<void> _loadPublicNearbyMosques({
+    required Position pos,
+    required LatLng center,
+    required Marker userMarker,
+    String? infoMessage,
+  }) async {
+    try {
+      final nearby = await MosqueService().findNearbyMosques(pos.latitude, pos.longitude);
+      final markers = <Marker>{userMarker};
+      for (final mosque in nearby) {
+        markers.add(Marker(
+          markerId: MarkerId(mosque.id),
+          position: LatLng(mosque.lat, mosque.lng),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          infoWindow: InfoWindow(
+            title: mosque.name,
+            snippet: mosque.address.isNotEmpty ? mosque.address : null,
+            onTap: () => _openInGoogleMaps(mosque.lat, mosque.lng, mosque.name),
+          ),
+        ));
+      }
+      if (!mounted) return;
+      setState(() {
+        _currentPosition = pos;
+        _mapCenter = center;
+        _markers = markers;
+        _publicNearbyMosques = nearby;
+        _foundCount = nearby.length;
+        _error = infoMessage;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _currentPosition = pos;
+        _mapCenter = center;
+        _markers = {userMarker};
+        _publicNearbyMosques = const [];
+        _foundCount = 0;
+        _error = 'Unable to load nearby masjids from public map data: $e';
+      });
+    }
+  }
+
   Future<void> _loadNearbyMosques() async {
     setState(() {
       _isLoading = true;
@@ -114,6 +158,16 @@ class _MasjidPageState extends State<MasjidPage> {
       // Load cached Mawaqit token
       final token = await DBHelper.getSetting(_kToken);
       if (token == null || token.isEmpty) {
+        if (kIsWeb) {
+          // CORS blocks Mawaqit API on web — use public OSM/Overpass fallback instead.
+          await _loadPublicNearbyMosques(
+            pos: pos,
+            center: center,
+            userMarker: userMarker,
+            infoMessage: 'Showing public map data (Mawaqit API unavailable on web).',
+          );
+          return;
+        }
         // No token – show user location and prompt login
         if (!mounted) return;
         setState(() {
@@ -134,8 +188,17 @@ class _MasjidPageState extends State<MasjidPage> {
           pos.longitude,
         );
       } on MawaqitAuthException {
-        // Token expired – clear it and prompt for re-login
+        // Token expired – clear it.
         await DBHelper.setSetting(_kToken, '');
+        if (kIsWeb) {
+          await _loadPublicNearbyMosques(
+            pos: pos,
+            center: center,
+            userMarker: userMarker,
+            infoMessage: 'Mawaqit session expired. Showing public map data.',
+          );
+          return;
+        }
         if (!mounted) return;
         setState(() {
           _currentPosition = pos;
@@ -690,9 +753,9 @@ class _MasjidPageState extends State<MasjidPage> {
               ),
               const SizedBox(height: 24),
               if (kIsWeb) ...[  
-                // On web, direct API login is blocked by CORS — link to mawaqit.net instead.
+                // On web, direct API login is blocked by CORS — show OSM results instead.
                 const Text(
-                  'Already have an account? Log in on mawaqit.net, then use the iOS or Android app to connect.',
+                  'Nearby masjids are loaded from public map data. Use the iOS or Android app to connect your mawaqit.net account.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AppPalette.textSecondary,
@@ -702,27 +765,77 @@ class _MasjidPageState extends State<MasjidPage> {
                 const SizedBox(height: 12),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppPalette.surfaceRaised,
-                    foregroundColor: AppPalette.accent,
+                    backgroundColor: AppPalette.accent,
+                    foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 24,
                       vertical: 12,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
-                      side: const BorderSide(color: AppPalette.accent),
                     ),
                   ),
-                  icon: const Icon(Icons.open_in_new),
+                  icon: const Icon(Icons.search),
                   label: const Text(
-                    'Open mawaqit.net',
+                    'Find Nearby Masjids',
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
-                  onPressed: () => launchUrl(
-                    Uri.parse('https://mawaqit.net/en/user/login'),
-                    mode: LaunchMode.externalApplication,
-                  ),
+                  onPressed: _loadNearbyMosques,
                 ),
+                if (_publicNearbyMosques.isNotEmpty) ...[  
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 200,
+                    child: ListView.separated(
+                      itemCount: _publicNearbyMosques.length,
+                      separatorBuilder: (_, __) => const Divider(
+                        color: AppPalette.outline,
+                        height: 1,
+                      ),
+                      itemBuilder: (_, i) {
+                        final m = _publicNearbyMosques[i];
+                        return ListTile(
+                          dense: true,
+                          leading: const Icon(
+                            Icons.mosque,
+                            color: AppPalette.accent,
+                            size: 20,
+                          ),
+                          title: Text(
+                            m.name,
+                            style: const TextStyle(
+                              color: AppPalette.textPrimary,
+                              fontSize: 13,
+                            ),
+                          ),
+                          subtitle: m.address.isNotEmpty
+                              ? Text(
+                                  m.address,
+                                  style: const TextStyle(
+                                    color: AppPalette.textSecondary,
+                                    fontSize: 11,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                )
+                              : null,
+                          trailing: IconButton(
+                            icon: const Icon(
+                              Icons.map_outlined,
+                              color: AppPalette.textSecondary,
+                              size: 18,
+                            ),
+                            onPressed: () => _openInGoogleMaps(
+                              m.lat,
+                              m.lng,
+                              m.name,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ] else ...[  
                 const Text(
                   'You already have a mawaqit.net account, Login in here',
