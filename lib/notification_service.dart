@@ -13,6 +13,7 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 import 'db_helper.dart';
+import 'mosque_service.dart';
 import 'prayer_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -44,6 +45,11 @@ class NotificationService {
   static const String _lastLngKey = 'notification_last_lng';
   static const String _speakerRouteKey = 'notification_speaker_route';
   static const String googleCastMediaUrlKey = 'google_cast_media_url';
+
+  // Mawaqit integration — keys shared with masjid_page.dart and mosque_service.dart
+  static const String _kMawaqitToken = 'mawaqit_token';
+  static const String kMawaqitMosqueUuid = 'mawaqit_selected_mosque_uuid';
+  static const String kMawaqitMosqueName = 'mawaqit_selected_mosque_name';
   static const List<String> _supportedPrayers = [
     'Fajr',
     'Dhuhr',
@@ -212,11 +218,51 @@ class NotificationService {
     final formatter = DateFormat('h:mm a');
     var scheduledCount = 0;
 
+    // ── Try to load the selected mosque's Mawaqit prayer-times calendar ──────
+    MawaqitCalendarData? mawaqitCalendar;
+    try {
+      final token = await DBHelper.getSetting(_kMawaqitToken);
+      final mosqueUuid = await DBHelper.getSetting(kMawaqitMosqueUuid);
+      if (token != null &&
+          token.isNotEmpty &&
+          mosqueUuid != null &&
+          mosqueUuid.isNotEmpty) {
+        mawaqitCalendar = await MosqueService.fetchPrayerCalendar(
+          token,
+          mosqueUuid,
+        );
+        debugPrint(
+          'Mawaqit calendar loaded for mosque: ${mawaqitCalendar.label}',
+        );
+      }
+    } on MawaqitAuthException catch (e) {
+      debugPrint(
+        'Mawaqit auth error loading calendar, using local calculation: $e',
+      );
+    } catch (e) {
+      debugPrint('Mawaqit calendar unavailable, using local calculation: $e');
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     for (int dayOffset = 0; dayOffset < _batchDays; dayOffset++) {
       final date =
           DateTime(now.year, now.month, now.day).add(Duration(days: dayOffset));
-      final times = PrayerService.getTimesForDate(latitude, longitude, date);
-      final prayers = PrayerService.getObligatoryPrayers(times);
+
+      // Prefer Mawaqit mosque schedule; fall back to local adhan calculation.
+      final List<PrayerScheduleItem> prayers;
+      final mawaqitDay = mawaqitCalendar?.prayerTimesForDate(date);
+      if (mawaqitDay != null) {
+        prayers = [
+          PrayerScheduleItem(name: 'Fajr', time: mawaqitDay.fajr),
+          PrayerScheduleItem(name: 'Dhuhr', time: mawaqitDay.dhuhr),
+          PrayerScheduleItem(name: 'Asr', time: mawaqitDay.asr),
+          PrayerScheduleItem(name: 'Maghrib', time: mawaqitDay.maghrib),
+          PrayerScheduleItem(name: 'Isha', time: mawaqitDay.isha),
+        ];
+      } else {
+        final times = PrayerService.getTimesForDate(latitude, longitude, date);
+        prayers = PrayerService.getObligatoryPrayers(times);
+      }
 
       for (final prayer in prayers) {
         if (!prayer.time.isAfter(now)) continue;

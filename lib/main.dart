@@ -8,6 +8,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:hijri_date/hijri.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:sqflite/sqflite.dart' show databaseFactory;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'app_palette.dart';
 import 'notification_service.dart';
@@ -20,6 +22,16 @@ import 'tracker_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Desktop builds use sqflite_common_ffi; initialize before any DB access.
+  if (!kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.linux ||
+          defaultTargetPlatform == TargetPlatform.macOS)) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
+
   await NotificationService.instance.initialize();
   HijriDate.setLocal('en');
   runApp(const AthanApp());

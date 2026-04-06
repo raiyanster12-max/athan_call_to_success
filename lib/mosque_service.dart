@@ -1,493 +1,300 @@
 import 'dart:convert';
-import 'dart:math' as math;
 
 import 'package:http/http.dart' as http;
 
-class MasjidResult {
-  const MasjidResult({
-    required this.id,
+/// A single mosque entry returned by the Mawaqit API.
+class MosqueSummary {
+  const MosqueSummary({
+    required this.uuid,
     required this.name,
-    required this.address,
-    required this.lat,
-    required this.lng,
+    this.localName,
+    this.lat,
+    this.lng,
+    this.address,
+    this.city,
+    this.country,
+    this.slug,
   });
 
-  final String id;
+  final String uuid;
   final String name;
-  final String address;
-  final double lat;
-  final double lng;
+  final String? localName;
+  final double? lat;
+  final double? lng;
+  final String? address;
+  final String? city;
+  final String? country;
+  final String? slug;
+
+  /// Display name prefers localName when populated.
+  String get displayName =>
+      (localName != null && localName!.isNotEmpty) ? localName! : name;
+
+  /// One-line address combining address + city.
+  String get fullAddress {
+    final parts = [address, city].where((s) => s != null && s.isNotEmpty);
+    return parts.join(', ');
+  }
+
+  factory MosqueSummary.fromJson(Map<String, dynamic> json) {
+    return MosqueSummary(
+      uuid: json['uuid'] as String? ?? '',
+      name: json['name'] as String? ?? 'Unnamed Mosque',
+      localName: json['localName'] as String?,
+      lat: (json['latitude'] as num?)?.toDouble(),
+      lng: (json['longitude'] as num?)?.toDouble(),
+      address: json['address'] as String?,
+      city: json['city'] as String?,
+      country: json['country'] as String?,
+      slug: json['slug'] as String?,
+    );
+  }
 }
 
-class MosqueLookupException implements Exception {
-  const MosqueLookupException(this.message);
-
+/// Thrown when the Mawaqit API returns 401/403 (bad or expired credentials).
+class MawaqitAuthException implements Exception {
+  const MawaqitAuthException(this.message);
   final String message;
-
   @override
   String toString() => message;
 }
 
+/// Lightweight Dart wrapper around the Mawaqit REST API.
+///
+/// API base: https://mawaqit.net/api
+///   Login      POST /2.0/me        (Basic Auth → { apiAccessToken })
+///   Search     GET  /2.0/mosque/search?lat=X&lon=X  (Authorization: <token>)
+///   By keyword GET  /2.0/mosque/search?word=X        (Authorization: <token>)
 class MosqueService {
-  static const int _defaultRadiusMeters = 8047; // 5 miles
-  // NOTE: no (?i) prefix — Overpass uses ,i flag on the filter instead
-  static const String _nameRegex =
-      'masjid|mosque|islamic|muslim|musalla|mushalla|masjed|jami|jamia|jame|al-masjid|jumah|jumuah|prayer hall|salah center|islamic center|islamic centre|icna|isna|msa |al islam|noor|nur|ummah|deen|tabligh|foundation|islamic society|muslim association|muslim community|islamic foundation|muslim foundation|muslim federation|baitul|dar ul|darul|ijtima';
-  static const String _userAgent =
-      'athan_call_to_success/1.0 (contact: app-local)';
-  static const List<String> _geocodeFallbackHosts = [
-    'nominatim.openstreetmap.org',
-    'geocode.maps.co',
-  ];
-  static const List<String> _overpassUrls = [
-    'https://overpass-api.de/api/interpreter',
-    'https://overpass.kumi.systems/api/interpreter',
-    'https://overpass.openstreetmap.ru/api/interpreter',
-  ];
+  static const String _apiBase = 'https://mawaqit.net/api';
 
-  /// Finds mosques and Islamic places of worship within [radiusMeters] of
-  /// the given coordinates using the free OpenStreetMap Overpass API.
-  Future<List<MasjidResult>> findNearbyMosques(
+  // ── Authentication ────────────────────────────────────────────────────────
+
+  /// Login with a mawaqit.net account and return the API access token.
+  static Future<String> login(String email, String password) async {
+    final uri = Uri.parse('$_apiBase/2.0/me');
+    final credentials = base64.encode(utf8.encode('$email:$password'));
+
+    final response = await http.post(
+      uri,
+      headers: {
+        'Authorization': 'Basic $credentials',
+        'Accept': 'application/json',
+      },
+    ).timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 401) {
+      throw const MawaqitAuthException(
+        'Invalid Mawaqit credentials. Please check your email and password.',
+      );
+    }
+    if (response.statusCode != 200) {
+      throw Exception('Mawaqit login failed (HTTP ${response.statusCode}).');
+    }
+
+    final data = json.decode(response.body) as Map<String, dynamic>;
+    final token = data['apiAccessToken'] as String?;
+    if (token == null || token.isEmpty) {
+      throw Exception('No API token received from Mawaqit login response.');
+    }
+    return token;
+  }
+
+  // ── Mosque search ─────────────────────────────────────────────────────────
+
+  /// Return mosques near [lat]/[lon] using the cached API [token].
+  static Future<List<MosqueSummary>> searchNearby(
+    String token,
     double lat,
-    double lng, {
-    int radiusMeters = _defaultRadiusMeters,
-    String? zipcode,
-  }) async {
-    // Query uses nwr shorthand (node+way+relation in one) to keep clause count
-    // low and avoid Overpass timeouts.
-    final query = '''
-[out:json][timeout:45];
-(
-  nwr["amenity"="place_of_worship"]["religion"="muslim"](around:$radiusMeters,$lat,$lng);
-  nwr["amenity"="mosque"](around:$radiusMeters,$lat,$lng);
-  nwr["amenity"="prayer_hall"](around:$radiusMeters,$lat,$lng);
-  nwr["building"="mosque"](around:$radiusMeters,$lat,$lng);
-  nwr["amenity"="community_centre"]["religion"="muslim"](around:$radiusMeters,$lat,$lng);
-  nwr["office"="religious"]["religion"="muslim"](around:$radiusMeters,$lat,$lng);
-  nwr["name"~"$_nameRegex",i]["amenity"](around:$radiusMeters,$lat,$lng);
-  nwr["name"~"$_nameRegex",i]["building"](around:$radiusMeters,$lat,$lng);
-  nwr["name"~"$_nameRegex",i]["office"](around:$radiusMeters,$lat,$lng);
-  nwr["amenity"="community_centre"]["name"~"$_nameRegex",i](around:$radiusMeters,$lat,$lng);
-);
-out center;
-''';
-
-    Object? lastFailure;
-    final overpassResults = <MasjidResult>[];
-    for (final baseUrl in _overpassUrls) {
-      try {
-        final response = await http
-            .post(
-              Uri.parse(baseUrl),
-              headers: {
-                'User-Agent': _userAgent,
-                'Content-Type': 'text/plain; charset=utf-8',
-              },
-              body: query,
-            )
-            .timeout(const Duration(seconds: 55));
-
-        if (response.statusCode != 200) {
-          if (response.statusCode >= 500 ||
-              response.statusCode == 429 ||
-              response.statusCode == 504) {
-            lastFailure = MosqueLookupException(
-              'Overpass API returned status ${response.statusCode}.',
-            );
-            continue;
-          }
-          throw MosqueLookupException(
-            'Overpass API returned status ${response.statusCode}.',
-          );
-        }
-
-        final data = json.decode(response.body) as Map<String, dynamic>;
-        final elements = data['elements'] as List<dynamic>? ?? [];
-        overpassResults.addAll(_parseOverpassElements(elements));
-        if (overpassResults.isNotEmpty) {
-          break;
-        }
-      } catch (e) {
-        lastFailure = e;
-      }
-    }
-
-    final fallbackResults = await _fetchFromNominatim(
-      lat: lat,
-      lng: lng,
-      radiusMeters: radiusMeters,
-      zipcode: zipcode,
-    );
-
-    final merged = _mergeAndSortByDistance(
-      lat: lat,
-      lng: lng,
-      lists: [overpassResults, fallbackResults],
-    );
-    if (merged.isNotEmpty) {
-      return merged;
-    }
-
-    throw MosqueLookupException(
-      'Unable to load nearby masjids right now. '
-      'Please retry in a moment. Details: $lastFailure',
-    );
+    double lon,
+  ) async {
+    return _search(token, {'lat': lat.toString(), 'lon': lon.toString()});
   }
 
-  List<MasjidResult> _parseOverpassElements(List<dynamic> elements) {
-    final results = <MasjidResult>[];
-    final seenIds = <String>{};
+  /// Return mosques matching [keyword] using the cached API [token].
+  static Future<List<MosqueSummary>> searchByKeyword(
+    String token,
+    String keyword,
+  ) async {
+    return _search(token, {'word': keyword});
+  }
 
-    for (final element in elements) {
-      final tags = (element['tags'] as Map<String, dynamic>?) ?? {};
+  // ── Prayer times calendar ─────────────────────────────────────────────────
 
-      // Prefer English name, then any Latin-script variant, then Arabic/Urdu, then place type
-      final name = ((tags['name:en'] as String?) ??
-              (tags['name'] as String?) ??
-              (tags['name:ar'] as String?) ??
-              (tags['name:ur'] as String?) ??
-              (tags['name:tr'] as String?) ??
-              (tags['alt_name'] as String?) ??
-              _inferPlaceName(tags))
-          ?.trim();
-      if (name == null || name.isEmpty) continue;
+  /// Fetch the full yearly prayer-times calendar for [mosqueUuid].
+  ///
+  /// Endpoint: GET /2.0/mosque/{uuid}/prayer-times
+  /// Header:   Api-Access-Token: <token>
+  ///
+  /// Returns a [MawaqitCalendarData] whose [prayerTimesForDate] method
+  /// yields the 5 obligatory prayer DateTimes for any day in the year.
+  static Future<MawaqitCalendarData> fetchPrayerCalendar(
+    String token,
+    String mosqueUuid,
+  ) async {
+    final uri = Uri.parse('$_apiBase/2.0/mosque/$mosqueUuid/prayer-times');
 
-      final double? lat2 =
-          (element['lat'] as num?)?.toDouble() ??
-          (element['center']?['lat'] as num?)?.toDouble();
-      final double? lng2 =
-          (element['lon'] as num?)?.toDouble() ??
-          (element['center']?['lon'] as num?)?.toDouble();
-      if (lat2 == null || lng2 == null) continue;
+    final response = await http.get(
+      uri,
+      headers: {
+        'Api-Access-Token': token,
+        'Accept': 'application/json',
+      },
+    ).timeout(const Duration(seconds: 15));
 
-      final street = tags['addr:street'] as String? ?? '';
-      final city = tags['addr:city'] as String? ?? '';
-      final fallbackAddress = tags['addr:full'] as String? ?? '';
-      final address = [
-        street,
-        city,
-        fallbackAddress,
-      ].where((s) => s.isNotEmpty).join(', ');
-
-      final id = '${element['type']}_${element['id']}';
-      if (!seenIds.add(id)) continue;
-
-      results.add(
-        MasjidResult(
-          id: id,
-          name: name,
-          address: address,
-          lat: lat2,
-          lng: lng2,
-        ),
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      throw const MawaqitAuthException(
+        'Mawaqit session expired or invalid. Please sign in again.',
+      );
+    }
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Mawaqit prayer times fetch failed (HTTP ${response.statusCode}).',
       );
     }
 
-    return results;
+    final body = json.decode(response.body) as Map<String, dynamic>;
+    return MawaqitCalendarData.fromJson(mosqueUuid, body);
   }
 
-  /// Returns a human-readable placeholder name when no explicit name tag is set.
-  String? _inferPlaceName(Map<String, dynamic> tags) {
-    final amenity = tags['amenity'] as String?;
-    final building = tags['building'] as String?;
-    final religion = tags['religion'] as String?;
-    final denomination = tags['denomination'] as String?;
-    if (amenity == 'mosque' || building == 'mosque') return 'Masjid';
-    if (amenity == 'prayer_hall') return 'Prayer Hall';
-    if (religion == 'muslim') {
-      if (denomination != null && denomination.isNotEmpty) {
-        return '${denomination[0].toUpperCase()}${denomination.substring(1)} Masjid';
-      }
-      return 'Islamic Place of Worship';
-    }
-    return null;
-  }
+  // ── Internal ──────────────────────────────────────────────────────────────
 
-  Future<List<MasjidResult>> _fetchFromNominatim({
-    required double lat,
-    required double lng,
-    required int radiusMeters,
-    String? zipcode,
-  }) async {
-    final latDelta = radiusMeters / 111320.0;
-    final cosLat = math.cos(lat * math.pi / 180).abs().clamp(0.1, 1.0);
-    final lngDelta = radiusMeters / (111320.0 * cosLat);
-
-    final left = (lng - lngDelta).toStringAsFixed(6);
-    final right = (lng + lngDelta).toStringAsFixed(6);
-    final top = (lat + latDelta).toStringAsFixed(6);
-    final bottom = (lat - latDelta).toStringAsFixed(6);
-
-    // Keep fallback broad enough to avoid showing only one center when
-    // Overpass is unavailable on a device/network.
-    final queries = [
-      'masjid',
-      'mosque',
-      'islamic center',
-      'islamic centre',
-      'islamic society',
-      'muslim center',
-      'muslim community center',
-      'muslim association',
-      'musalla',
-      'prayer hall',
-    ];
-    final results = <MasjidResult>[];
-
-    for (final q in queries) {
-      final attempts = <Map<String, String>>[
-        {
-          'format': 'jsonv2',
-          'q': q,
-          'bounded': '1',
-          'limit': '100',
-          'addressdetails': '1',
-          'extratags': '1',
-          'viewbox': '$left,$top,$right,$bottom',
-        },
-        {
-          'format': 'jsonv2',
-          'q': q,
-          'limit': '60',
-          'addressdetails': '1',
-          'extratags': '1',
-        },
-      ];
-
-      if (zipcode != null && zipcode.trim().isNotEmpty) {
-        attempts.addAll([
-          {
-            'format': 'jsonv2',
-            'q': '$q $zipcode',
-            'bounded': '1',
-            'limit': '40',
-            'addressdetails': '1',
-            'extratags': '1',
-            'viewbox': '$left,$top,$right,$bottom',
-          },
-          {
-            'format': 'jsonv2',
-            'q': '$q $zipcode',
-            'limit': '60',
-            'addressdetails': '1',
-            'extratags': '1',
-          },
-        ]);
-      }
-
-      for (final params in attempts) {
-        for (final host in _geocodeFallbackHosts) {
-          try {
-            final uri = Uri.https(host, '/search', params);
-
-            final response = await http
-                .get(
-                  uri,
-                  headers: {
-                    'User-Agent': _userAgent,
-                    'Accept': 'application/json',
-                  },
-                )
-                .timeout(const Duration(seconds: 8));
-
-            if (response.statusCode == 429) {
-              continue;
-            }
-
-            if (response.statusCode != 200) {
-              continue;
-            }
-
-            final data = json.decode(response.body) as List<dynamic>;
-            for (final item in data) {
-              final map = item as Map<String, dynamic>;
-              final latText = map['lat'] as String?;
-              final lonText = map['lon'] as String?;
-              final lat2 = double.tryParse(latText ?? '');
-              final lng2 = double.tryParse(lonText ?? '');
-              if (lat2 == null || lng2 == null) continue;
-
-              final name = (map['name'] as String?)?.trim().isNotEmpty == true
-                  ? (map['name'] as String).trim()
-                  : ((map['display_name'] as String?) ?? '')
-                        .split(',')
-                        .first
-                        .trim();
-              if (name.isEmpty) continue;
-
-              final distance = _distanceMeters(lat, lng, lat2, lng2);
-              if (distance > radiusMeters * 1.75) {
-                continue;
-              }
-
-              final id = 'nominatim_${map['osm_type']}_${map['osm_id']}';
-              results.add(
-                MasjidResult(
-                  id: id,
-                  name: name,
-                  address: (map['display_name'] as String?) ?? '',
-                  lat: lat2,
-                  lng: lng2,
-                ),
-              );
-            }
-
-            // Use first successful host response for this attempt.
-            break;
-          } catch (_) {
-            // Ignore individual fallback failures and continue.
-          }
-        }
-      }
-
-      // Stop early once we have enough nearby options.
-      if (results.length >= 30) break;
-    }
-
-    return results;
-  }
-
-  List<MasjidResult> _mergeAndSortByDistance({
-    required double lat,
-    required double lng,
-    required List<List<MasjidResult>> lists,
-  }) {
-    final merged = <MasjidResult>[];
-    final seen = <String>{};
-
-    for (final list in lists) {
-      for (final item in list) {
-        final key =
-            '${item.name.toLowerCase()}_${item.lat.toStringAsFixed(4)}_${item.lng.toStringAsFixed(4)}';
-        if (!seen.add(key)) continue;
-        merged.add(item);
-      }
-    }
-
-    merged.sort((a, b) {
-      final da = _distanceMeters(lat, lng, a.lat, a.lng);
-      final db = _distanceMeters(lat, lng, b.lat, b.lng);
-      return da.compareTo(db);
-    });
-    return merged;
-  }
-
-  double _distanceMeters(double lat1, double lon1, double lat2, double lon2) {
-    const earthRadius = 6371000.0;
-    final dLat = (lat2 - lat1) * math.pi / 180.0;
-    final dLon = (lon2 - lon1) * math.pi / 180.0;
-    final rLat1 = lat1 * math.pi / 180.0;
-    final rLat2 = lat2 * math.pi / 180.0;
-
-    final a =
-        math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(rLat1) *
-            math.cos(rLat2) *
-            math.sin(dLon / 2) *
-            math.sin(dLon / 2);
-    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-    return earthRadius * c;
-  }
-
-  /// Geocodes a zip code, city name, or free-text location query to (lat, lng).
-  /// Falls back to [geocodeZipcode] for 5-digit US zip codes.
-  Future<({double lat, double lng})> geocodeQuery(String query) async {
-    final q = query.trim();
-    if (RegExp(r'^\d{5}(-\d{4})?$').hasMatch(q)) {
-      return geocodeZipcode(q);
-    }
-    try {
-      return _geocodeFromHosts({'q': q, 'addressdetails': '1'});
-    } on MosqueLookupException {
-      rethrow;
-    } catch (e) {
-      throw MosqueLookupException('Failed to find location: $e');
-    }
-  }
-
-  /// Geocodes a US zip code to (lat, lng) using the Nominatim API.
-  /// Throws [MosqueLookupException] if the zip code cannot be resolved.
-  Future<({double lat, double lng})> geocodeZipcode(String zipcode) async {
-    try {
-      final clean = zipcode.trim();
-
-      // US-focused attempt first.
-      try {
-        return _geocodeFromHosts({
-          'postalcode': clean,
-          'countrycodes': 'us',
-        });
-      } on MosqueLookupException {
-        // Fall through to global postal lookup.
-      }
-
-      // Global fallback for non-US postal codes.
-      return _geocodeFromHosts({'q': clean, 'addressdetails': '1'});
-    } on MosqueLookupException {
-      rethrow;
-    } catch (e) {
-      throw MosqueLookupException(
-        'Failed to look up zip code: ${e.toString()}',
-      );
-    }
-  }
-
-  Future<({double lat, double lng})> _geocodeFromHosts(
+  static Future<List<MosqueSummary>> _search(
+    String token,
     Map<String, String> params,
   ) async {
-    Object? lastFailure;
+    final uri = Uri.parse(
+      '$_apiBase/2.0/mosque/search',
+    ).replace(queryParameters: params);
 
-    for (final host in _geocodeFallbackHosts) {
-      final query = <String, String>{
-        'format': 'jsonv2',
-        'limit': '1',
-        ...params,
-      };
+    final response = await http.get(
+      uri,
+      headers: {
+        'Authorization': token,
+        'Accept': 'application/json',
+      },
+    ).timeout(const Duration(seconds: 15));
 
-      final uri = Uri.https(host, '/search', query);
-      try {
-        final response = await http
-            .get(
-              uri,
-              headers: {'User-Agent': _userAgent, 'Accept': 'application/json'},
-            )
-            .timeout(const Duration(seconds: 10));
-
-        if (response.statusCode == 429) {
-          lastFailure = MosqueLookupException(
-            'Location service is rate-limited right now.',
-          );
-          continue;
-        }
-        if (response.statusCode != 200) {
-          lastFailure = MosqueLookupException(
-            'Could not find location (HTTP ${response.statusCode}).',
-          );
-          continue;
-        }
-
-        final data = json.decode(response.body) as List<dynamic>;
-        if (data.isEmpty) {
-          lastFailure = const MosqueLookupException('Location was not found.');
-          continue;
-        }
-
-        final item = data.first as Map<String, dynamic>;
-        final lat = double.tryParse('${item['lat']}');
-        final lng = double.tryParse('${item['lon']}');
-        if (lat == null || lng == null) {
-          lastFailure = const MosqueLookupException(
-            'Location response had invalid coordinates.',
-          );
-          continue;
-        }
-
-        return (lat: lat, lng: lng);
-      } catch (e) {
-        lastFailure = e;
-      }
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      throw const MawaqitAuthException(
+        'Mawaqit session expired or invalid. Please sign in again.',
+      );
+    }
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Mosque search failed (HTTP ${response.statusCode}).',
+      );
     }
 
-    throw MosqueLookupException('Failed to find location: $lastFailure');
+    final body = json.decode(response.body);
+    if (body is! List) return [];
+
+    return body
+        .whereType<Map<String, dynamic>>()
+        .map(MosqueSummary.fromJson)
+        .where((m) => m.uuid.isNotEmpty && m.lat != null && m.lng != null)
+        .toList();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mawaqit calendar data model
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The 5 obligatory prayer times for a single date, sourced from a mosque's
+/// Mawaqit calendar (adhan times, not iqama).
+class MawaqitDayPrayers {
+  const MawaqitDayPrayers({
+    required this.fajr,
+    required this.dhuhr,
+    required this.asr,
+    required this.maghrib,
+    required this.isha,
+  });
+
+  final DateTime fajr;
+  final DateTime dhuhr;
+  final DateTime asr;
+  final DateTime maghrib;
+  final DateTime isha;
+
+  /// Returns prayers in canonical order: Fajr, Dhuhr, Asr, Maghrib, Isha.
+  List<MapEntry<String, DateTime>> get asList => [
+    MapEntry('Fajr', fajr),
+    MapEntry('Dhuhr', dhuhr),
+    MapEntry('Asr', asr),
+    MapEntry('Maghrib', maghrib),
+    MapEntry('Isha', isha),
+  ];
+}
+
+/// Full yearly calendar returned by `GET /2.0/mosque/{uuid}/prayer-times`.
+///
+/// Calendar structure from Mawaqit:
+///   calendar[monthIndex (0-based)][dayString ("1"–"31")] =
+///       ["HH:MM", "HH:MM", "HH:MM", "HH:MM", "HH:MM", "HH:MM"]
+///   Order: Fajr (0), Shurouq (1, skip), Dhuhr (2), Asr (3), Maghrib (4), Isha (5)
+class MawaqitCalendarData {
+  const MawaqitCalendarData({
+    required this.mosqueUuid,
+    required this.label,
+    required this.calendar,
+  });
+
+  final String mosqueUuid;
+  final String label;
+
+  // calendar[0..11][dayKey] = [Fajr, Shurouq, Dhuhr, Asr, Maghrib, Isha]
+  final List<Map<String, List<String>>> calendar;
+
+  factory MawaqitCalendarData.fromJson(
+    String mosqueUuid,
+    Map<String, dynamic> json,
+  ) {
+    final raw = json['calendar'] as List<dynamic>? ?? [];
+    final cal = raw.map<Map<String, List<String>>>((month) {
+      if (month is! Map) return {};
+      return (month as Map<String, dynamic>).map((day, times) {
+        final timesList = (times as List<dynamic>)
+            .map((t) => t?.toString() ?? '00:00')
+            .toList();
+        return MapEntry(day, timesList);
+      });
+    }).toList();
+
+    return MawaqitCalendarData(
+      mosqueUuid: mosqueUuid,
+      label: json['label'] as String? ?? json['name'] as String? ?? '',
+      calendar: cal,
+    );
+  }
+
+  /// Returns the 5 obligatory prayer times as [DateTime] objects for [date],
+  /// or null if [date] is outside this calendar's available range.
+  MawaqitDayPrayers? prayerTimesForDate(DateTime date) {
+    final monthIndex = date.month - 1;
+    final dayKey = date.day.toString();
+
+    if (monthIndex < 0 || monthIndex >= calendar.length) return null;
+    final monthData = calendar[monthIndex];
+    final times = monthData[dayKey];
+    if (times == null || times.length < 6) return null;
+
+    DateTime parse(int index) {
+      final raw = times[index];
+      final parts = raw.split(':');
+      final h = int.tryParse(parts.isNotEmpty ? parts[0] : '0') ?? 0;
+      final m = int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0;
+      return DateTime(date.year, date.month, date.day, h, m);
+    }
+
+    return MawaqitDayPrayers(
+      fajr: parse(0),
+      // index 1 is Shurouq — skip
+      dhuhr: parse(2),
+      asr: parse(3),
+      maghrib: parse(4),
+      isha: parse(5),
+    );
   }
 }

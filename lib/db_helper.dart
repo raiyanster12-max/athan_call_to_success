@@ -116,4 +116,119 @@ class DBHelper {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Pinned (My) Masjid
+  // ──────────────────────────────────────────────────────────────────────────
+
+  static const _kPinnedId = 'pinned_masjid_id';
+  static const _kPinnedName = 'pinned_masjid_name';
+  static const _kPinnedAddress = 'pinned_masjid_address';
+  static const _kPinnedLat = 'pinned_masjid_lat';
+  static const _kPinnedLng = 'pinned_masjid_lng';
+
+  /// Returns a map with keys {id, name, address, lat, lng}, or null if none pinned.
+  static Future<Map<String, dynamic>?> getPinnedMasjid() async {
+    final id = await getSetting(_kPinnedId);
+    if (id == null) return null;
+    final name = await getSetting(_kPinnedName);
+    final address = await getSetting(_kPinnedAddress);
+    final lat = double.tryParse(await getSetting(_kPinnedLat) ?? '');
+    final lng = double.tryParse(await getSetting(_kPinnedLng) ?? '');
+    if (name == null || lat == null || lng == null) return null;
+    return {
+      'id': id,
+      'name': name,
+      'address': address ?? '',
+      'lat': lat,
+      'lng': lng,
+    };
+  }
+
+  static Future<void> setPinnedMasjid({
+    required String id,
+    required String name,
+    required String address,
+    required double lat,
+    required double lng,
+  }) async {
+    final db = await database();
+    await db.transaction((txn) async {
+      for (final e in <String, String>{
+        _kPinnedId: id,
+        _kPinnedName: name,
+        _kPinnedAddress: address,
+        _kPinnedLat: lat.toString(),
+        _kPinnedLng: lng.toString(),
+      }.entries) {
+        await txn.insert(
+          'app_settings',
+          {'setting_key': e.key, 'setting_value': e.value},
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+    });
+  }
+
+  static Future<void> clearPinnedMasjid() async {
+    final db = await database();
+    await db.delete(
+      'app_settings',
+      where: 'setting_key IN (?, ?, ?, ?, ?)',
+      whereArgs: [
+        _kPinnedId,
+        _kPinnedName,
+        _kPinnedAddress,
+        _kPinnedLat,
+        _kPinnedLng,
+      ],
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Iqamah Offsets
+  // ──────────────────────────────────────────────────────────────────────────
+
+  static const _kIqFajr = 'iqamah_fajr';
+  static const _kIqDhuhr = 'iqamah_dhuhr';
+  static const _kIqAsr = 'iqamah_asr';
+  static const _kIqMaghrib = 'iqamah_maghrib';
+  static const _kIqIsha = 'iqamah_isha';
+  static const _kJumaa1 = 'jumaa_time_1';
+  static const _kJumaa2 = 'jumaa_time_2';
+
+  /// Returns iqamah settings with defaults matching Masjid Al-Salam:
+  /// fajr=30, dhuhr=15, asr=15, maghrib=10, isha=15.
+  static Future<Map<String, dynamic>> getIqamahSettings() async {
+    return {
+      'fajr': int.tryParse(await getSetting(_kIqFajr) ?? '') ?? 30,
+      'dhuhr': int.tryParse(await getSetting(_kIqDhuhr) ?? '') ?? 15,
+      'asr': int.tryParse(await getSetting(_kIqAsr) ?? '') ?? 15,
+      'maghrib': int.tryParse(await getSetting(_kIqMaghrib) ?? '') ?? 10,
+      'isha': int.tryParse(await getSetting(_kIqIsha) ?? '') ?? 15,
+      'jumaa1': await getSetting(_kJumaa1) ?? '13:45',
+      'jumaa2': await getSetting(_kJumaa2) ?? '15:15',
+    };
+  }
+
+  static Future<void> setIqamahSettings(Map<String, dynamic> s) async {
+    final db = await database();
+    await db.transaction((txn) async {
+      for (final e in <String, String>{
+        _kIqFajr: s['fajr'].toString(),
+        _kIqDhuhr: s['dhuhr'].toString(),
+        _kIqAsr: s['asr'].toString(),
+        _kIqMaghrib: s['maghrib'].toString(),
+        _kIqIsha: s['isha'].toString(),
+        _kJumaa1: s['jumaa1'] as String,
+        _kJumaa2: s['jumaa2'] as String,
+      }.entries) {
+        await txn.insert(
+          'app_settings',
+          {'setting_key': e.key, 'setting_value': e.value},
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+    });
+  }
 }

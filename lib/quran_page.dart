@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:quran/quran.dart' as quran;
@@ -31,6 +33,7 @@ class _QuranPageState extends State<QuranPage> {
   static const String _favoritesKey = 'quran_favorite_surahs';
   static const String _lastReadKey = 'quran_last_read_surah';
   static const String _recentReadsKey = 'quran_recent_read_surahs';
+  static int? _sessionLastReadSurah;
 
   static const List<_Surah> _surahs = [
     _Surah(1, 'Al-Fatihah', 'The Opening'),
@@ -150,9 +153,11 @@ class _QuranPageState extends State<QuranPage> {
   ];
 
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _recentReadsScrollController = ScrollController();
   final Set<int> _favorites = <int>{};
   final Map<int, double> _readingProgress = <int, double>{};
   final List<int> _recentReads = <int>[];
+  final Map<int, int> _recentReadAyahBySurah = <int, int>{};
 
   int? _lastReadSurah;
   String _searchQuery = '';
@@ -174,68 +179,111 @@ class _QuranPageState extends State<QuranPage> {
 
   @override
   void dispose() {
+    _recentReadsScrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
   Future<void> _loadQuranSettings() async {
-    final favoritesCsv = await DBHelper.getSetting(_favoritesKey);
-    final lastRead = await DBHelper.getSetting(_lastReadKey);
-    final recentReadsCsv = await DBHelper.getSetting(_recentReadsKey);
+    final currentLastReadSurah = _lastReadSurah ?? _sessionLastReadSurah;
+    try {
+      final favoritesCsv = await DBHelper.getSetting(_favoritesKey);
+      final lastRead = await DBHelper.getSetting(_lastReadKey);
+      final recentReadsCsv = await DBHelper.getSetting(_recentReadsKey);
+      final parsedLastReadSurah =
+          int.tryParse(lastRead ?? '') ?? currentLastReadSurah;
 
-    final parsedFavorites = favoritesCsv == null || favoritesCsv.trim().isEmpty
-        ? <int>{}
-        : favoritesCsv
-              .split(',')
-              .map((entry) => int.tryParse(entry.trim()))
-              .whereType<int>()
-              .toSet();
+      final parsedFavorites =
+          favoritesCsv == null || favoritesCsv.trim().isEmpty
+          ? <int>{}
+          : favoritesCsv
+                .split(',')
+                .map((entry) => int.tryParse(entry.trim()))
+                .whereType<int>()
+                .toSet();
 
-    final parsedRecentReads =
-        recentReadsCsv == null || recentReadsCsv.trim().isEmpty
-        ? <int>[]
-        : recentReadsCsv
-              .split(',')
-              .map((entry) => int.tryParse(entry.trim()))
-              .whereType<int>()
-              .toList();
+      final parsedRecentReads =
+          recentReadsCsv == null || recentReadsCsv.trim().isEmpty
+          ? <int>[]
+          : () {
+              final ordered = <int>[];
+              final ayahMap = <int, int>{};
+              for (final rawToken in recentReadsCsv.split(',')) {
+                final token = rawToken.trim();
+                if (token.isEmpty) continue;
 
-    final progressEntries = await Future.wait(
-      _surahs.map((surah) async {
-        final storedAyah = await DBHelper.getSetting(
-          'quran_last_read_ayah_${surah.number}',
-        );
-        final ayah = int.tryParse(storedAyah ?? '');
-        if (ayah == null || ayah <= 0) {
-          return MapEntry<int, double>(surah.number, 0);
-        }
+                final parts = token.split(':');
+                final surah = int.tryParse(parts.first.trim());
+                if (surah == null) continue;
 
-        final progress = (ayah / quran.getVerseCount(surah.number))
-            .clamp(0.0, 1.0)
-            .toDouble();
-        return MapEntry<int, double>(surah.number, progress);
-      }),
-    );
+                final ayah = parts.length > 1
+                    ? int.tryParse(parts[1].trim())
+                    : null;
 
-    if (!mounted) return;
-    setState(() {
-      _favorites
-        ..clear()
-        ..addAll(parsedFavorites);
-      _recentReads
-        ..clear()
-        ..addAll(parsedRecentReads);
-      _readingProgress
-        ..clear()
-        ..addEntries(progressEntries);
-      _lastReadSurah = int.tryParse(lastRead ?? '');
-      _isLoading = false;
-    });
+                if (!ordered.contains(surah)) {
+                  ordered.add(surah);
+                }
+                if (ayah != null && ayah > 0) {
+                  ayahMap[surah] = ayah;
+                }
+              }
+              _recentReadAyahBySurah
+                ..clear()
+                ..addAll(ayahMap);
+              return ordered;
+            }();
+
+      final progressEntries = await Future.wait(
+        _surahs.map((surah) async {
+          try {
+            final storedAyah = await DBHelper.getSetting(
+              'quran_last_read_ayah_${surah.number}',
+            );
+            final ayah = int.tryParse(storedAyah ?? '');
+            if (ayah == null || ayah <= 0) {
+              return MapEntry<int, double>(surah.number, 0);
+            }
+            final progress = (ayah / quran.getVerseCount(surah.number))
+                .clamp(0.0, 1.0)
+                .toDouble();
+            return MapEntry<int, double>(surah.number, progress);
+          } catch (_) {
+            return MapEntry<int, double>(surah.number, 0);
+          }
+        }),
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _favorites
+          ..clear()
+          ..addAll(parsedFavorites);
+        _recentReads
+          ..clear()
+          ..addAll(parsedRecentReads);
+        _readingProgress
+          ..clear()
+          ..addEntries(progressEntries);
+        _lastReadSurah = parsedLastReadSurah;
+      });
+      _sessionLastReadSurah = parsedLastReadSurah;
+    } catch (_) {
+      // sqflite unavailable on web — keep in-memory/session last-read value.
+      if (mounted && currentLastReadSurah != null) {
+        setState(() {
+          _lastReadSurah = currentLastReadSurah;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _saveFavorites() async {
     final sorted = _favorites.toList()..sort();
-    await DBHelper.setSetting(_favoritesKey, sorted.join(','));
+    try {
+      await DBHelper.setSetting(_favoritesKey, sorted.join(','));
+    } catch (_) {}
   }
 
   Future<void> _toggleFavorite(int surahNumber) async {
@@ -250,12 +298,37 @@ class _QuranPageState extends State<QuranPage> {
   }
 
   Future<void> _markAsLastRead(_Surah surah) async {
-    await DBHelper.setSetting(_lastReadKey, surah.number.toString());
+    await _markAsLastReadWithAyah(surah, ayahNumber: null);
+  }
+
+  Future<void> _markAsLastReadWithAyah(_Surah surah, {int? ayahNumber}) async {
+    _sessionLastReadSurah = surah.number;
+    try {
+      await DBHelper.setSetting(_lastReadKey, surah.number.toString());
+    } catch (_) {}
+
+    if (ayahNumber != null && ayahNumber > 0) {
+      _recentReadAyahBySurah[surah.number] = ayahNumber;
+    }
+
     final updatedRecentReads = <int>[
       surah.number,
       ..._recentReads.where((number) => number != surah.number),
     ].take(10).toList();
-    await DBHelper.setSetting(_recentReadsKey, updatedRecentReads.join(','));
+
+    final recentCsv = updatedRecentReads
+        .map((surahNumber) {
+          final ayah = _recentReadAyahBySurah[surahNumber];
+          if (ayah == null || ayah <= 0) {
+            return surahNumber.toString();
+          }
+          return '$surahNumber:$ayah';
+        })
+        .join(',');
+
+    try {
+      await DBHelper.setSetting(_recentReadsKey, recentCsv);
+    } catch (_) {}
 
     if (!mounted) return;
     setState(() {
@@ -267,11 +340,45 @@ class _QuranPageState extends State<QuranPage> {
   }
 
   Future<void> _openSurahDetails(_Surah surah) async {
-    await _markAsLastRead(surah);
+    int? resumeAyah = _recentReadAyahBySurah[surah.number];
+    try {
+      final storedAyah = await DBHelper.getSetting(
+        'quran_last_read_ayah_${surah.number}',
+      );
+      final parsed = int.tryParse(storedAyah ?? '');
+      if (parsed != null && parsed > 0) {
+        resumeAyah = parsed;
+      }
+    } catch (_) {}
+
+    debugPrint(
+      'Quran Recently Read: opening surah=${surah.number} ${surah.name} ayah=${resumeAyah ?? 1}',
+    );
+    await _markAsLastReadWithAyah(surah, ayahNumber: resumeAyah);
     if (!mounted) return;
     await Navigator.of(
       context,
-    ).push(MaterialPageRoute(builder: (_) => _SurahDetailsPage(surah: surah)));
+    ).push(
+      MaterialPageRoute(
+        builder: (_) => _SurahDetailsPage(surah: surah, initialAyah: resumeAyah),
+      ),
+    );
+
+    int? latestAyah = _recentReadAyahBySurah[surah.number];
+    try {
+      final storedAyah = await DBHelper.getSetting(
+        'quran_last_read_ayah_${surah.number}',
+      );
+      final parsed = int.tryParse(storedAyah ?? '');
+      if (parsed != null && parsed > 0) {
+        latestAyah = parsed;
+      }
+    } catch (_) {}
+
+    await _markAsLastReadWithAyah(surah, ayahNumber: latestAyah);
+    debugPrint(
+      'Quran Recently Read: returned from surah=${surah.number}, saved ayah=${latestAyah ?? 1}, reloading settings',
+    );
     await _loadQuranSettings();
   }
 
@@ -307,9 +414,6 @@ class _QuranPageState extends State<QuranPage> {
       ?_lastReadSurah,
       ..._recentReads,
       ..._favorites,
-      1,
-      2,
-      3,
     ];
 
     final seen = <int>{};
@@ -419,6 +523,23 @@ class _QuranPageState extends State<QuranPage> {
 
   Widget _buildRecentlyReadSection() {
     final items = _recentReadSurahs;
+
+    if (items.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _quranPanelRaised,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _quranDividerColor),
+        ),
+        child: const Text(
+          'Recently Read will appear here after you open a surah.',
+          style: TextStyle(color: _quranMutedText, fontSize: 14),
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -433,17 +554,32 @@ class _QuranPageState extends State<QuranPage> {
         const SizedBox(height: 12),
         SizedBox(
           height: 88,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: items.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              final surah = items[index];
-              return _buildRecentReadTile(
-                surah,
-                isActive: surah.number == _lastReadSurah,
-              );
-            },
+          child: ScrollConfiguration(
+            behavior: const MaterialScrollBehavior().copyWith(
+              dragDevices: {
+                PointerDeviceKind.touch,
+                PointerDeviceKind.mouse,
+                PointerDeviceKind.stylus,
+              },
+            ),
+            child: Scrollbar(
+              controller: _recentReadsScrollController,
+              thumbVisibility: true,
+              interactive: true,
+              child: ListView.separated(
+                controller: _recentReadsScrollController,
+                scrollDirection: Axis.horizontal,
+                itemCount: items.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 12),
+                itemBuilder: (context, index) {
+                  final surah = items[index];
+                  return _buildRecentReadTile(
+                    surah,
+                    isActive: surah.number == _lastReadSurah,
+                  );
+                },
+              ),
+            ),
           ),
         ),
       ],
@@ -944,9 +1080,10 @@ class _Surah {
 }
 
 class _SurahDetailsPage extends StatefulWidget {
-  const _SurahDetailsPage({required this.surah});
+  const _SurahDetailsPage({required this.surah, this.initialAyah});
 
   final _Surah surah;
+  final int? initialAyah;
 
   @override
   State<_SurahDetailsPage> createState() => _SurahDetailsPageState();
@@ -954,6 +1091,7 @@ class _SurahDetailsPage extends StatefulWidget {
 
 class _SurahDetailsPageState extends State<_SurahDetailsPage> {
   static const int _readingGoalMinutes = 5;
+  static final Map<int, int> _sessionLastReadAyahBySurah = <int, int>{};
 
   late final int _verseCount;
   late final List<GlobalKey> _verseKeys;
@@ -972,6 +1110,56 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
   double _arabicFontSize = 36;
   double _translationFontSize = 18;
   bool _showTajweed = false;
+  String? _loadError;
+
+  int? _bestEffortVisibleAyah() {
+    if (!mounted) return null;
+    final mediaQuery = MediaQuery.maybeOf(context);
+    if (mediaQuery == null) return null;
+
+    final topAnchor = mediaQuery.padding.top + kToolbarHeight + 12;
+    final screenHeight = mediaQuery.size.height;
+
+    int? bestAyah;
+    double bestDistance = double.infinity;
+
+    for (int i = 0; i < _verseKeys.length; i++) {
+      final ctx = _verseKeys[i].currentContext;
+      if (ctx == null) continue;
+
+      final render = ctx.findRenderObject();
+      if (render is! RenderBox || !render.attached) continue;
+
+      final top = render.localToGlobal(Offset.zero).dy;
+      final bottom = top + render.size.height;
+      if (bottom < topAnchor || top > screenHeight) continue;
+
+      final distance = (top - topAnchor).abs();
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestAyah = i + 1;
+      }
+    }
+    return bestAyah;
+  }
+
+  Future<void> _persistLastReadAyah(int ayah, {bool updateUi = true}) async {
+    final safeAyah = ayah.clamp(1, _verseCount);
+    if (updateUi && mounted) {
+      setState(() {
+        _selectedAyah = safeAyah;
+        _lastReadAyah = safeAyah;
+      });
+    } else {
+      _selectedAyah = safeAyah;
+      _lastReadAyah = safeAyah;
+    }
+
+    _sessionLastReadAyahBySurah[widget.surah.number] = safeAyah;
+    try {
+      await DBHelper.setSetting(_lastReadAyahKey, safeAyah.toString());
+    } catch (_) {}
+  }
 
   String get _lastReadAyahKey => 'quran_last_read_ayah_${widget.surah.number}';
 
@@ -1055,6 +1243,10 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
 
   @override
   void dispose() {
+    final visibleAyah = _bestEffortVisibleAyah() ?? _selectedAyah;
+    _sessionLastReadAyahBySurah[widget.surah.number] = visibleAyah;
+    unawaited(DBHelper.setSetting(_lastReadAyahKey, visibleAyah.toString()));
+
     _readingTimer?.cancel();
     _scrollController.dispose();
     _reciterPlayer.dispose();
@@ -1062,60 +1254,109 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
   }
 
   Future<void> _loadReaderState() async {
-    final storedLastRead = await DBHelper.getSetting(_lastReadAyahKey);
-    final parsedLastRead = int.tryParse(storedLastRead ?? '') ?? 1;
+    int parsedLastRead =
+        widget.initialAyah ?? _sessionLastReadAyahBySurah[widget.surah.number] ?? 1;
+    try {
+      final storedLastRead = await DBHelper.getSetting(_lastReadAyahKey);
+      parsedLastRead = int.tryParse(storedLastRead ?? '') ?? parsedLastRead;
+    } catch (_) {}
 
-    final verseItems = List<_AyahContent>.generate(_verseCount, (index) {
-      final ayah = index + 1;
-      final arabicVerse = quran.getVerse(
-        widget.surah.number,
-        ayah,
-        verseEndSymbol: true,
-      );
-      return _AyahContent(
-        ayahNumber: ayah,
-        arabic: arabicVerse,
-        translation: quran.getVerseTranslation(
+    try {
+      final verseItems = List<_AyahContent>.generate(_verseCount, (index) {
+        final ayah = index + 1;
+        final arabicVerse = quran.getVerse(
           widget.surah.number,
           ayah,
-          translation: quran.Translation.enSaheeh,
-        ),
-      );
-    });
+          verseEndSymbol: true,
+        );
 
-    if (!mounted) return;
-    setState(() {
-      _verses = verseItems;
-      _lastReadAyah = parsedLastRead.clamp(1, _verseCount);
-      _selectedAyah = _lastReadAyah;
-      _isLoading = false;
-    });
+        // Keep details page usable even if a translation lookup fails.
+        String translation;
+        try {
+          translation = quran.getVerseTranslation(
+            widget.surah.number,
+            ayah,
+            translation: quran.Translation.enSaheeh,
+          );
+        } catch (_) {
+          translation = 'Translation unavailable for this ayah.';
+        }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToAyah(_selectedAyah, animated: false);
-    });
+        return _AyahContent(
+          ayahNumber: ayah,
+          arabic: arabicVerse,
+          translation: translation,
+        );
+      });
+
+      if (!mounted) return;
+      setState(() {
+        _verses = verseItems;
+        _lastReadAyah = parsedLastRead.clamp(1, _verseCount);
+        _selectedAyah = _lastReadAyah;
+        _loadError = null;
+        _isLoading = false;
+      });
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToAyah(_selectedAyah, animated: false);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _verses = const <_AyahContent>[];
+        _loadError = 'Unable to load this surah right now.';
+        _isLoading = false;
+      });
+      debugPrint('Failed to load surah ${widget.surah.number}: $e');
+    }
   }
 
   Future<void> _setSelectedAyah(int ayah) async {
-    setState(() {
-      _selectedAyah = ayah;
-      _lastReadAyah = ayah;
-    });
-    await DBHelper.setSetting(_lastReadAyahKey, ayah.toString());
+    await _persistLastReadAyah(ayah);
   }
 
   Future<void> _scrollToAyah(int ayah, {bool animated = true}) async {
     if (ayah < 1 || ayah > _verseCount) return;
-    _setSelectedAyah(ayah);
+    await _setSelectedAyah(ayah);
 
-    final targetContext = _verseKeys[ayah - 1].currentContext;
-    if (targetContext == null) return;
-    await Scrollable.ensureVisible(
-      targetContext,
-      duration: animated ? const Duration(milliseconds: 350) : Duration.zero,
-      curve: Curves.easeOut,
-      alignment: 0.08,
-    );
+    Future<bool> ensureTargetVisible() async {
+      final targetContext = _verseKeys[ayah - 1].currentContext;
+      if (targetContext == null) return false;
+      await Scrollable.ensureVisible(
+        targetContext,
+        duration: animated ? const Duration(milliseconds: 350) : Duration.zero,
+        curve: Curves.easeOut,
+        alignment: 0.08,
+      );
+      return true;
+    }
+
+    if (await ensureTargetVisible()) return;
+    if (!_scrollController.hasClients) return;
+
+    // Long surahs lazily build off-screen cards. Jump by list fraction first,
+    // then retry ensureVisible over a few frames once widgets are materialized.
+    final maxExtent = _scrollController.position.maxScrollExtent;
+    final fraction = _verseCount <= 1 ? 0.0 : (ayah - 1) / (_verseCount - 1);
+    final estimatedOffset = (maxExtent * fraction).clamp(0.0, maxExtent);
+
+    if (animated) {
+      await _scrollController.animateTo(
+        estimatedOffset,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOut,
+      );
+    } else {
+      _scrollController.jumpTo(estimatedOffset);
+    }
+
+    if (!mounted) return;
+    for (var i = 0; i < 4; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+      if (!mounted) return;
+      if (await ensureTargetVisible()) return;
+    }
   }
 
   Future<void> _copyAyah(_AyahContent ayah) async {
@@ -1134,21 +1375,47 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
     );
   }
 
+  String _normalizeAudioUrl(String url) {
+    if (url.startsWith('http://')) {
+      return 'https://${url.substring('http://'.length)}';
+    }
+    return url;
+  }
+
+  String _everyAyahUrl(int surahNumber, int ayahNumber) {
+    final surah = surahNumber.toString().padLeft(3, '0');
+    final ayah = ayahNumber.toString().padLeft(3, '0');
+    return 'https://everyayah.com/data/Alafasy_128kbps/$surah$ayah.mp3';
+  }
+
   Future<void> _playAyahRecitation(int ayahNumber) async {
-    try {
-      await _reciterPlayer.stop();
-      final url = quran.getAudioURLByVerse(
+    final quranUrl = _normalizeAudioUrl(
+      quran.getAudioURLByVerse(
         widget.surah.number,
         ayahNumber,
         reciter: quran.Reciter.arAlafasy,
-      );
-      await _reciterPlayer.play(UrlSource(url));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Ayah recitation failed: $e')));
+      ),
+    );
+    final fallbackUrl = _everyAyahUrl(widget.surah.number, ayahNumber);
+    final candidates = <String>{quranUrl, fallbackUrl}.toList(growable: false);
+
+    Object? lastError;
+    for (final url in candidates) {
+      try {
+        await _reciterPlayer.stop();
+        await _reciterPlayer.setSourceUrl(url);
+        await _reciterPlayer.resume();
+        return;
+      } catch (e) {
+        lastError = e;
+        debugPrint('Ayah recitation source failed: $url -> $e');
+      }
     }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Ayah recitation failed: $lastError')),
+    );
   }
 
   Future<void> _scrollToTop() async {
@@ -1157,6 +1424,157 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
       0,
       duration: const Duration(milliseconds: 320),
       curve: Curves.easeOut,
+    );
+  }
+
+  Future<void> _openSurahControlsSheet() async {
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppPalette.surfaceRaised,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            void syncState(VoidCallback update) {
+              if (mounted) {
+                setState(update);
+              }
+              setSheetState(() {});
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          'Surah Controls',
+                          style: TextStyle(
+                            color: AppPalette.textPrimary,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          tooltip: 'Close',
+                          onPressed: () => Navigator.of(sheetContext).pop(),
+                          icon: const Icon(
+                            Icons.close,
+                            color: AppPalette.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    _ControlRow(
+                      label: 'Arabic',
+                      value: _arabicFontSize.round(),
+                      onDecrease: () => syncState(() {
+                        _arabicFontSize =
+                            (_arabicFontSize - 2).clamp(28, 52).toDouble();
+                      }),
+                      onIncrease: () => syncState(() {
+                        _arabicFontSize =
+                            (_arabicFontSize + 2).clamp(28, 52).toDouble();
+                      }),
+                    ),
+                    const SizedBox(height: 6),
+                    _ControlRow(
+                      label: 'Translation',
+                      value: _translationFontSize.round(),
+                      onDecrease: () => syncState(() {
+                        _translationFontSize =
+                            (_translationFontSize - 1).clamp(14, 26).toDouble();
+                      }),
+                      onIncrease: () => syncState(() {
+                        _translationFontSize =
+                            (_translationFontSize + 1).clamp(14, 26).toDouble();
+                      }),
+                      trailing: Switch(
+                        value: _showTranslation,
+                        onChanged: (v) => syncState(() => _showTranslation = v),
+                        activeThumbColor: AppPalette.accent,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        const SizedBox(width: 4),
+                        const Text(
+                          'Tajweed',
+                          style: TextStyle(
+                            color: AppPalette.textSecondary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Spacer(),
+                        Switch(
+                          value: _showTajweed,
+                          onChanged: (v) => syncState(() => _showTajweed = v),
+                          activeThumbColor: AppPalette.accent,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 14),
+                    Row(
+                      children: [
+                        const Text(
+                          'Jump to',
+                          style: TextStyle(
+                            color: AppPalette.textMuted,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        DropdownButton<int>(
+                          value: _selectedAyah,
+                          underline: const SizedBox.shrink(),
+                          items: List<DropdownMenuItem<int>>.generate(
+                            _verseCount,
+                            (index) {
+                              final ayah = index + 1;
+                              return DropdownMenuItem<int>(
+                                value: ayah,
+                                child: Text('Ayah ${widget.surah.number}:$ayah'),
+                              );
+                            },
+                          ),
+                          onChanged: (value) async {
+                            if (value == null) return;
+                            await _scrollToAyah(value);
+                            if (!mounted) return;
+                            setSheetState(() {});
+                          },
+                        ),
+                        const Spacer(),
+                        Text(
+                          'Last read: ${widget.surah.number}:$_lastReadAyah',
+                          style: const TextStyle(
+                            color: AppPalette.textMuted,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1171,7 +1589,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
     return 'Reading goal: $completed/$_readingGoalMinutes mins';
   }
 
-  bool get _showBasmala => widget.surah.number != 9;
+  bool get _showBasmala => widget.surah.number != 9 && widget.surah.number != 1;
 
   String _displayArabicForAyah(_AyahContent ayah) {
     if (!_showBasmala || ayah.ayahNumber != 1) {
@@ -1201,7 +1619,14 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
       return ayah.arabic;
     }
 
-    return words.skip(4).join(' ').trim();
+    final remaining = words.skip(4).join(' ').trim();
+    // If the whole verse IS the basmala (e.g. Surah 1 Ayah 1), stripping it
+    // leaves only a verse-end symbol with no meaningful Arabic content.
+    // In that case return the original so the card matches its translation.
+    if (remaining.isEmpty || _normalizeArabicToken(remaining).isEmpty) {
+      return ayah.arabic;
+    }
+    return remaining;
   }
 
   String _normalizeArabicToken(String token) {
@@ -1216,26 +1641,86 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    if (_loadError != null) {
+      return Scaffold(
+        appBar: AppBar(title: Text(widget.surah.displayTitle)),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.menu_book_rounded, size: 40),
+                const SizedBox(height: 12),
+                Text(
+                  _loadError!,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                FilledButton(
+                  onPressed: () {
+                    setState(() {
+                      _isLoading = true;
+                      _loadError = null;
+                    });
+                    _loadReaderState();
+                  },
+                  child: const Text('Try Again'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(title: Text(widget.surah.displayTitle)),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      floatingActionButton: FloatingActionButton.small(
-        heroTag: 'quran-scroll-top',
-        backgroundColor: AppPalette.surfaceRaised,
-        foregroundColor: Colors.white,
-        onPressed: _scrollToTop,
-        tooltip: 'Back to top',
-        child: const Icon(Icons.keyboard_arrow_up_rounded),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'quran-surah-controls',
+            backgroundColor: AppPalette.surfaceRaised,
+            foregroundColor: Colors.white,
+            onPressed: _openSurahControlsSheet,
+            tooltip: 'Surah controls',
+            child: const Icon(Icons.tune_rounded),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton.small(
+            heroTag: 'quran-scroll-top',
+            backgroundColor: AppPalette.surfaceRaised,
+            foregroundColor: Colors.white,
+            onPressed: _scrollToTop,
+            tooltip: 'Back to top',
+            child: const Icon(Icons.keyboard_arrow_up_rounded),
+          ),
+        ],
       ),
       body: Container(
         decoration: const BoxDecoration(
           gradient: AppPalette.backgroundGradient,
         ),
-        child: ListView(
-          controller: _scrollController,
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 20),
-          children: [
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            if (notification is ScrollEndNotification ||
+                (notification is UserScrollNotification &&
+                    notification.direction == ScrollDirection.idle)) {
+              final visibleAyah = _bestEffortVisibleAyah();
+              if (visibleAyah != null && visibleAyah != _lastReadAyah) {
+                unawaited(_persistLastReadAyah(visibleAyah, updateUi: false));
+              }
+            }
+            return false;
+          },
+          child: ListView(
+            controller: _scrollController,
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 20),
+            children: [
             Card(
               elevation: 0,
               color: AppPalette.surfaceRaised,
@@ -1443,20 +1928,21 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                         ],
                       ),
                       const SizedBox(height: 6),
-                      Wrap(
-                        alignment: WrapAlignment.end,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: 6,
-                        runSpacing: 8,
-                        textDirection: TextDirection.rtl,
-                        children: [
-                          for (final word
-                              in ayahArabicDisplay
-                                  .split(RegExp(r'\s+'))
-                                  .where((w) => w.trim().isNotEmpty))
-                            GestureDetector(
-                              onTap: () => _playAyahRecitation(ayah.ayahNumber),
-                              child: _showTajweed
+                      GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onTap: () => _playAyahRecitation(ayah.ayahNumber),
+                        child: Wrap(
+                          alignment: WrapAlignment.end,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 6,
+                          runSpacing: 8,
+                          textDirection: TextDirection.rtl,
+                          children: [
+                            for (final word
+                                in ayahArabicDisplay
+                                    .split(RegExp(r'\s+'))
+                                    .where((w) => w.trim().isNotEmpty))
+                              _showTajweed
                                   ? RichText(
                                       textDirection: TextDirection.rtl,
                                       text: TextSpan(
@@ -1465,7 +1951,9 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                                           height: 1.75,
                                         ),
                                         children: _tajweedSpans(
-                                            word, _arabicFontSize),
+                                          word,
+                                          _arabicFontSize,
+                                        ),
                                       ),
                                     )
                                   : Text(
@@ -1476,8 +1964,8 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                                         height: 1.75,
                                       ),
                                     ),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
                       if (_showTranslation) ...[
                         const SizedBox(height: 12),
@@ -1496,7 +1984,8 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                 ),
               );
             }),
-          ],
+            ],
+          ),
         ),
       ),
     );
