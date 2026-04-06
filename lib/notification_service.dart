@@ -46,6 +46,10 @@ class NotificationService {
   static const String _speakerRouteKey = 'notification_speaker_route';
   static const String googleCastMediaUrlKey = 'google_cast_media_url';
 
+  /// Shared with settings_page.dart — when 'true', athan plays even when the
+  /// device is on silent/vibrate by routing through the Android alarm stream.
+  static const String overrideMuteKey = 'settings_override_mute';
+
   // Mawaqit integration — keys shared with masjid_page.dart and mosque_service.dart
   static const String _kMawaqitToken = 'mawaqit_token';
   static const String kMawaqitMosqueUuid = 'mawaqit_selected_mosque_uuid';
@@ -133,7 +137,7 @@ class NotificationService {
   // Android notification channels
   // ───────────────────────────────────────────────────────────────────────────
 
-  static const int _channelVersion = 5;
+  static const int _channelVersion = 6;
   static const String _channelVersionKey = 'notification_channel_version';
 
   Future<void> _ensureAndroidToneChannels() async {
@@ -146,6 +150,8 @@ class NotificationService {
       await DBHelper.getSetting(_channelVersionKey) ?? '',
     );
 
+    // Normal channels — respect device silent/vibrate mode.
+    // Alarm channels (suffix _alarm) — bypass silent/vibrate via STREAM_ALARM.
     const channels = [
       AndroidNotificationChannel(
         'athan_tone_beep',
@@ -156,12 +162,30 @@ class NotificationService {
         sound: RawResourceAndroidNotificationSound('athan_beep'),
       ),
       AndroidNotificationChannel(
+        'athan_tone_beep_alarm',
+        'Athan Tone: Beep (Override Mute)',
+        description: 'Prayer reminders with Beep tone — plays even on silent',
+        importance: Importance.max,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('athan_beep'),
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+      ),
+      AndroidNotificationChannel(
         'athan_tone_muezzin_1',
         'Athan Tone: Muezzin Voice 1 with Fajr Athan',
         description: 'Prayer reminders with Muezzin Voice 1 with Fajr Athan tone',
         importance: Importance.max,
         playSound: true,
         sound: RawResourceAndroidNotificationSound('athan_muezzin_1'),
+      ),
+      AndroidNotificationChannel(
+        'athan_tone_muezzin_1_alarm',
+        'Athan Tone: Muezzin Voice 1 (Override Mute)',
+        description: 'Prayer reminders with Muezzin Voice 1 tone — plays even on silent',
+        importance: Importance.max,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('athan_muezzin_1'),
+        audioAttributesUsage: AudioAttributesUsage.alarm,
       ),
       AndroidNotificationChannel(
         'athan_tone_muezzin_2',
@@ -172,12 +196,30 @@ class NotificationService {
         sound: RawResourceAndroidNotificationSound('athan_muezzin_2'),
       ),
       AndroidNotificationChannel(
+        'athan_tone_muezzin_2_alarm',
+        'Athan Tone: Muezzin Voice 2 (Override Mute)',
+        description: 'Prayer reminders with Muezzin Voice 2 tone — plays even on silent',
+        importance: Importance.max,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('athan_muezzin_2'),
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+      ),
+      AndroidNotificationChannel(
         'athan_tone_abbu_athan',
         'Athan Tone: Abbu_Athan',
         description: 'Prayer reminders with Abbu_Athan tone',
         importance: Importance.max,
         playSound: true,
         sound: RawResourceAndroidNotificationSound('athan_abbu_athan'),
+      ),
+      AndroidNotificationChannel(
+        'athan_tone_abbu_athan_alarm',
+        'Athan Tone: Abbu_Athan (Override Mute)',
+        description: 'Prayer reminders with Abbu_Athan tone — plays even on silent',
+        importance: Importance.max,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('athan_abbu_athan'),
+        audioAttributesUsage: AudioAttributesUsage.alarm,
       ),
     ];
 
@@ -429,10 +471,12 @@ class NotificationService {
     }
 
     if (route == speakerPhoneSpeaker) {
+      final overrideMute =
+          (await DBHelper.getSetting(overrideMuteKey))?.toLowerCase() == 'true';
       try {
-        await _playToneLocallyForTest(toneSelection);
+        await _playToneLocallyForTest(toneSelection, overrideMute: overrideMute);
         return 'Playing ${toneSelection.label} for $prayerName on this phone '
-            '(saved="$storedToneRaw", resolved="$normalizedTone").';
+            '(saved="$storedToneRaw", resolved="$normalizedTone", overrideMute=$overrideMute).';
       } catch (e) {
         return 'Phone playback failed: $e';
       }
@@ -705,7 +749,10 @@ class NotificationService {
     }
   }
 
-  Future<void> _playToneLocallyForTest(_ToneSelection selection) async {
+  Future<void> _playToneLocallyForTest(
+    _ToneSelection selection, {
+    bool overrideMute = false,
+  }) async {
     final previousPlayer = _testAudioPlayer;
     if (previousPlayer != null) {
       try {
@@ -724,6 +771,23 @@ class NotificationService {
       }
       unawaited(player.dispose().catchError((_) {}));
     });
+
+    // When override mute is on, route through the Android alarm audio stream
+    // so playback is audible even when the device is on silent/vibrate.
+    if (overrideMute && !kIsWeb && Platform.isAndroid) {
+      try {
+        await player.setAudioContext(
+          const AudioContext(
+            android: AudioContextAndroid(
+              usageType: AndroidUsageType.alarm,
+              audioFocus: AndroidAudioFocus.gain,
+            ),
+          ),
+        );
+      } catch (e) {
+        debugPrint('setAudioContext (alarm) failed: $e');
+      }
+    }
 
     if (selection.assetKey != null) {
       await player.play(AssetSource(selection.assetPathForPlayer));
@@ -932,7 +996,10 @@ class NotificationService {
     required String tone,
     required String speakerRoute,
   }) async {
-    final (channelId, channelName, androidSound, _) = _tonePlatformConfig(tone);
+    final overrideMute =
+        (await DBHelper.getSetting(overrideMuteKey))?.toLowerCase() == 'true';
+    final (channelId, channelName, androidSound, _) =
+        _tonePlatformConfig(tone, overrideMute: overrideMute);
 
     return NotificationDetails(
       android: AndroidNotificationDetails(
@@ -942,7 +1009,9 @@ class NotificationService {
         priority: Priority.high,
         playSound: true,
         sound: androidSound,
-        audioAttributesUsage: AudioAttributesUsage.alarm,
+        audioAttributesUsage: overrideMute
+            ? AudioAttributesUsage.alarm
+            : AudioAttributesUsage.notification,
         fullScreenIntent: true,
       ),
       iOS: const DarwinNotificationDetails(presentSound: true),
@@ -959,33 +1028,36 @@ class NotificationService {
   }
 
   (String, String, RawResourceAndroidNotificationSound?, String?)
-      _tonePlatformConfig(String tone) {
+      _tonePlatformConfig(String tone, {bool overrideMute = false}) {
+    final suffix = overrideMute ? '_alarm' : '';
     switch (tone) {
       case _toneMuezzin1:
         return (
-          'athan_tone_muezzin_1',
-          'Muezzin 1',
+          'athan_tone_muezzin_1$suffix',
+          overrideMute ? 'Muezzin 1 (Override Mute)' : 'Muezzin 1',
           const RawResourceAndroidNotificationSound('athan_muezzin_1'),
           null
         );
       case _toneMuezzin2:
         return (
-          'athan_tone_muezzin_2',
-          'Muezzin 2 with Mishary Alafasi',
+          'athan_tone_muezzin_2$suffix',
+          overrideMute
+              ? 'Muezzin 2 with Mishary Alafasi (Override Mute)'
+              : 'Muezzin 2 with Mishary Alafasi',
           const RawResourceAndroidNotificationSound('athan_muezzin_2'),
           null
         );
       case _toneAbbuAthan:
         return (
-          'athan_tone_abbu_athan',
-          'Abbu_Athan',
+          'athan_tone_abbu_athan$suffix',
+          overrideMute ? 'Abbu_Athan (Override Mute)' : 'Abbu_Athan',
           const RawResourceAndroidNotificationSound('athan_abbu_athan'),
           null
         );
       default:
         return (
-          'athan_tone_beep',
-          'Beep',
+          'athan_tone_beep$suffix',
+          overrideMute ? 'Beep (Override Mute)' : 'Beep',
           const RawResourceAndroidNotificationSound('athan_beep'),
           null
         );
