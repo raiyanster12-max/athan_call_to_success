@@ -1,5 +1,6 @@
 ﻿import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -515,11 +516,17 @@ class _MasjidPageState extends State<MasjidPage> {
                           } catch (_) {}
                           if (ctx.mounted) Navigator.pop(ctx);
                         } catch (e) {
+                          final msg = e.toString();
+                          final isCors = kIsWeb &&
+                              (msg.contains('Failed to fetch') ||
+                                  msg.contains('XMLHttpRequest') ||
+                                  msg.contains('NetworkError'));
                           setDialogState(() {
                             loggingIn = false;
-                            dialogError = e
-                                .toString()
-                                .replaceFirst('Exception: ', '');
+                            dialogError = isCors
+                                ? 'Browser security (CORS) blocks direct login from the web app. '
+                                    'Please use the Android/iOS app, or visit mawaqit.net directly.'
+                                : msg.replaceFirst('Exception: ', '');
                           });
                         }
                       },
@@ -682,35 +689,71 @@ class _MasjidPageState extends State<MasjidPage> {
                 ),
               ),
               const SizedBox(height: 24),
-              const Text(
-                'You already have a mawaqit.net account, Login in here',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppPalette.textSecondary,
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppPalette.surfaceRaised,
-                  foregroundColor: AppPalette.accent,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 12,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    side: BorderSide(color: AppPalette.accent),
+              if (kIsWeb) ...[  
+                // On web, direct API login is blocked by CORS — link to mawaqit.net instead.
+                const Text(
+                  'Already have an account? Log in on mawaqit.net, then use the iOS or Android app to connect.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppPalette.textSecondary,
+                    fontSize: 14,
                   ),
                 ),
-                icon: const Icon(Icons.login),
-                label: const Text(
-                  'Login',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppPalette.surfaceRaised,
+                    foregroundColor: AppPalette.accent,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      side: const BorderSide(color: AppPalette.accent),
+                    ),
+                  ),
+                  icon: const Icon(Icons.open_in_new),
+                  label: const Text(
+                    'Open mawaqit.net',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  onPressed: () => launchUrl(
+                    Uri.parse('https://mawaqit.net/en/user/login'),
+                    mode: LaunchMode.externalApplication,
+                  ),
                 ),
-                onPressed: () => _promptCredentials(retryAfter: true),
-              ),
+              ] else ...[  
+                const Text(
+                  'You already have a mawaqit.net account, Login in here',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppPalette.textSecondary,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppPalette.surfaceRaised,
+                    foregroundColor: AppPalette.accent,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      side: const BorderSide(color: AppPalette.accent),
+                    ),
+                  ),
+                  icon: const Icon(Icons.login),
+                  label: const Text(
+                    'Login',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  onPressed: () => _promptCredentials(retryAfter: true),
+                ),
+              ],
             ],
           ),
         ),
