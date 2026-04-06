@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hijri_date/hijri.dart';
 import 'package:intl/intl.dart';
@@ -25,6 +26,8 @@ class _TrackerPageState extends State<TrackerPage> {
   ];
 
   bool _isLoading = true;
+  bool _isDatabaseAvailable = true;
+  String _databaseErrorMessage = '';
   final int _currentYear = DateTime.now().year;
   final DateTime _today = DateTime.now();
   Map<String, bool> _prayerStatuses = {
@@ -45,20 +48,45 @@ class _TrackerPageState extends State<TrackerPage> {
   }
 
   Future<void> _loadTrackerData() async {
-    final prayerStatuses = await DBHelper.getPrayerLogForDate(_todayKey);
-    final ramadanDates = _buildRamadanDatesForYear(_currentYear);
-    final savedRamadanStatuses = await _loadRamadanStatuses(_currentYear);
+    // sqflite does not support web; skip DB calls entirely to avoid a
+    // hanging Future that would leave the loading spinner on screen forever.
+    if (kIsWeb) {
+      final ramadanDates = _buildRamadanDatesForYear(_currentYear);
+      if (!mounted) return;
+      setState(() {
+        _ramadanDates = ramadanDates;
+        _isDatabaseAvailable = false;
+        _databaseErrorMessage =
+            'Prayer tracking is not available on the web version. Use the mobile or desktop app to log prayers.';
+        _isLoading = false;
+      });
+      return;
+    }
 
-    if (!mounted) return;
-    setState(() {
-      _prayerStatuses = {
-        for (final prayer in _trackedPrayers)
-          prayer: prayerStatuses[prayer] ?? false,
-      };
-      _ramadanDates = ramadanDates;
-      _ramadanStatuses = savedRamadanStatuses;
-      _isLoading = false;
-    });
+    try {
+      final prayerStatuses = await DBHelper.getPrayerLogForDate(_todayKey);
+      final ramadanDates = _buildRamadanDatesForYear(_currentYear);
+      final savedRamadanStatuses = await _loadRamadanStatuses(_currentYear);
+
+      if (!mounted) return;
+      setState(() {
+        _prayerStatuses = {
+          for (final prayer in _trackedPrayers)
+            prayer: prayerStatuses[prayer] ?? false,
+        };
+        _ramadanDates = ramadanDates;
+        _ramadanStatuses = savedRamadanStatuses;
+        _isDatabaseAvailable = true;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isDatabaseAvailable = false;
+        _databaseErrorMessage = 'Error loading tracker data: ${e.toString()}';
+        _isLoading = false;
+      });
+    }
   }
 
   List<DateTime> _buildRamadanDatesForYear(int year) {
@@ -102,20 +130,49 @@ class _TrackerPageState extends State<TrackerPage> {
   }
 
   Future<void> _togglePrayer(String prayer, bool value) async {
-    await DBHelper.setPrayerCompleted(
-      dateKey: _todayKey,
-      prayerName: prayer,
-      completed: value,
-    );
-    if (!mounted) return;
-    setState(() {
-      _prayerStatuses[prayer] = value;
-    });
+    if (!_isDatabaseAvailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot save: Database not available on this platform'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    try {
+      await DBHelper.setPrayerCompleted(
+        dateKey: _todayKey,
+        prayerName: prayer,
+        completed: value,
+      );
+      if (!mounted) return;
+      setState(() {
+        _prayerStatuses[prayer] = value;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving prayer status: $e'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
   }
 
   String _dateKey(DateTime date) => DateFormat('yyyy-MM-dd').format(date);
 
   Future<void> _toggleRamadanStatus(DateTime date) async {
+    if (!_isDatabaseAvailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot save: Database not available on this platform'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
     final key = _dateKey(date);
     final current = _ramadanStatuses[key] ?? '';
 
@@ -135,7 +192,18 @@ class _TrackerPageState extends State<TrackerPage> {
         _ramadanStatuses[key] = next;
       }
     });
-    await _saveRamadanStatuses();
+    try {
+      await _saveRamadanStatuses();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving Ramadan status: $e'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
   }
 
   int get _ramadanDoneCount =>
@@ -362,60 +430,111 @@ class _TrackerPageState extends State<TrackerPage> {
                   semanticsLabel: 'Loading tracker data',
                 ),
               )
-            : RefreshIndicator(
-                onRefresh: _loadTrackerData,
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.checklist,
-                                  color: AppPalette.accent,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Prayer Tracker',
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.bold),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Today — $_completedCount of ${_trackedPrayers.length} prayers logged',
-                              style: const TextStyle(
+            : !_isDatabaseAvailable
+                ? Center(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.info_outline,
+                                size: 48,
                                 color: AppPalette.textSecondary,
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            for (final prayer in _trackedPrayers)
-                              CheckboxListTile(
-                                value: _prayerStatuses[prayer] ?? false,
-                                contentPadding: EdgeInsets.zero,
-                                title: Text(prayer),
-                                controlAffinity:
-                                    ListTileControlAffinity.leading,
-                                onChanged: (value) {
-                                  if (value == null) return;
-                                  _togglePrayer(prayer, value);
-                                },
+                              const SizedBox(height: 16),
+                              Text(
+                                'Tracker Unavailable',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleLarge
+                                    ?.copyWith(fontWeight: FontWeight.bold),
                               ),
-                          ],
+                              const SizedBox(height: 8),
+                              Text(
+                                _databaseErrorMessage,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: AppPalette.textSecondary,
+                                ),
+                              ),
+                              if (kIsWeb)
+                                Column(
+                                  children: [
+                                    const SizedBox(height: 16),
+                                    const Text(
+                                      'Please use the mobile app or desktop version to track prayers and fasting.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppPalette.textMuted,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    _buildRamadanTrackerCard(),
-                  ],
-                ),
-              ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: _loadTrackerData,
+                    child: ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.checklist,
+                                      color: AppPalette.accent,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Prayer Tracker',
+                                      style: Theme.of(context).textTheme.titleMedium
+                                          ?.copyWith(fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Today — $_completedCount of ${_trackedPrayers.length} prayers logged',
+                                  style: const TextStyle(
+                                    color: AppPalette.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                for (final prayer in _trackedPrayers)
+                                  CheckboxListTile(
+                                    value: _prayerStatuses[prayer] ?? false,
+                                    contentPadding: EdgeInsets.zero,
+                                    title: Text(prayer),
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                    onChanged: (value) {
+                                      if (value == null) return;
+                                      _togglePrayer(prayer, value);
+                                    },
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildRamadanTrackerCard(),
+                      ],
+                    ),
+                  ),
       ),
     );
   }
