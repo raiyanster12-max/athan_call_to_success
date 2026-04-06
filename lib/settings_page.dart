@@ -43,7 +43,7 @@ class _SettingsPageState extends State<SettingsPage> {
       NotificationService.googleCastMediaUrlKey;
   static const String _preferredCastSpeakerNameKey =
       'preferred_cast_speaker_name';
-  static const String _overrideMuteKey = 'settings_override_mute';
+  static const String _overrideMuteKey = NotificationService.overrideMuteKey;
   static const String _showHijriDateKey = 'settings_show_hijri_date';
   static const String _autoTestPrayerValue = '__auto_next__';
 
@@ -664,6 +664,12 @@ class _SettingsPageState extends State<SettingsPage> {
     await _saveBoolSetting(_overrideMuteKey, value);
     if (!mounted) return;
     setState(() => _overrideMute = value);
+    // Reschedule so notifications use the correct channel (alarm vs normal stream).
+    unawaited(
+      NotificationService.instance
+          .rescheduleUsingStoredLocation()
+          .catchError((_) {}),
+    );
   }
 
   Future<void> _setShowHijriDate(bool value) async {
