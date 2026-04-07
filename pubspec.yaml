@@ -36,6 +36,7 @@ dependencies:
   google_fonts: ^6.2.1
   flutter_map: ^7.0.2
   latlong2: ^0.9.0
+  shared_preferences: ^2.3.2
   googlecast:
     path: third_party/googlecast
 

@@ -117,9 +117,7 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
       setState(() {
         _castConnected = connected;
-        if (!connected) {
-          _lastCastState = 'Disconnected';
-        }
+        _lastCastState = connected ? 'Connected' : 'Disconnected';
       });
     });
     _castMessageSub = cast.messageStream.listen((state) {
@@ -146,10 +144,52 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!mounted) return;
     setState(() {
       _castConnected = connected;
-      if (!connected && _lastCastState == 'Not connected') {
-        _lastCastState = 'Not connected';
-      }
+      _lastCastState = connected ? 'Connected' : 'Not connected';
     });
+  }
+
+  Future<bool> _ensureCastDiscoveryPermissions() async {
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return true;
+    }
+
+    var locationPermission = await Geolocator.checkPermission();
+    if (locationPermission == LocationPermission.denied) {
+      locationPermission = await Geolocator.requestPermission();
+    }
+    if (locationPermission == LocationPermission.denied ||
+        locationPermission == LocationPermission.deniedForever) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Location permission is required to discover Cast devices on your network.',
+          ),
+        ),
+      );
+      return false;
+    }
+
+    final nearbyWifiStatus = await Permission.nearbyWifiDevices.status;
+    if (nearbyWifiStatus != PermissionStatus.granted) {
+      final requested = await Permission.nearbyWifiDevices.request();
+      if (requested != PermissionStatus.granted) {
+        if (!mounted) return false;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Nearby Wi-Fi devices permission is required to discover Cast speakers.',
+            ),
+          ),
+        );
+        return false;
+      }
+    }
+
+    if (mounted) {
+      setState(() => _locationPermission = locationPermission);
+    }
+    return true;
   }
 
   Future<void> _loadSettings() async {
@@ -791,6 +831,10 @@ class _SettingsPageState extends State<SettingsPage> {
                         visualDensity: VisualDensity.compact,
                       ),
                       onPressed: () async {
+                        final hasPermissions =
+                            await _ensureCastDiscoveryPermissions();
+                        if (!hasPermissions) return;
+
                         debugPrint('Cast chooser: Select Speaker tapped');
                         final shown = await GoogleChromeCast.showCastDialog();
                         debugPrint('Cast chooser: showCastDialog returned $shown');

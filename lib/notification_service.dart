@@ -26,12 +26,21 @@ import 'prayer_service.dart';
 Future<void> onDidReceiveBackgroundNotificationResponse(
   NotificationResponse response,
 ) async {
-  // Re-initialise timezone data because this runs in a fresh isolate.
-  // We cannot reliably call platform timezone plugins from this isolate.
   tz.initializeTimeZones();
-  await NotificationService.instance._triggerNetworkSpeakerIfConfigured(
-    payload: response.payload,
-  );
+  // This fires when the user taps an athan notification while the app is
+  // in the background or terminated.  It runs in a fresh isolate so we
+  // wrap everything in try/catch and enforce a hard timeout so Android
+  // cannot kill the process due to an unexpectedly long background task.
+  try {
+    await NotificationService.instance
+        ._triggerNetworkSpeakerIfConfigured(
+          payload: response.payload,
+          isBackground: true,
+        )
+        .timeout(const Duration(seconds: 12));
+  } catch (e) {
+    debugPrint('Background notification handler error: $e');
+  }
 }
 
 class NotificationService {
@@ -39,7 +48,7 @@ class NotificationService {
 
   static final NotificationService instance = NotificationService._();
 
-  static const int _batchDays = 3;
+  static const int _batchDays = 7;
   static const String _batchEndKey = 'notification_batch_end';
   static const String _lastLatKey = 'notification_last_lat';
   static const String _lastLngKey = 'notification_last_lng';
@@ -380,7 +389,7 @@ class NotificationService {
     if (parsedBatchEnd == null) return;
 
     final now = DateTime.now();
-    if (!parsedBatchEnd.isAfter(now.add(const Duration(hours: 12)))) {
+    if (!parsedBatchEnd.isAfter(now.add(const Duration(hours: 24)))) {
       final latText = await DBHelper.getSetting(_lastLatKey);
       final lngText = await DBHelper.getSetting(_lastLngKey);
       if (latText != null && lngText != null) {
@@ -412,10 +421,35 @@ class NotificationService {
   // Public speaker helpers (used by Settings UI)
   // ───────────────────────────────────────────────────────────────────────────
 
-  Future<void> triggerSelectedSpeakerNow({String? routeOverride}) async {
+  Future<void> triggerSelectedSpeakerNow({
+    String? routeOverride,
+    String? prayerName,
+  }) async {
     if (kIsWeb) return;
     await initialize();
-    await _triggerSelectedSpeakerForRoute(routeOverride);
+    await _triggerSelectedSpeakerForRoute(
+      routeOverride,
+      prayerName: prayerName,
+    );
+  }
+
+  Future<void> _showMirrorPhoneNotification(String prayerName) async {
+    final tone = _normalizeToneName(
+      await DBHelper.getSetting('alarm_tone_${prayerName.toLowerCase()}'),
+    );
+    final details = await _buildNotificationDetailsForPrayer(
+      prayerName: prayerName,
+      tone: tone,
+      speakerRoute: speakerPhoneSpeaker,
+    );
+
+    await _plugin.show(
+      DateTime.now().millisecondsSinceEpoch.remainder(1 << 31),
+      _notificationTitleForPrayer(prayerName),
+      _notificationBodyForPrayer(prayerName),
+      details,
+      payload: '$prayerName|${DateTime.now().toIso8601String()}|mirror',
+    );
   }
 
   Future<String> testSelectedSpeakerNow({
@@ -495,9 +529,14 @@ class NotificationService {
   //   3. Wait up to 8 s for a session to become active.
   // ───────────────────────────────────────────────────────────────────────────
 
-  Future<bool> _ensureCastConnected() async {
+  Future<bool> _ensureCastConnected({bool skipDiscovery = false}) async {
     try {
       if (await GoogleChromeCast.isConnected()) return true;
+
+      // In a background isolate (skipDiscovery=true) there is no active UI so
+      // Cast discovery cannot establish a new session — only honour an already
+      // connected session above.
+      if (skipDiscovery) return false;
 
       // Attempt to reconnect via discovery.
       // Some versions of the googlecast package expose startDiscovery() —
@@ -526,11 +565,14 @@ class NotificationService {
   // AND the background delivery handler.
   // ───────────────────────────────────────────────────────────────────────────
 
-  Future<void> _triggerGoogleCastIfConfigured({String? prayerName}) async {
+  Future<void> _triggerGoogleCastIfConfigured({
+    String? prayerName,
+    bool isBackground = false,
+  }) async {
     if (defaultTargetPlatform != TargetPlatform.android) return;
 
     try {
-      final connected = await _ensureCastConnected();
+      final connected = await _ensureCastConnected(skipDiscovery: isBackground);
       if (!connected) {
         debugPrint(
           'Google Cast: could not establish a session. '
@@ -563,17 +605,30 @@ class NotificationService {
       debugPrint('Google Cast: command sent successfully.');
     } catch (e) {
       debugPrint('Google Cast error: $e');
-      rethrow;
+      // Do not rethrow — Cast failures must never suppress the notification
+      // channel sound or crash the background isolate.
     }
   }
 
   Future<void> _triggerSelectedSpeakerForRoute(
     String? routeOverride, {
     String? prayerName,
+    bool isBackground = false,
   }) async {
     final route = routeOverride ?? await _loadSpeakerRoutePreference();
     if (route == speakerGoogleCast) {
-      await _triggerGoogleCastIfConfigured(prayerName: prayerName);
+      if (!isBackground && prayerName != null && prayerName.trim().isNotEmpty) {
+        // Keep a phone notification visible/audible while also casting.
+        try {
+          await _showMirrorPhoneNotification(prayerName);
+        } catch (e) {
+          debugPrint('Mirror phone notification failed: $e');
+        }
+      }
+      await _triggerGoogleCastIfConfigured(
+        prayerName: prayerName,
+        isBackground: isBackground,
+      );
     }
     // speakerPhoneSpeaker — sound already plays via the notification channel;
     // nothing extra to do here.
@@ -582,10 +637,12 @@ class NotificationService {
   Future<void> _triggerNetworkSpeakerIfConfigured({
     String? payload,
     String? prayerName,
+    bool isBackground = false,
   }) async {
     await _triggerSelectedSpeakerForRoute(
       null,
       prayerName: prayerName ?? _prayerNameFromPayload(payload),
+      isBackground: isBackground,
     );
   }
 
@@ -672,18 +729,78 @@ class NotificationService {
 
   String? _prayerNameFromPayload(String? payload) {
     if (payload == null || payload.trim().isEmpty) return null;
-    final parts = payload.split('|');
-    if (parts.isEmpty) return null;
-    return _normalizePrayerName(parts.first);
+
+    final trimmed = payload.trim();
+
+    // Newer or custom payloads may pass only the prayer name.
+    final direct = _normalizePrayerName(trimmed);
+    if (direct != null) return direct;
+
+    // Legacy scheduled payload format: "PrayerName|timestamp".
+    final pipeParts = trimmed.split('|');
+    if (pipeParts.isNotEmpty) {
+      final first = _normalizePrayerName(pipeParts.first);
+      if (first != null) return first;
+    }
+
+    // Defensive fallback: scan full payload text for a prayer token.
+    return _normalizePrayerName(trimmed);
   }
 
   String? _normalizePrayerName(String? prayerName) {
     if (prayerName == null) return null;
+
+    final raw = prayerName.trim();
+    if (raw.isEmpty) return null;
+
+    // Exact canonical match first.
     for (final prayer in _supportedPrayers) {
-      if (prayer.toLowerCase() == prayerName.trim().toLowerCase()) {
+      if (prayer.toLowerCase() == raw.toLowerCase()) {
         return prayer;
       }
     }
+
+    // Normalize to letters only so we can handle aliases and punctuation.
+    final token = raw.toLowerCase().replaceAll(RegExp(r'[^a-z]'), '');
+    switch (token) {
+      case 'fajr':
+        return 'Fajr';
+      case 'dhuhr':
+      case 'duhr':
+      case 'zuhr':
+      case 'dhuhur':
+        return 'Dhuhr';
+      case 'asr':
+      case 'asar':
+        return 'Asr';
+      case 'maghrib':
+      case 'magrib':
+      case 'magribh':
+      case 'maghreb':
+        return 'Maghrib';
+      case 'isha':
+      case 'ishaah':
+      case 'esha':
+      case 'ishaa':
+        return 'Isha';
+    }
+
+    // If payload contains extra text (for example JSON-ish or labels),
+    // search for prayer aliases within the string.
+    final lower = raw.toLowerCase();
+    if (lower.contains('fajr')) return 'Fajr';
+    if (lower.contains('dhuhr') || lower.contains('duhr') || lower.contains('zuhr')) {
+      return 'Dhuhr';
+    }
+    if (lower.contains('asr') || lower.contains('asar')) return 'Asr';
+    if (lower.contains('maghrib') ||
+        lower.contains('magrib') ||
+        lower.contains('maghreb') ||
+        lower.contains('magribh')) {
+      return 'Maghrib';
+    }
+    if (lower.contains('isha') || lower.contains('esha')) return 'Isha';
+
     return null;
   }
 

@@ -90,7 +90,22 @@ class GoogleChromeCast {
     }
   }
 
-  static Future<void> startDiscovery() async {}
+  static Future<void> startDiscovery() async {
+    try {
+      // Older native plugin builds may not expose startDiscovery directly.
+      // Fall back to showing the Cast chooser, which also performs discovery.
+      final started = await _channel.invokeMethod<bool>('startDiscovery');
+      if (started == true) return;
+    } catch (_) {
+      // Ignore and try chooser fallback below.
+    }
+
+    try {
+      await _channel.invokeMethod<bool>('showCastDialog');
+    } catch (_) {
+      // Best effort only; callers should still poll isConnected().
+    }
+  }
 }
 
 class Googlecast {

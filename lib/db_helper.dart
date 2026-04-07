@@ -1,7 +1,12 @@
+import 'dart:convert';
+
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
 class DBHelper {
+  static const String trackerPrayerKeyPrefix = 'prayer_status_date_';
+  static const String trackerRamadanKeyPrefix = 'ramadan_status_year_';
+
   static Future<void> _createFavoriteMasjidsTable(Database db) async {
     await db.execute(
       'CREATE TABLE favorite_masjids(id TEXT PRIMARY KEY, name TEXT, address TEXT, lat REAL, lng REAL)',
@@ -80,15 +85,117 @@ class DBHelper {
     required bool completed,
   }) async {
     final db = await DBHelper.database();
-    await db.insert(
-      'prayer_logs',
-      {
-        'date_key': dateKey,
-        'prayer_name': prayerName,
-        'completed': completed ? 1 : 0,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
+    await db.insert('prayer_logs', {
+      'date_key': dateKey,
+      'prayer_name': prayerName,
+      'completed': completed ? 1 : 0,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  static Future<Map<String, dynamic>> exportTrackerData() async {
+    final db = await DBHelper.database();
+    final prayerRows = await db.query('prayer_logs');
+    final ramadanRows = await db.query(
+      'app_settings',
+      where: 'setting_key LIKE ?',
+      whereArgs: ['${trackerRamadanKeyPrefix}%'],
     );
+
+    final prayerStatusByDate = <String, Map<String, bool>>{};
+    for (final row in prayerRows) {
+      final dateKey = row['date_key'] as String;
+      final prayerName = row['prayer_name'] as String;
+      final completed = (row['completed'] as int) == 1;
+      final dateMap = prayerStatusByDate.putIfAbsent(
+        dateKey,
+        () => <String, bool>{},
+      );
+      dateMap[prayerName] = completed;
+    }
+
+    final ramadanStatusByYear = <String, Map<String, String>>{};
+    for (final row in ramadanRows) {
+      final settingKey = row['setting_key'] as String;
+      final year = settingKey.substring(trackerRamadanKeyPrefix.length);
+      final settingValue = row['setting_value'] as String;
+      try {
+        final parsed =
+            (settingValue.isEmpty
+                    ? <String, dynamic>{}
+                    : Map<String, dynamic>.from(
+                        (settingValue.startsWith('{')
+                            ? (jsonDecode(settingValue) as Map<String, dynamic>)
+                            : <String, dynamic>{}),
+                      ))
+                .map((k, v) => MapEntry(k, v?.toString() ?? ''));
+        ramadanStatusByYear[year] = parsed;
+      } catch (_) {
+        ramadanStatusByYear[year] = <String, String>{};
+      }
+    }
+
+    return {
+      'type': 'athan_tracker_backup',
+      'version': 1,
+      'exportedAt': DateTime.now().toIso8601String(),
+      'prayerStatusByDate': prayerStatusByDate,
+      'ramadanStatusByYear': ramadanStatusByYear,
+    };
+  }
+
+  static Future<void> importTrackerData(
+    Map<String, dynamic> payload, {
+    bool replaceExisting = true,
+  }) async {
+    final db = await DBHelper.database();
+
+    final prayerStatusByDate =
+        (payload['prayerStatusByDate'] as Map?)?.cast<String, dynamic>() ??
+        <String, dynamic>{};
+    final ramadanStatusByYear =
+        (payload['ramadanStatusByYear'] as Map?)?.cast<String, dynamic>() ??
+        <String, dynamic>{};
+
+    await db.transaction((txn) async {
+      if (replaceExisting) {
+        await txn.delete('prayer_logs');
+        await txn.delete(
+          'app_settings',
+          where: 'setting_key LIKE ?',
+          whereArgs: ['${trackerRamadanKeyPrefix}%'],
+        );
+      }
+
+      for (final dateEntry in prayerStatusByDate.entries) {
+        final dateKey = dateEntry.key;
+        final prayers =
+            (dateEntry.value as Map?)?.cast<String, dynamic>() ??
+            <String, dynamic>{};
+
+        for (final prayerEntry in prayers.entries) {
+          await txn.insert('prayer_logs', {
+            'date_key': dateKey,
+            'prayer_name': prayerEntry.key,
+            'completed': prayerEntry.value == true ? 1 : 0,
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+      }
+
+      for (final yearEntry in ramadanStatusByYear.entries) {
+        final year = yearEntry.key;
+        final statuses =
+            (yearEntry.value as Map?)?.cast<String, dynamic>() ??
+            <String, dynamic>{};
+        final normalized = statuses.map(
+          (k, v) => MapEntry(k, v?.toString() ?? ''),
+        );
+
+        await txn.insert('app_settings', {
+          'setting_key': '$trackerRamadanKeyPrefix$year',
+          'setting_value': jsonEncode(normalized),
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    });
   }
 
   static Future<String?> getSetting(String key) async {
@@ -107,14 +214,10 @@ class DBHelper {
 
   static Future<void> setSetting(String key, String value) async {
     final db = await DBHelper.database();
-    await db.insert(
-      'app_settings',
-      {
-        'setting_key': key,
-        'setting_value': value,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('app_settings', {
+      'setting_key': key,
+      'setting_value': value,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -161,11 +264,10 @@ class DBHelper {
         _kPinnedLat: lat.toString(),
         _kPinnedLng: lng.toString(),
       }.entries) {
-        await txn.insert(
-          'app_settings',
-          {'setting_key': e.key, 'setting_value': e.value},
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+        await txn.insert('app_settings', {
+          'setting_key': e.key,
+          'setting_value': e.value,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
       }
     });
   }
@@ -223,11 +325,10 @@ class DBHelper {
         _kJumaa1: s['jumaa1'] as String,
         _kJumaa2: s['jumaa2'] as String,
       }.entries) {
-        await txn.insert(
-          'app_settings',
-          {'setting_key': e.key, 'setting_value': e.value},
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+        await txn.insert('app_settings', {
+          'setting_key': e.key,
+          'setting_value': e.value,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
       }
     });
   }

@@ -4,7 +4,6 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:quran/quran.dart' as quran;
 
@@ -31,6 +30,7 @@ class QuranPage extends StatefulWidget {
 
 class _QuranPageState extends State<QuranPage> {
   static const String _favoritesKey = 'quran_favorite_surahs';
+  static const String _ayahBookmarksKey = 'quran_bookmarked_ayahs';
   static const String _lastReadKey = 'quran_last_read_surah';
   static const String _recentReadsKey = 'quran_recent_read_surahs';
   static int? _sessionLastReadSurah;
@@ -155,6 +155,7 @@ class _QuranPageState extends State<QuranPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _recentReadsScrollController = ScrollController();
   final Set<int> _favorites = <int>{};
+  final Set<String> _ayahBookmarks = <String>{};
   final Map<int, double> _readingProgress = <int, double>{};
   final List<int> _recentReads = <int>[];
   final Map<int, int> _recentReadAyahBySurah = <int, int>{};
@@ -188,6 +189,7 @@ class _QuranPageState extends State<QuranPage> {
     final currentLastReadSurah = _lastReadSurah ?? _sessionLastReadSurah;
     try {
       final favoritesCsv = await DBHelper.getSetting(_favoritesKey);
+      final ayahBookmarksCsv = await DBHelper.getSetting(_ayahBookmarksKey);
       final lastRead = await DBHelper.getSetting(_lastReadKey);
       final recentReadsCsv = await DBHelper.getSetting(_recentReadsKey);
       final parsedLastReadSurah =
@@ -201,6 +203,15 @@ class _QuranPageState extends State<QuranPage> {
                 .map((entry) => int.tryParse(entry.trim()))
                 .whereType<int>()
                 .toSet();
+
+      final parsedAyahBookmarks =
+          ayahBookmarksCsv == null || ayahBookmarksCsv.trim().isEmpty
+          ? <String>{}
+          : ayahBookmarksCsv
+            .split(',')
+            .map((entry) => entry.trim())
+            .where((entry) => entry.isNotEmpty)
+            .toSet();
 
       final parsedRecentReads =
           recentReadsCsv == null || recentReadsCsv.trim().isEmpty
@@ -258,6 +269,9 @@ class _QuranPageState extends State<QuranPage> {
         _favorites
           ..clear()
           ..addAll(parsedFavorites);
+        _ayahBookmarks
+          ..clear()
+          ..addAll(parsedAyahBookmarks);
         _recentReads
           ..clear()
           ..addAll(parsedRecentReads);
@@ -339,8 +353,11 @@ class _QuranPageState extends State<QuranPage> {
     });
   }
 
-  Future<void> _openSurahDetails(_Surah surah) async {
-    int? resumeAyah = _recentReadAyahBySurah[surah.number];
+  Future<void> _openSurahDetails(
+    _Surah surah, {
+    int? initialAyahOverride,
+  }) async {
+    int? resumeAyah = initialAyahOverride ?? _recentReadAyahBySurah[surah.number];
     try {
       final storedAyah = await DBHelper.getSetting(
         'quran_last_read_ayah_${surah.number}',
@@ -772,7 +789,6 @@ class _QuranPageState extends State<QuranPage> {
   Widget _buildSurahRow(_Surah surah) {
     final progress = _readingProgress[surah.number] ?? 0;
     final isLastRead = surah.number == _lastReadSurah;
-    final isFavorite = _favorites.contains(surah.number);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -830,35 +846,14 @@ class _QuranPageState extends State<QuranPage> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          surah.arabicName,
-                          textDirection: TextDirection.rtl,
-                          style: GoogleFonts.scheherazadeNew(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        IconButton(
-                          visualDensity: VisualDensity.compact,
-                          padding: EdgeInsets.zero,
-                          tooltip: isFavorite
-                              ? 'Remove bookmark'
-                              : 'Add bookmark',
-                          onPressed: () => _toggleFavorite(surah.number),
-                          icon: Icon(
-                            isFavorite
-                                ? Icons.bookmark
-                                : Icons.bookmark_border_rounded,
-                            color: isFavorite
-                                ? _quranHighlight
-                                : _quranMutedText,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      surah.arabicName,
+                      textDirection: TextDirection.rtl,
+                      style: GoogleFonts.scheherazadeNew(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
                 ),
@@ -911,13 +906,95 @@ class _QuranPageState extends State<QuranPage> {
     return Column(children: children);
   }
 
-  Widget _buildBookmarksList(List<_Surah> surahs) {
-    if (surahs.isEmpty) {
-      return _buildEmptyState('No bookmarked surahs yet.');
+  List<({int surahNumber, int ayahNumber})> _filteredAyahBookmarks() {
+    final items = <({int surahNumber, int ayahNumber})>[];
+
+    for (final token in _ayahBookmarks) {
+      final parts = token.split(':');
+      if (parts.length != 2) continue;
+      final surahNumber = int.tryParse(parts[0].trim());
+      final ayahNumber = int.tryParse(parts[1].trim());
+      if (surahNumber == null || ayahNumber == null) continue;
+      if (surahNumber < 1 || surahNumber > 114 || ayahNumber < 1) continue;
+      if (ayahNumber > quran.getVerseCount(surahNumber)) continue;
+
+      final surah = _surahByNumber(surahNumber);
+      if (surah == null) continue;
+
+      if (_searchQuery.isNotEmpty) {
+        final query = _searchQuery;
+        final ref = '$surahNumber:$ayahNumber';
+        final matches =
+            surah.matches(query) ||
+            ref.contains(query) ||
+            surah.number.toString() == query;
+        if (!matches) continue;
+      }
+
+      items.add((surahNumber: surahNumber, ayahNumber: ayahNumber));
+    }
+
+    items.sort((a, b) {
+      final surahCompare = a.surahNumber.compareTo(b.surahNumber);
+      if (surahCompare != 0) return surahCompare;
+      return a.ayahNumber.compareTo(b.ayahNumber);
+    });
+
+    return items;
+  }
+
+  Widget _buildAyahBookmarkRow(({int surahNumber, int ayahNumber}) bookmark) {
+    final surah = _surahByNumber(bookmark.surahNumber)!;
+    final arabic = quran.getVerse(
+      bookmark.surahNumber,
+      bookmark.ayahNumber,
+      verseEndSymbol: false,
+    );
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: _quranPanelRaised,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _quranDividerColor),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        leading: const Icon(Icons.bookmark, color: _quranHighlight),
+        title: Text(
+          '${surah.name} ${bookmark.surahNumber}:${bookmark.ayahNumber}',
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        subtitle: Text(
+          arabic,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textDirection: TextDirection.rtl,
+          style: GoogleFonts.scheherazadeNew(
+            color: _quranMutedText,
+            fontSize: 18,
+            height: 1.4,
+          ),
+        ),
+        trailing: const Icon(Icons.chevron_right, color: _quranMutedText),
+        onTap: () => _openSurahDetails(
+          surah,
+          initialAyahOverride: bookmark.ayahNumber,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBookmarksList(List<({int surahNumber, int ayahNumber})> bookmarks) {
+    if (bookmarks.isEmpty) {
+      return _buildEmptyState('No bookmarked ayahs yet.');
     }
 
     return Column(
-      children: [for (final surah in surahs) _buildSurahRow(surah)],
+      children: [for (final bookmark in bookmarks) _buildAyahBookmarkRow(bookmark)],
     );
   }
 
@@ -980,14 +1057,12 @@ class _QuranPageState extends State<QuranPage> {
   @override
   Widget build(BuildContext context) {
     final allFiltered = _applyFilters(_surahs);
-    final favoriteFiltered = _applyFilters(
-      _surahs.where((surah) => _favorites.contains(surah.number)),
-    );
+    final ayahBookmarks = _filteredAyahBookmarks();
 
     final content = switch (_browseMode) {
       _QuranBrowseMode.chapters => _buildChapterSectionList(allFiltered),
       _QuranBrowseMode.parts => _buildPartsList(allFiltered),
-      _QuranBrowseMode.bookmarks => _buildBookmarksList(favoriteFiltered),
+      _QuranBrowseMode.bookmarks => _buildBookmarksList(ayahBookmarks),
     };
 
     return Scaffold(
@@ -997,9 +1072,12 @@ class _QuranPageState extends State<QuranPage> {
               child: CircularProgressIndicator(semanticsLabel: 'Loading Quran'),
             )
           : SafeArea(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
-                children: [
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 980),
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+                    children: [
                   Row(
                     children: [
                       const Expanded(
@@ -1031,7 +1109,9 @@ class _QuranPageState extends State<QuranPage> {
                   _buildBrowseModeSelector(),
                   const SizedBox(height: 14),
                   content,
-                ],
+                    ],
+                  ),
+                ),
               ),
             ),
     );
@@ -1091,6 +1171,7 @@ class _SurahDetailsPage extends StatefulWidget {
 
 class _SurahDetailsPageState extends State<_SurahDetailsPage> {
   static const int _readingGoalMinutes = 5;
+  static const String _ayahBookmarksKey = 'quran_bookmarked_ayahs';
   static final Map<int, int> _sessionLastReadAyahBySurah = <int, int>{};
 
   late final int _verseCount;
@@ -1111,6 +1192,43 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
   double _translationFontSize = 18;
   bool _showTajweed = false;
   String? _loadError;
+  final Set<String> _ayahBookmarks = <String>{};
+
+  String _ayahBookmarkToken(int ayahNumber) =>
+      '${widget.surah.number}:$ayahNumber';
+
+  bool _isAyahBookmarked(int ayahNumber) =>
+      _ayahBookmarks.contains(_ayahBookmarkToken(ayahNumber));
+
+  Future<void> _saveAyahBookmarks() async {
+    final sorted = _ayahBookmarks.toList()..sort();
+    try {
+      await DBHelper.setSetting(_ayahBookmarksKey, sorted.join(','));
+    } catch (_) {}
+  }
+
+  Future<void> _toggleAyahBookmark(_AyahContent ayah) async {
+    final token = _ayahBookmarkToken(ayah.ayahNumber);
+    final wasBookmarked = _ayahBookmarks.contains(token);
+    setState(() {
+      if (wasBookmarked) {
+        _ayahBookmarks.remove(token);
+      } else {
+        _ayahBookmarks.add(token);
+      }
+    });
+    await _saveAyahBookmarks();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          wasBookmarked
+              ? 'Removed bookmark ${widget.surah.number}:${ayah.ayahNumber}'
+              : 'Bookmarked ayah ${widget.surah.number}:${ayah.ayahNumber}',
+        ),
+      ),
+    );
+  }
 
   int? _bestEffortVisibleAyah() {
     if (!mounted) return null;
@@ -1262,6 +1380,18 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
     } catch (_) {}
 
     try {
+      try {
+        final rawAyahBookmarks = await DBHelper.getSetting(_ayahBookmarksKey);
+        _ayahBookmarks
+          ..clear()
+          ..addAll(
+            (rawAyahBookmarks ?? '')
+                .split(',')
+                .map((entry) => entry.trim())
+                .where((entry) => entry.isNotEmpty),
+          );
+      } catch (_) {}
+
       final verseItems = List<_AyahContent>.generate(_verseCount, (index) {
         final ayah = index + 1;
         final arabicVerse = quran.getVerse(
@@ -1357,22 +1487,6 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
       if (!mounted) return;
       if (await ensureTargetVisible()) return;
     }
-  }
-
-  Future<void> _copyAyah(_AyahContent ayah) async {
-    final messenger = ScaffoldMessenger.of(context);
-    await Clipboard.setData(
-      ClipboardData(
-        text:
-            'Surah ${widget.surah.number}:${ayah.ayahNumber}\n${ayah.arabic}\n${ayah.translation}',
-      ),
-    );
-    if (!mounted) return;
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text('Copied ayah ${widget.surah.number}:${ayah.ayahNumber}'),
-      ),
-    );
   }
 
   String _normalizeAudioUrl(String url) {
@@ -1921,9 +2035,15 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                           ),
                           const Spacer(),
                           IconButton(
-                            tooltip: 'Copy ayah',
-                            onPressed: () => _copyAyah(ayah),
-                            icon: const Icon(Icons.copy_rounded),
+                            tooltip: _isAyahBookmarked(ayah.ayahNumber)
+                                ? 'Remove ayah bookmark'
+                                : 'Bookmark ayah',
+                            onPressed: () => _toggleAyahBookmark(ayah),
+                            icon: Icon(
+                              _isAyahBookmarked(ayah.ayahNumber)
+                                  ? Icons.bookmark
+                                  : Icons.bookmark_border_rounded,
+                            ),
                           ),
                         ],
                       ),
