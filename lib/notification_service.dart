@@ -123,8 +123,9 @@ class NotificationService {
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
 
-    await androidPlugin?.requestNotificationsPermission();
-    await androidPlugin?.requestExactAlarmsPermission();
+    // Permission requests are handled via permission_handler from UI flows.
+    // Some Android devices/plugins can throw NPE here when context is not
+    // ready; avoid startup fragility and use schedule-mode fallback instead.
     await _ensureAndroidToneChannels();
 
     _initialized = true;
@@ -430,6 +431,7 @@ class NotificationService {
     await _triggerSelectedSpeakerForRoute(
       routeOverride,
       prayerName: prayerName,
+      ensureDeviceNotification: true,
     );
   }
 
@@ -450,6 +452,7 @@ class NotificationService {
       details,
       payload: '$prayerName|${DateTime.now().toIso8601String()}|mirror',
     );
+    debugPrint('Mirror phone notification shown for $prayerName.');
   }
 
   Future<String> testSelectedSpeakerNow({
@@ -614,17 +617,27 @@ class NotificationService {
     String? routeOverride, {
     String? prayerName,
     bool isBackground = false,
+    bool ensureDeviceNotification = false,
   }) async {
-    final route = routeOverride ?? await _loadSpeakerRoutePreference();
-    if (route == speakerGoogleCast) {
-      if (!isBackground && prayerName != null && prayerName.trim().isNotEmpty) {
-        // Keep a phone notification visible/audible while also casting.
-        try {
-          await _showMirrorPhoneNotification(prayerName);
-        } catch (e) {
-          debugPrint('Mirror phone notification failed: $e');
-        }
+    debugPrint(
+      'Trigger speaker route start: routeOverride=$routeOverride, '
+      'prayerName=$prayerName, isBackground=$isBackground, '
+      'ensureDeviceNotification=$ensureDeviceNotification',
+    );
+    if (ensureDeviceNotification &&
+        !isBackground &&
+        prayerName != null &&
+        prayerName.trim().isNotEmpty) {
+      try {
+        await _showMirrorPhoneNotification(prayerName);
+      } catch (e) {
+        debugPrint('Mirror phone notification failed: $e');
       }
+    }
+
+    final route = routeOverride ?? await _loadSpeakerRoutePreference();
+    debugPrint('Resolved speaker route: $route');
+    if (route == speakerGoogleCast) {
       await _triggerGoogleCastIfConfigured(
         prayerName: prayerName,
         isBackground: isBackground,

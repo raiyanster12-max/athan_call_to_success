@@ -49,6 +49,11 @@ dev_dependencies:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
+  web:
+    generate: true
+    image_path: "assets/icon/athan_app_icon.png"
+    background_color: "#00796B"
+    theme_color: "#00796B"
   windows:
     generate: true
     image_path: "assets/icon/athan_app_icon.png"

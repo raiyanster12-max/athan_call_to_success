@@ -98,7 +98,7 @@ class DBHelper {
     final ramadanRows = await db.query(
       'app_settings',
       where: 'setting_key LIKE ?',
-      whereArgs: ['${trackerRamadanKeyPrefix}%'],
+      whereArgs: ['$trackerRamadanKeyPrefix%'],
     );
 
     final prayerStatusByDate = <String, Map<String, bool>>{};
@@ -162,7 +162,7 @@ class DBHelper {
         await txn.delete(
           'app_settings',
           where: 'setting_key LIKE ?',
-          whereArgs: ['${trackerRamadanKeyPrefix}%'],
+          whereArgs: ['$trackerRamadanKeyPrefix%'],
         );
       }
 
