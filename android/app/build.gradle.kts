@@ -5,6 +5,24 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+import java.util.Properties
+
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) {
+        f.inputStream().use { load(it) }
+    }
+}
+
+val googleMapsApiKey: String = (
+    providers.gradleProperty("GOOGLE_MAPS_API_KEY").orNull
+        ?: providers.gradleProperty("googleMapsApiKey").orNull
+        ?: System.getenv("GOOGLE_MAPS_API_KEY")
+        ?: localProps.getProperty("GOOGLE_MAPS_API_KEY")
+        ?: localProps.getProperty("googleMapsApiKey")
+        ?: ""
+).trim()
+
 android {
     namespace = "com.example.athan_call_to_success"
     compileSdk = flutter.compileSdkVersion
@@ -29,6 +47,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = googleMapsApiKey
     }
 
     buildTypes {
@@ -53,4 +72,24 @@ flutter {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation("com.google.android.gms:play-services-cast-framework:21.0.1")
+}
+
+gradle.taskGraph.whenReady {
+    val buildingRelease = allTasks.any { task ->
+        val n = task.name.lowercase()
+        (n.contains("assemble") || n.contains("bundle")) && n.contains("release")
+    }
+
+    val looksInvalid = googleMapsApiKey.isBlank() ||
+        googleMapsApiKey.length < 30 ||
+        !googleMapsApiKey.startsWith("AIza")
+
+    if (buildingRelease && looksInvalid) {
+        throw GradleException(
+            "GOOGLE_MAPS_API_KEY is missing/invalid for release build. " +
+                "Expected a real Google key like AIza... (typically ~39 chars). " +
+                "Set one of: -PgoogleMapsApiKey=AIza... OR environment GOOGLE_MAPS_API_KEY OR " +
+                "local.properties entry GOOGLE_MAPS_API_KEY=AIza...",
+        )
+    }
 }

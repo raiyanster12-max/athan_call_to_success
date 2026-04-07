@@ -13,6 +13,7 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 import 'db_helper.dart';
+import 'mosque_service.dart';
 import 'prayer_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -25,12 +26,21 @@ import 'prayer_service.dart';
 Future<void> onDidReceiveBackgroundNotificationResponse(
   NotificationResponse response,
 ) async {
-  // Re-initialise timezone data because this runs in a fresh isolate.
-  // We cannot reliably call platform timezone plugins from this isolate.
   tz.initializeTimeZones();
-  await NotificationService.instance._triggerNetworkSpeakerIfConfigured(
-    payload: response.payload,
-  );
+  // This fires when the user taps an athan notification while the app is
+  // in the background or terminated.  It runs in a fresh isolate so we
+  // wrap everything in try/catch and enforce a hard timeout so Android
+  // cannot kill the process due to an unexpectedly long background task.
+  try {
+    await NotificationService.instance
+        ._triggerNetworkSpeakerIfConfigured(
+          payload: response.payload,
+          isBackground: true,
+        )
+        .timeout(const Duration(seconds: 12));
+  } catch (e) {
+    debugPrint('Background notification handler error: $e');
+  }
 }
 
 class NotificationService {
@@ -38,12 +48,21 @@ class NotificationService {
 
   static final NotificationService instance = NotificationService._();
 
-  static const int _batchDays = 3;
+  static const int _batchDays = 7;
   static const String _batchEndKey = 'notification_batch_end';
   static const String _lastLatKey = 'notification_last_lat';
   static const String _lastLngKey = 'notification_last_lng';
   static const String _speakerRouteKey = 'notification_speaker_route';
   static const String googleCastMediaUrlKey = 'google_cast_media_url';
+
+  /// Shared with settings_page.dart — when 'true', athan plays even when the
+  /// device is on silent/vibrate by routing through the Android alarm stream.
+  static const String overrideMuteKey = 'settings_override_mute';
+
+  // Mawaqit integration — keys shared with masjid_page.dart and mosque_service.dart
+  static const String _kMawaqitToken = 'mawaqit_token';
+  static const String kMawaqitMosqueUuid = 'mawaqit_selected_mosque_uuid';
+  static const String kMawaqitMosqueName = 'mawaqit_selected_mosque_name';
   static const List<String> _supportedPrayers = [
     'Fajr',
     'Dhuhr',
@@ -104,8 +123,9 @@ class NotificationService {
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
 
-    await androidPlugin?.requestNotificationsPermission();
-    await androidPlugin?.requestExactAlarmsPermission();
+    // Permission requests are handled via permission_handler from UI flows.
+    // Some Android devices/plugins can throw NPE here when context is not
+    // ready; avoid startup fragility and use schedule-mode fallback instead.
     await _ensureAndroidToneChannels();
 
     _initialized = true;
@@ -127,7 +147,7 @@ class NotificationService {
   // Android notification channels
   // ───────────────────────────────────────────────────────────────────────────
 
-  static const int _channelVersion = 5;
+  static const int _channelVersion = 6;
   static const String _channelVersionKey = 'notification_channel_version';
 
   Future<void> _ensureAndroidToneChannels() async {
@@ -140,6 +160,8 @@ class NotificationService {
       await DBHelper.getSetting(_channelVersionKey) ?? '',
     );
 
+    // Normal channels — respect device silent/vibrate mode.
+    // Alarm channels (suffix _alarm) — bypass silent/vibrate via STREAM_ALARM.
     const channels = [
       AndroidNotificationChannel(
         'athan_tone_beep',
@@ -150,12 +172,30 @@ class NotificationService {
         sound: RawResourceAndroidNotificationSound('athan_beep'),
       ),
       AndroidNotificationChannel(
+        'athan_tone_beep_alarm',
+        'Athan Tone: Beep (Override Mute)',
+        description: 'Prayer reminders with Beep tone — plays even on silent',
+        importance: Importance.max,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('athan_beep'),
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+      ),
+      AndroidNotificationChannel(
         'athan_tone_muezzin_1',
         'Athan Tone: Muezzin Voice 1 with Fajr Athan',
         description: 'Prayer reminders with Muezzin Voice 1 with Fajr Athan tone',
         importance: Importance.max,
         playSound: true,
         sound: RawResourceAndroidNotificationSound('athan_muezzin_1'),
+      ),
+      AndroidNotificationChannel(
+        'athan_tone_muezzin_1_alarm',
+        'Athan Tone: Muezzin Voice 1 (Override Mute)',
+        description: 'Prayer reminders with Muezzin Voice 1 tone — plays even on silent',
+        importance: Importance.max,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('athan_muezzin_1'),
+        audioAttributesUsage: AudioAttributesUsage.alarm,
       ),
       AndroidNotificationChannel(
         'athan_tone_muezzin_2',
@@ -166,12 +206,30 @@ class NotificationService {
         sound: RawResourceAndroidNotificationSound('athan_muezzin_2'),
       ),
       AndroidNotificationChannel(
+        'athan_tone_muezzin_2_alarm',
+        'Athan Tone: Muezzin Voice 2 (Override Mute)',
+        description: 'Prayer reminders with Muezzin Voice 2 tone — plays even on silent',
+        importance: Importance.max,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('athan_muezzin_2'),
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+      ),
+      AndroidNotificationChannel(
         'athan_tone_abbu_athan',
         'Athan Tone: Abbu_Athan',
         description: 'Prayer reminders with Abbu_Athan tone',
         importance: Importance.max,
         playSound: true,
         sound: RawResourceAndroidNotificationSound('athan_abbu_athan'),
+      ),
+      AndroidNotificationChannel(
+        'athan_tone_abbu_athan_alarm',
+        'Athan Tone: Abbu_Athan (Override Mute)',
+        description: 'Prayer reminders with Abbu_Athan tone — plays even on silent',
+        importance: Importance.max,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('athan_abbu_athan'),
+        audioAttributesUsage: AudioAttributesUsage.alarm,
       ),
     ];
 
@@ -212,11 +270,51 @@ class NotificationService {
     final formatter = DateFormat('h:mm a');
     var scheduledCount = 0;
 
+    // ── Try to load the selected mosque's Mawaqit prayer-times calendar ──────
+    MawaqitCalendarData? mawaqitCalendar;
+    try {
+      final token = await DBHelper.getSetting(_kMawaqitToken);
+      final mosqueUuid = await DBHelper.getSetting(kMawaqitMosqueUuid);
+      if (token != null &&
+          token.isNotEmpty &&
+          mosqueUuid != null &&
+          mosqueUuid.isNotEmpty) {
+        mawaqitCalendar = await MosqueService.fetchPrayerCalendar(
+          token,
+          mosqueUuid,
+        );
+        debugPrint(
+          'Mawaqit calendar loaded for mosque: ${mawaqitCalendar.label}',
+        );
+      }
+    } on MawaqitAuthException catch (e) {
+      debugPrint(
+        'Mawaqit auth error loading calendar, using local calculation: $e',
+      );
+    } catch (e) {
+      debugPrint('Mawaqit calendar unavailable, using local calculation: $e');
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     for (int dayOffset = 0; dayOffset < _batchDays; dayOffset++) {
       final date =
           DateTime(now.year, now.month, now.day).add(Duration(days: dayOffset));
-      final times = PrayerService.getTimesForDate(latitude, longitude, date);
-      final prayers = PrayerService.getObligatoryPrayers(times);
+
+      // Prefer Mawaqit mosque schedule; fall back to local adhan calculation.
+      final List<PrayerScheduleItem> prayers;
+      final mawaqitDay = mawaqitCalendar?.prayerTimesForDate(date);
+      if (mawaqitDay != null) {
+        prayers = [
+          PrayerScheduleItem(name: 'Fajr', time: mawaqitDay.fajr),
+          PrayerScheduleItem(name: 'Dhuhr', time: mawaqitDay.dhuhr),
+          PrayerScheduleItem(name: 'Asr', time: mawaqitDay.asr),
+          PrayerScheduleItem(name: 'Maghrib', time: mawaqitDay.maghrib),
+          PrayerScheduleItem(name: 'Isha', time: mawaqitDay.isha),
+        ];
+      } else {
+        final times = PrayerService.getTimesForDate(latitude, longitude, date);
+        prayers = PrayerService.getObligatoryPrayers(times);
+      }
 
       for (final prayer in prayers) {
         if (!prayer.time.isAfter(now)) continue;
@@ -292,7 +390,7 @@ class NotificationService {
     if (parsedBatchEnd == null) return;
 
     final now = DateTime.now();
-    if (!parsedBatchEnd.isAfter(now.add(const Duration(hours: 12)))) {
+    if (!parsedBatchEnd.isAfter(now.add(const Duration(hours: 24)))) {
       final latText = await DBHelper.getSetting(_lastLatKey);
       final lngText = await DBHelper.getSetting(_lastLngKey);
       if (latText != null && lngText != null) {
@@ -324,10 +422,37 @@ class NotificationService {
   // Public speaker helpers (used by Settings UI)
   // ───────────────────────────────────────────────────────────────────────────
 
-  Future<void> triggerSelectedSpeakerNow({String? routeOverride}) async {
+  Future<void> triggerSelectedSpeakerNow({
+    String? routeOverride,
+    String? prayerName,
+  }) async {
     if (kIsWeb) return;
     await initialize();
-    await _triggerSelectedSpeakerForRoute(routeOverride);
+    await _triggerSelectedSpeakerForRoute(
+      routeOverride,
+      prayerName: prayerName,
+      ensureDeviceNotification: true,
+    );
+  }
+
+  Future<void> _showMirrorPhoneNotification(String prayerName) async {
+    final tone = _normalizeToneName(
+      await DBHelper.getSetting('alarm_tone_${prayerName.toLowerCase()}'),
+    );
+    final details = await _buildNotificationDetailsForPrayer(
+      prayerName: prayerName,
+      tone: tone,
+      speakerRoute: speakerPhoneSpeaker,
+    );
+
+    await _plugin.show(
+      DateTime.now().millisecondsSinceEpoch.remainder(1 << 31),
+      _notificationTitleForPrayer(prayerName),
+      _notificationBodyForPrayer(prayerName),
+      details,
+      payload: '$prayerName|${DateTime.now().toIso8601String()}|mirror',
+    );
+    debugPrint('Mirror phone notification shown for $prayerName.');
   }
 
   Future<String> testSelectedSpeakerNow({
@@ -383,10 +508,12 @@ class NotificationService {
     }
 
     if (route == speakerPhoneSpeaker) {
+      final overrideMute =
+          (await DBHelper.getSetting(overrideMuteKey))?.toLowerCase() == 'true';
       try {
-        await _playToneLocallyForTest(toneSelection);
+        await _playToneLocallyForTest(toneSelection, overrideMute: overrideMute);
         return 'Playing ${toneSelection.label} for $prayerName on this phone '
-            '(saved="$storedToneRaw", resolved="$normalizedTone").';
+            '(saved="$storedToneRaw", resolved="$normalizedTone", overrideMute=$overrideMute).';
       } catch (e) {
         return 'Phone playback failed: $e';
       }
@@ -405,9 +532,14 @@ class NotificationService {
   //   3. Wait up to 8 s for a session to become active.
   // ───────────────────────────────────────────────────────────────────────────
 
-  Future<bool> _ensureCastConnected() async {
+  Future<bool> _ensureCastConnected({bool skipDiscovery = false}) async {
     try {
       if (await GoogleChromeCast.isConnected()) return true;
+
+      // In a background isolate (skipDiscovery=true) there is no active UI so
+      // Cast discovery cannot establish a new session — only honour an already
+      // connected session above.
+      if (skipDiscovery) return false;
 
       // Attempt to reconnect via discovery.
       // Some versions of the googlecast package expose startDiscovery() —
@@ -436,11 +568,14 @@ class NotificationService {
   // AND the background delivery handler.
   // ───────────────────────────────────────────────────────────────────────────
 
-  Future<void> _triggerGoogleCastIfConfigured({String? prayerName}) async {
+  Future<void> _triggerGoogleCastIfConfigured({
+    String? prayerName,
+    bool isBackground = false,
+  }) async {
     if (defaultTargetPlatform != TargetPlatform.android) return;
 
     try {
-      final connected = await _ensureCastConnected();
+      final connected = await _ensureCastConnected(skipDiscovery: isBackground);
       if (!connected) {
         debugPrint(
           'Google Cast: could not establish a session. '
@@ -473,17 +608,40 @@ class NotificationService {
       debugPrint('Google Cast: command sent successfully.');
     } catch (e) {
       debugPrint('Google Cast error: $e');
-      rethrow;
+      // Do not rethrow — Cast failures must never suppress the notification
+      // channel sound or crash the background isolate.
     }
   }
 
   Future<void> _triggerSelectedSpeakerForRoute(
     String? routeOverride, {
     String? prayerName,
+    bool isBackground = false,
+    bool ensureDeviceNotification = false,
   }) async {
+    debugPrint(
+      'Trigger speaker route start: routeOverride=$routeOverride, '
+      'prayerName=$prayerName, isBackground=$isBackground, '
+      'ensureDeviceNotification=$ensureDeviceNotification',
+    );
+    if (ensureDeviceNotification &&
+        !isBackground &&
+        prayerName != null &&
+        prayerName.trim().isNotEmpty) {
+      try {
+        await _showMirrorPhoneNotification(prayerName);
+      } catch (e) {
+        debugPrint('Mirror phone notification failed: $e');
+      }
+    }
+
     final route = routeOverride ?? await _loadSpeakerRoutePreference();
+    debugPrint('Resolved speaker route: $route');
     if (route == speakerGoogleCast) {
-      await _triggerGoogleCastIfConfigured(prayerName: prayerName);
+      await _triggerGoogleCastIfConfigured(
+        prayerName: prayerName,
+        isBackground: isBackground,
+      );
     }
     // speakerPhoneSpeaker — sound already plays via the notification channel;
     // nothing extra to do here.
@@ -492,10 +650,12 @@ class NotificationService {
   Future<void> _triggerNetworkSpeakerIfConfigured({
     String? payload,
     String? prayerName,
+    bool isBackground = false,
   }) async {
     await _triggerSelectedSpeakerForRoute(
       null,
       prayerName: prayerName ?? _prayerNameFromPayload(payload),
+      isBackground: isBackground,
     );
   }
 
@@ -582,18 +742,78 @@ class NotificationService {
 
   String? _prayerNameFromPayload(String? payload) {
     if (payload == null || payload.trim().isEmpty) return null;
-    final parts = payload.split('|');
-    if (parts.isEmpty) return null;
-    return _normalizePrayerName(parts.first);
+
+    final trimmed = payload.trim();
+
+    // Newer or custom payloads may pass only the prayer name.
+    final direct = _normalizePrayerName(trimmed);
+    if (direct != null) return direct;
+
+    // Legacy scheduled payload format: "PrayerName|timestamp".
+    final pipeParts = trimmed.split('|');
+    if (pipeParts.isNotEmpty) {
+      final first = _normalizePrayerName(pipeParts.first);
+      if (first != null) return first;
+    }
+
+    // Defensive fallback: scan full payload text for a prayer token.
+    return _normalizePrayerName(trimmed);
   }
 
   String? _normalizePrayerName(String? prayerName) {
     if (prayerName == null) return null;
+
+    final raw = prayerName.trim();
+    if (raw.isEmpty) return null;
+
+    // Exact canonical match first.
     for (final prayer in _supportedPrayers) {
-      if (prayer.toLowerCase() == prayerName.trim().toLowerCase()) {
+      if (prayer.toLowerCase() == raw.toLowerCase()) {
         return prayer;
       }
     }
+
+    // Normalize to letters only so we can handle aliases and punctuation.
+    final token = raw.toLowerCase().replaceAll(RegExp(r'[^a-z]'), '');
+    switch (token) {
+      case 'fajr':
+        return 'Fajr';
+      case 'dhuhr':
+      case 'duhr':
+      case 'zuhr':
+      case 'dhuhur':
+        return 'Dhuhr';
+      case 'asr':
+      case 'asar':
+        return 'Asr';
+      case 'maghrib':
+      case 'magrib':
+      case 'magribh':
+      case 'maghreb':
+        return 'Maghrib';
+      case 'isha':
+      case 'ishaah':
+      case 'esha':
+      case 'ishaa':
+        return 'Isha';
+    }
+
+    // If payload contains extra text (for example JSON-ish or labels),
+    // search for prayer aliases within the string.
+    final lower = raw.toLowerCase();
+    if (lower.contains('fajr')) return 'Fajr';
+    if (lower.contains('dhuhr') || lower.contains('duhr') || lower.contains('zuhr')) {
+      return 'Dhuhr';
+    }
+    if (lower.contains('asr') || lower.contains('asar')) return 'Asr';
+    if (lower.contains('maghrib') ||
+        lower.contains('magrib') ||
+        lower.contains('maghreb') ||
+        lower.contains('magribh')) {
+      return 'Maghrib';
+    }
+    if (lower.contains('isha') || lower.contains('esha')) return 'Isha';
+
     return null;
   }
 
@@ -659,7 +879,10 @@ class NotificationService {
     }
   }
 
-  Future<void> _playToneLocallyForTest(_ToneSelection selection) async {
+  Future<void> _playToneLocallyForTest(
+    _ToneSelection selection, {
+    bool overrideMute = false,
+  }) async {
     final previousPlayer = _testAudioPlayer;
     if (previousPlayer != null) {
       try {
@@ -678,6 +901,23 @@ class NotificationService {
       }
       unawaited(player.dispose().catchError((_) {}));
     });
+
+    // When override mute is on, route through the Android alarm audio stream
+    // so playback is audible even when the device is on silent/vibrate.
+    if (overrideMute && !kIsWeb && Platform.isAndroid) {
+      try {
+        await player.setAudioContext(
+          AudioContext(
+            android: AudioContextAndroid(
+              usageType: AndroidUsageType.alarm,
+              audioFocus: AndroidAudioFocus.gain,
+            ),
+          ),
+        );
+      } catch (e) {
+        debugPrint('setAudioContext (alarm) failed: $e');
+      }
+    }
 
     if (selection.assetKey != null) {
       await player.play(AssetSource(selection.assetPathForPlayer));
@@ -886,7 +1126,10 @@ class NotificationService {
     required String tone,
     required String speakerRoute,
   }) async {
-    final (channelId, channelName, androidSound, _) = _tonePlatformConfig(tone);
+    final overrideMute =
+        (await DBHelper.getSetting(overrideMuteKey))?.toLowerCase() == 'true';
+    final (channelId, channelName, androidSound, _) =
+        _tonePlatformConfig(tone, overrideMute: overrideMute);
 
     return NotificationDetails(
       android: AndroidNotificationDetails(
@@ -896,7 +1139,9 @@ class NotificationService {
         priority: Priority.high,
         playSound: true,
         sound: androidSound,
-        audioAttributesUsage: AudioAttributesUsage.alarm,
+        audioAttributesUsage: overrideMute
+            ? AudioAttributesUsage.alarm
+            : AudioAttributesUsage.notification,
         fullScreenIntent: true,
       ),
       iOS: const DarwinNotificationDetails(presentSound: true),
@@ -913,33 +1158,36 @@ class NotificationService {
   }
 
   (String, String, RawResourceAndroidNotificationSound?, String?)
-      _tonePlatformConfig(String tone) {
+      _tonePlatformConfig(String tone, {bool overrideMute = false}) {
+    final suffix = overrideMute ? '_alarm' : '';
     switch (tone) {
       case _toneMuezzin1:
         return (
-          'athan_tone_muezzin_1',
-          'Muezzin 1',
+          'athan_tone_muezzin_1$suffix',
+          overrideMute ? 'Muezzin 1 (Override Mute)' : 'Muezzin 1',
           const RawResourceAndroidNotificationSound('athan_muezzin_1'),
           null
         );
       case _toneMuezzin2:
         return (
-          'athan_tone_muezzin_2',
-          'Muezzin 2 with Mishary Alafasi',
+          'athan_tone_muezzin_2$suffix',
+          overrideMute
+              ? 'Muezzin 2 with Mishary Alafasi (Override Mute)'
+              : 'Muezzin 2 with Mishary Alafasi',
           const RawResourceAndroidNotificationSound('athan_muezzin_2'),
           null
         );
       case _toneAbbuAthan:
         return (
-          'athan_tone_abbu_athan',
-          'Abbu_Athan',
+          'athan_tone_abbu_athan$suffix',
+          overrideMute ? 'Abbu_Athan (Override Mute)' : 'Abbu_Athan',
           const RawResourceAndroidNotificationSound('athan_abbu_athan'),
           null
         );
       default:
         return (
-          'athan_tone_beep',
-          'Beep',
+          'athan_tone_beep$suffix',
+          overrideMute ? 'Beep (Override Mute)' : 'Beep',
           const RawResourceAndroidNotificationSound('athan_beep'),
           null
         );

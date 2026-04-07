@@ -57,9 +57,12 @@ class _MorePageState extends State<MorePage> {
         decoration: const BoxDecoration(
           gradient: AppPalette.backgroundGradient,
         ),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 920),
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -92,6 +95,7 @@ class _MorePageState extends State<MorePage> {
                         ),
                       ),
                       child: CalendarDatePicker(
+                        key: ValueKey(_selectedDate),
                         initialDate: _selectedDate,
                         firstDate: DateTime(2000),
                         lastDate: DateTime(2100),
@@ -125,7 +129,9 @@ class _MorePageState extends State<MorePage> {
                 ],
               ),
             ),
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     );

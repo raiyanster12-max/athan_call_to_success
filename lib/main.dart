@@ -8,8 +8,10 @@ import 'package:geolocator/geolocator.dart';
 import 'package:hijri_date/hijri.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'app_palette.dart';
+import 'db_helper.dart';
 import 'notification_service.dart';
 import 'more_page.dart';
 import 'qibla_page.dart';
@@ -20,6 +22,16 @@ import 'tracker_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Desktop builds use sqflite_common_ffi; initialize before any DB access.
+  if (!kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.linux ||
+          defaultTargetPlatform == TargetPlatform.macOS)) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
+
   await NotificationService.instance.initialize();
   HijriDate.setLocal('en');
   runApp(const AthanApp());
@@ -192,7 +204,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   String _locationStatus = 'Waiting for location...';
   PrayerTimes? _currentPrayerTimes;
   bool _isLoading = false;
@@ -204,6 +216,7 @@ class _HomePageState extends State<HomePage> {
   bool _notificationPrompted = false;
   final Set<String> _triggeredPrayerKeys = <String>{};
   String _cityName = '';
+  Map<String, dynamic>? _pinnedMasjid;
 
   bool get _supportsNotificationPermission {
     return defaultTargetPlatform == TargetPlatform.android ||
@@ -247,7 +260,9 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     NotificationService.instance.refreshBatchIfNeeded();
+    unawaited(_loadPinnedMasjidForHome());
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(() {
@@ -263,9 +278,49 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _clockTimer?.cancel();
     _countdownTimer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      NotificationService.instance.refreshBatchIfNeeded();
+      unawaited(_loadPinnedMasjidForHome());
+      _refreshPrayerTimesFromBestSource();
+    }
+  }
+
+  Future<void> _loadPinnedMasjidForHome() async {
+    final pinned = await DBHelper.getPinnedMasjid();
+    if (!mounted) return;
+    setState(() {
+      _pinnedMasjid = pinned;
+    });
+    _refreshPrayerTimesFromBestSource();
+  }
+
+  ({double lat, double lng})? _activePrayerCoordinates() {
+    final pinned = _pinnedMasjid;
+    final pinnedLat = pinned?['lat'] as double?;
+    final pinnedLng = pinned?['lng'] as double?;
+    if (pinnedLat != null && pinnedLng != null) {
+      return (lat: pinnedLat, lng: pinnedLng);
+    }
+
+    final position = _currentPosition;
+    if (position == null) return null;
+    return (lat: position.latitude, lng: position.longitude);
+  }
+
+  void _refreshPrayerTimesFromBestSource() {
+    final coords = _activePrayerCoordinates();
+    if (coords == null || !mounted) return;
+    setState(() {
+      _currentPrayerTimes = PrayerService.getTimes(coords.lat, coords.lng);
+    });
   }
 
   Future<void> _maybePromptNotificationPermission() async {
@@ -317,16 +372,16 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _updateNextPrayerCountdown() {
-    final position = _currentPosition;
-    if (position == null || !mounted) {
+    final coords = _activePrayerCoordinates();
+    if (coords == null || !mounted) {
       return;
     }
 
-    _maybeTriggerExternalSpeakerAtPrayerTime(position);
+    _maybeTriggerExternalSpeakerAtPrayerTime();
 
     final nextPrayer = PrayerService.getNextPrayer(
-      position.latitude,
-      position.longitude,
+      coords.lat,
+      coords.lng,
     );
 
     setState(() {
@@ -334,10 +389,13 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  void _maybeTriggerExternalSpeakerAtPrayerTime(Position position) {
+  void _maybeTriggerExternalSpeakerAtPrayerTime() {
+    final coords = _activePrayerCoordinates();
+    if (coords == null) return;
+
     final now = DateTime.now();
     final prayers = PrayerService.getObligatoryPrayers(
-      PrayerService.getTimesForDate(position.latitude, position.longitude, now),
+      PrayerService.getTimesForDate(coords.lat, coords.lng, now),
     );
 
     for (final prayer in prayers) {
@@ -354,9 +412,9 @@ class _HomePageState extends State<HomePage> {
       }
 
       _triggeredPrayerKeys.add(triggerKey);
-      NotificationService.instance.triggerSelectedSpeakerNow().catchError(
-        (_) {},
-      );
+        NotificationService.instance
+            .triggerSelectedSpeakerNow(prayerName: prayer.name)
+            .catchError((_) {});
       return;
     }
   }
@@ -442,17 +500,13 @@ class _HomePageState extends State<HomePage> {
       final locationLabel = await _buildLocationLabel(position);
       if (!mounted) return;
 
-      final times = PrayerService.getTimes(
-        position.latitude,
-        position.longitude,
-      );
       _currentPosition = position;
 
       setState(() {
         _locationStatus = locationLabel;
-        _currentPrayerTimes = times;
         _isLoading = false;
       });
+      _refreshPrayerTimesFromBestSource();
       _startCountdown();
 
       // Schedule notifications independently so a sound/channel error never
@@ -519,14 +573,14 @@ class _HomePageState extends State<HomePage> {
   }
 
   String _nextPrayerCountdownLabel() {
-    final position = _currentPosition;
-    if (position == null) {
+    final coords = _activePrayerCoordinates();
+    if (coords == null) {
       return '';
     }
 
     final nextPrayer = PrayerService.getNextPrayer(
-      position.latitude,
-      position.longitude,
+      coords.lat,
+      coords.lng,
     );
     final diff = nextPrayer.time.difference(DateTime.now());
     final totalMinutes = diff.inMinutes < 0 ? 0 : diff.inMinutes;
@@ -534,9 +588,16 @@ class _HomePageState extends State<HomePage> {
     final minutes = totalMinutes % 60;
 
     if (hours > 0) {
-      return 'Next prayer in ${hours}h ${minutes}m';
+      return 'Next prayer in $hours hrs and $minutes minutes';
     }
-    return 'Next prayer in ${minutes}m';
+    return 'Next prayer in $minutes minutes';
+  }
+
+  String _heroLocationLabel() {
+    if (_cityName.trim().isNotEmpty) {
+      return _cityName.trim();
+    }
+    return _locationStatus;
   }
 
   @override
@@ -612,6 +673,8 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildHeroSection(_PrayerEntry? current, {required double heroHeight}) {
     final countdown = _nextPrayerCountdownLabel();
+    final prayerLabel = current?.name ?? (_nextPrayerName ?? '—');
+    final locationLabel = _heroLocationLabel();
     final textTopPadding = (heroHeight * 0.28).clamp(80.0, 120.0);
     final textBottomPadding = (heroHeight * 0.12).clamp(20.0, 36.0);
     final cloudTop = (heroHeight * 0.48).clamp(108.0, 150.0);
@@ -635,13 +698,22 @@ class _HomePageState extends State<HomePage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        current?.name ?? (_nextPrayerName ?? '—'),
+                        prayerLabel,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 52,
                           fontWeight: FontWeight.bold,
                           letterSpacing: -1.0,
                           height: 1.0,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'In Prayer.',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w300,
                         ),
                       ),
                       if (countdown.isNotEmpty) ...[
@@ -655,10 +727,10 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                       ],
-                      if (_cityName.isNotEmpty) ...[
+                      if (locationLabel.trim().isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Text(
-                          _cityName,
+                          locationLabel,
                           style: const TextStyle(
                             color: AppPalette.textMuted,
                             fontSize: 15,
@@ -898,18 +970,6 @@ class _HomePageState extends State<HomePage> {
                 color: Colors.white,
                 fontSize: 18,
                 fontWeight: isActive ? FontWeight.w500 : FontWeight.w300,
-              ),
-            ),
-          ),
-          Container(
-            width: 7,
-            height: 7,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isActive ? Colors.white : Colors.transparent,
-              border: Border.all(
-                color: isActive ? Colors.white : Colors.white38,
-                width: 1.5,
               ),
             ),
           ),

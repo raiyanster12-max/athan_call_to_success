@@ -1,11 +1,11 @@
 {
-    "name": "Athan: Call to Success",
-    "short_name": "Athan",
+    "name": "athan_call_to_success",
+    "short_name": "athan_call_to_success",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#121214",
-    "theme_color": "#56D39A",
-    "description": "Prayer times, Qibla compass, Quran reader, and mosque finder — all in one app.",
+    "background_color": "#00796B",
+    "theme_color": "#00796B",
+    "description": "A new Flutter project.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
