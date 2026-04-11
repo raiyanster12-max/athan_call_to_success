@@ -14,6 +14,7 @@ import 'app_palette.dart';
 import 'db_helper.dart';
 import 'notification_service.dart';
 import 'more_page.dart';
+import 'mosque_service.dart';
 import 'qibla_page.dart';
 import 'prayer_service.dart';
 import 'quran_page.dart';
@@ -215,8 +216,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   String? _nextPrayerName;
   bool _notificationPrompted = false;
   final Set<String> _triggeredPrayerKeys = <String>{};
+  final MosqueService _mosqueService = MosqueService();
   String _cityName = '';
   Map<String, dynamic>? _pinnedMasjid;
+  Map<String, dynamic>? _nearestMasjid;
+  Map<String, dynamic> _iqamahSettings = const {};
+  String? _lastScheduledPrayerCoordKey;
+
+  bool get _isUsingMasjidPrayerSource =>
+      _pinnedMasjid != null || _nearestMasjid != null;
 
   bool get _supportsNotificationPermission {
     return defaultTargetPlatform == TargetPlatform.android ||
@@ -263,6 +271,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     NotificationService.instance.refreshBatchIfNeeded();
     unawaited(_loadPinnedMasjidForHome());
+    unawaited(_loadIqamahSettingsForHome());
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(() {
@@ -289,7 +298,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       NotificationService.instance.refreshBatchIfNeeded();
       unawaited(_loadPinnedMasjidForHome());
+      unawaited(_loadIqamahSettingsForHome());
       _refreshPrayerTimesFromBestSource();
+      unawaited(_scheduleNotificationsForBestSource());
+
+      final position = _currentPosition;
+      if (_pinnedMasjid == null && position != null) {
+        unawaited(_resolveNearestMasjid(position));
+      }
     }
   }
 
@@ -298,8 +314,63 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (!mounted) return;
     setState(() {
       _pinnedMasjid = pinned;
+      if (pinned != null) {
+        _nearestMasjid = null;
+      }
     });
     _refreshPrayerTimesFromBestSource();
+    unawaited(_scheduleNotificationsForBestSource());
+
+    final position = _currentPosition;
+    if (pinned == null && position != null) {
+      unawaited(_resolveNearestMasjid(position));
+    }
+  }
+
+  Future<void> _loadIqamahSettingsForHome() async {
+    final iqamah = await DBHelper.getIqamahSettings();
+    if (!mounted) return;
+    setState(() {
+      _iqamahSettings = iqamah;
+    });
+  }
+
+  int? _iqamahOffsetForPrayer(String prayerName) {
+    final key = prayerName.toLowerCase();
+    const defaults = {
+      'fajr': 30,
+      'dhuhr': 15,
+      'asr': 15,
+      'maghrib': 10,
+      'isha': 15,
+    };
+    if (_iqamahSettings.containsKey(key)) {
+      final value = _iqamahSettings[key] as int?;
+      if (value != null) {
+        return value;
+      }
+    }
+    return defaults[key];
+  }
+
+  String? _masjidOffsetLabel(String prayerName) {
+    if (!_isUsingMasjidPrayerSource) {
+      return null;
+    }
+    final offset = _iqamahOffsetForPrayer(prayerName);
+    if (offset == null) {
+      return null;
+    }
+    final padded = offset.toString().padLeft(2, '0');
+    return '+$padded';
+  }
+
+  String _masjidOffsetSuffix(String prayerName) {
+    final label = _masjidOffsetLabel(prayerName);
+    if (label == null) {
+      return '';
+    }
+    return ' $label';
   }
 
   ({double lat, double lng})? _activePrayerCoordinates() {
@@ -310,9 +381,80 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       return (lat: pinnedLat, lng: pinnedLng);
     }
 
+    final nearest = _nearestMasjid;
+    final nearestLat = nearest?['lat'] as double?;
+    final nearestLng = nearest?['lng'] as double?;
+    if (nearestLat != null && nearestLng != null) {
+      return (lat: nearestLat, lng: nearestLng);
+    }
+
     final position = _currentPosition;
     if (position == null) return null;
     return (lat: position.latitude, lng: position.longitude);
+  }
+
+  Future<void> _resolveNearestMasjid(Position position) async {
+    if (_pinnedMasjid != null) {
+      if (_nearestMasjid != null && mounted) {
+        setState(() {
+          _nearestMasjid = null;
+        });
+      }
+      return;
+    }
+
+    try {
+      final nearby = await _mosqueService.findNearbyMosques(
+        position.latitude,
+        position.longitude,
+      );
+      if (!mounted || _pinnedMasjid != null) return;
+
+      nearby.sort((a, b) {
+        final da = Geolocator.distanceBetween(
+          position.latitude,
+          position.longitude,
+          a.lat,
+          a.lng,
+        );
+        final db = Geolocator.distanceBetween(
+          position.latitude,
+          position.longitude,
+          b.lat,
+          b.lng,
+        );
+        return da.compareTo(db);
+      });
+
+      if (nearby.isEmpty) {
+        setState(() {
+          _nearestMasjid = null;
+        });
+        _refreshPrayerTimesFromBestSource();
+        unawaited(_scheduleNotificationsForBestSource());
+        return;
+      }
+
+      final nearest = nearby.first;
+      setState(() {
+        _nearestMasjid = {
+          'id': nearest.id,
+          'name': nearest.name,
+          'address': nearest.address,
+          'lat': nearest.lat,
+          'lng': nearest.lng,
+        };
+      });
+      _refreshPrayerTimesFromBestSource();
+      unawaited(_scheduleNotificationsForBestSource());
+    } catch (_) {
+      if (!mounted || _pinnedMasjid != null) return;
+      setState(() {
+        _nearestMasjid = null;
+      });
+      _refreshPrayerTimesFromBestSource();
+      unawaited(_scheduleNotificationsForBestSource());
+    }
   }
 
   void _refreshPrayerTimesFromBestSource() {
@@ -321,6 +463,27 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {
       _currentPrayerTimes = PrayerService.getTimes(coords.lat, coords.lng);
     });
+  }
+
+  Future<void> _scheduleNotificationsForBestSource() async {
+    final coords = _activePrayerCoordinates();
+    if (coords == null) return;
+
+    final scheduleKey =
+        '${coords.lat.toStringAsFixed(6)},${coords.lng.toStringAsFixed(6)}';
+    if (scheduleKey == _lastScheduledPrayerCoordKey) {
+      return;
+    }
+
+    _lastScheduledPrayerCoordKey = scheduleKey;
+    try {
+      await NotificationService.instance.scheduleRollingPrayerNotifications(
+        latitude: coords.lat,
+        longitude: coords.lng,
+      );
+    } catch (_) {
+      _lastScheduledPrayerCoordKey = null;
+    }
   }
 
   Future<void> _maybePromptNotificationPermission() async {
@@ -379,10 +542,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     _maybeTriggerExternalSpeakerAtPrayerTime();
 
-    final nextPrayer = PrayerService.getNextPrayer(
-      coords.lat,
-      coords.lng,
-    );
+    final nextPrayer = PrayerService.getNextPrayer(coords.lat, coords.lng);
 
     setState(() {
       _nextPrayerName = nextPrayer.name;
@@ -412,9 +572,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       }
 
       _triggeredPrayerKeys.add(triggerKey);
-        NotificationService.instance
-            .triggerSelectedSpeakerNow(prayerName: prayer.name)
-            .catchError((_) {});
+      NotificationService.instance
+          .triggerSelectedSpeakerNow(prayerName: prayer.name)
+          .catchError((_) {});
       return;
     }
   }
@@ -506,17 +666,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _locationStatus = locationLabel;
         _isLoading = false;
       });
+
+      await _resolveNearestMasjid(position);
+      if (!mounted) return;
+
       _refreshPrayerTimesFromBestSource();
       _startCountdown();
 
       // Schedule notifications independently so a sound/channel error never
       // surfaces as a "Could not get location" message.
-      NotificationService.instance
-          .scheduleRollingPrayerNotifications(
-            latitude: position.latitude,
-            longitude: position.longitude,
-          )
-          .catchError((_) {});
+      unawaited(_scheduleNotificationsForBestSource());
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -578,10 +737,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       return '';
     }
 
-    final nextPrayer = PrayerService.getNextPrayer(
-      coords.lat,
-      coords.lng,
-    );
+    final nextPrayer = PrayerService.getNextPrayer(coords.lat, coords.lng);
     final diff = nextPrayer.time.difference(DateTime.now());
     final totalMinutes = diff.inMinutes < 0 ? 0 : diff.inMinutes;
     final hours = totalMinutes ~/ 60;
@@ -594,10 +750,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   String _heroLocationLabel() {
-    if (_cityName.trim().isNotEmpty) {
-      return _cityName.trim();
+    final pinnedName = (_pinnedMasjid?['name'] as String?)?.trim() ?? '';
+    if (pinnedName.isNotEmpty) {
+      return 'Masjid prayer times: $pinnedName';
     }
-    return _locationStatus;
+
+    final nearestName = (_nearestMasjid?['name'] as String?)?.trim() ?? '';
+    if (nearestName.isNotEmpty) {
+      return 'Nearest masjid prayer times: $nearestName';
+    }
+
+    if (_cityName.trim().isNotEmpty) {
+      return 'Local prayer times: ${_cityName.trim()}';
+    }
+    return 'Local prayer times';
   }
 
   @override
@@ -671,7 +837,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildHeroSection(_PrayerEntry? current, {required double heroHeight}) {
+  Widget _buildHeroSection(
+    _PrayerEntry? current, {
+    required double heroHeight,
+  }) {
     final countdown = _nextPrayerCountdownLabel();
     final prayerLabel = current?.name ?? (_nextPrayerName ?? '—');
     final locationLabel = _heroLocationLabel();
@@ -689,7 +858,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           Positioned(top: cloudTop, right: 34, child: _buildCloudWisps()),
           // Current prayer text + qibla button
           Padding(
-            padding: EdgeInsets.fromLTRB(20, textTopPadding, 20, textBottomPadding),
+            padding: EdgeInsets.fromLTRB(
+              20,
+              textTopPadding,
+              20,
+              textBottomPadding,
+            ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -959,32 +1133,69 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Widget _buildPrayerRow(String name, DateTime time, {bool isActive = false}) {
-    final row = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              name,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: isActive ? FontWeight.w500 : FontWeight.w300,
+    final offsetLabel = _masjidOffsetLabel(name);
+    final offsetMinutes = _iqamahOffsetForPrayer(name);
+    final timeLabel = _formatTime(time);
+    final row = Semantics(
+      label: offsetMinutes == null
+          ? '$name at $timeLabel'
+          : '$name at $timeLabel with iqamah offset plus $offsetMinutes minutes',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                name,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: isActive ? FontWeight.w500 : FontWeight.w300,
+                ),
               ),
             ),
-          ),
-          Expanded(
-            child: Text(
-              _formatTime(time),
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w300,
+            Expanded(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    timeLabel,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w300,
+                    ),
+                  ),
+                  if (offsetLabel != null) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        // High-contrast badge for WCAG/508 readability.
+                        color: const Color(0xFF0E3A2B),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: const Color(0xFF7CE2B4)),
+                      ),
+                      child: Text(
+                        '$offsetLabel min',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
     if (isActive) {
