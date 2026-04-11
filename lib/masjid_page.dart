@@ -205,9 +205,7 @@ class _MasjidPageState extends State<MasjidPage> {
               keyboardType: TextInputType.emailAddress,
               autofillHints: const [AutofillHints.email],
               style: const TextStyle(color: AppPalette.textPrimary),
-              decoration: const InputDecoration(
-                labelText: 'Email',
-              ),
+              decoration: const InputDecoration(labelText: 'Email'),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -215,17 +213,12 @@ class _MasjidPageState extends State<MasjidPage> {
               obscureText: true,
               autofillHints: const [AutofillHints.password],
               style: const TextStyle(color: AppPalette.textPrimary),
-              decoration: const InputDecoration(
-                labelText: 'Password',
-              ),
+              decoration: const InputDecoration(labelText: 'Password'),
             ),
             const SizedBox(height: 8),
             const Text(
               'Used only to request a Mawaqit API token on-device.',
-              style: TextStyle(
-                color: AppPalette.textSecondary,
-                fontSize: 12,
-              ),
+              style: TextStyle(color: AppPalette.textSecondary, fontSize: 12),
             ),
           ],
         ),
@@ -241,10 +234,9 @@ class _MasjidPageState extends State<MasjidPage> {
               if (email.isEmpty || password.isEmpty) {
                 return;
               }
-              Navigator.of(dialogContext).pop({
-                'email': email,
-                'password': password,
-              });
+              Navigator.of(
+                dialogContext,
+              ).pop({'email': email, 'password': password});
             },
             child: const Text('Sign In'),
           ),
@@ -1110,97 +1102,99 @@ class _MasjidPageState extends State<MasjidPage> {
           constraints: const BoxConstraints(maxWidth: 760),
           child: Column(
             children: [
-          // Keep the Mawaqit-style discovery flow accessible even when
-          // a masjid is already pinned.
-          Container(
-            margin: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppPalette.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppPalette.outline),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Masjid Finder',
-                  style: TextStyle(
-                    color: AppPalette.textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
+              // Keep the Mawaqit-style discovery flow accessible even when
+              // a masjid is already pinned.
+              Container(
+                margin: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppPalette.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppPalette.outline),
                 ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Search and switch to another masjid anytime.',
-                  style: TextStyle(
-                    color: AppPalette.textSecondary,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    OutlinedButton.icon(
-                      onPressed: _searchNearYou,
-                      icon: const Icon(Icons.my_location, size: 16),
-                      label: const Text('Near You'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _showSearchDialog,
-                      icon: const Icon(Icons.search, size: 16),
-                      label: const Text('By Location'),
-                    ),
-                    FilledButton.icon(
-                      onPressed: _isMawaqitBusy
-                          ? null
-                          : _signInAndFindNearestMawaqitMasjid,
-                      icon: const Icon(Icons.login, size: 16),
-                      label: Text(
-                        _isMawaqitBusy ? 'Signing In...' : 'Mawaqit Sign In',
+                    const Text(
+                      'Masjid Finder',
+                      style: TextStyle(
+                        color: AppPalette.textPrimary,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Search and switch to another masjid anytime.',
+                      style: TextStyle(
+                        color: AppPalette.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _searchNearYou,
+                          icon: const Icon(Icons.my_location, size: 16),
+                          label: const Text('Near You'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _showSearchDialog,
+                          icon: const Icon(Icons.search, size: 16),
+                          label: const Text('By Location'),
+                        ),
+                        FilledButton.icon(
+                          onPressed: _isMawaqitBusy
+                              ? null
+                              : _signInAndFindNearestMawaqitMasjid,
+                          icon: const Icon(Icons.login, size: 16),
+                          label: Text(
+                            _isMawaqitBusy
+                                ? 'Signing In...'
+                                : 'Mawaqit Sign In',
+                          ),
+                        ),
+                      ],
+                    ),
+                    if ((_selectedMawaqitMosqueName ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Selected Mawaqit mosque: $_selectedMawaqitMosqueName',
+                        style: const TextStyle(
+                          color: AppPalette.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
-                if ((_selectedMawaqitMosqueName ?? '').isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'Selected Mawaqit mosque: $_selectedMawaqitMosqueName',
-                    style: const TextStyle(
-                      color: AppPalette.textSecondary,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
+              ),
 
-          // Prayer list card
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: AppPalette.surfaceRaised,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppPalette.outline),
-            ),
-            child: Column(
-              children: [
-                for (int i = 0; i < prayers.length; i++)
-                  _buildPrayerTile(
-                    prayers[i],
-                    next.name,
-                    fmt,
-                    isLast: i == prayers.length - 1,
-                  ),
-              ],
-            ),
-          ),
+              // Prayer list card
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: AppPalette.surfaceRaised,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppPalette.outline),
+                ),
+                child: Column(
+                  children: [
+                    for (int i = 0; i < prayers.length; i++)
+                      _buildPrayerTile(
+                        prayers[i],
+                        next.name,
+                        fmt,
+                        isLast: i == prayers.length - 1,
+                      ),
+                  ],
+                ),
+              ),
 
-          // Sunrise + Jum'a info row
+              // Sunrise + Jum'a info row
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
                 child: Wrap(
@@ -1249,7 +1243,7 @@ class _MasjidPageState extends State<MasjidPage> {
                 ),
               ),
 
-          // Clear pinned button
+              // Clear pinned button
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: TextButton.icon(
@@ -1295,7 +1289,7 @@ class _MasjidPageState extends State<MasjidPage> {
         child: Row(
           children: [
             SizedBox(
-              width: 76,
+              width: 108,
               child: Text(
                 prayer.name,
                 style: TextStyle(
@@ -1305,8 +1299,10 @@ class _MasjidPageState extends State<MasjidPage> {
                 ),
               ),
             ),
+            const SizedBox(width: 18),
             Expanded(
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
