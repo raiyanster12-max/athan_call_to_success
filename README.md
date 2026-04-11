@@ -2,6 +2,29 @@
 
 A new Flutter project.
 
+## Download the Android APK
+
+A GitHub Actions workflow automatically builds an APK on every push to `main`/`master`.
+
+### How to download
+
+1. Go to the **Actions** tab of this repository on GitHub.
+2. Click the latest **"Build Android APK"** workflow run.
+3. Scroll to the **Artifacts** section at the bottom of the page.
+4. Download **`athan-apk`**, unzip it, and side-load the `.apk` onto your Android device.
+
+> **Note:** Make sure *Install from unknown sources* (or *Install unknown apps*) is enabled in your Android settings before installing a side-loaded APK.
+
+### Release APK with Google Maps
+
+By default the workflow builds a **debug APK** (fully functional; Google Maps tiles are replaced by a text message). To build a proper **release APK** with Google Maps:
+
+1. Obtain a Google Maps Android API key from the [Google Cloud Console](https://console.cloud.google.com/).
+2. Add it as a repository secret named `GOOGLE_MAPS_API_KEY` (*Settings → Secrets and variables → Actions → New repository secret*).
+3. Re-run the workflow — it will automatically detect the secret and produce a release APK.
+
+---
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.
