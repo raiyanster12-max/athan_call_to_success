@@ -43,7 +43,8 @@ android {
         applicationId = "com.example.athan_call_to_success"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // androidx.car.app:app requires at least API 23.
+        minSdk = maxOf(flutter.minSdkVersion, 23)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -72,6 +73,8 @@ flutter {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation("com.google.android.gms:play-services-cast-framework:21.0.1")
+    // Android Auto / Android Automotive OS – Car App Library
+    implementation("androidx.car.app:app:1.4.0")
 }
 
 gradle.taskGraph.whenReady {
