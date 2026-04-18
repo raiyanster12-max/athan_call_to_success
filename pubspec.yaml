@@ -17,12 +17,14 @@ dependencies:
   http: ^1.2.0
   google_maps_flutter: ^2.7.0
   url_launcher: ^6.2.4
-
+  # flutter_car_app: ^0.0.1 # Or similar Car App Library wrapper
+  adhan: ^2.0.0+1
+  imad_flutter: ^0.1.0 # Only used for Android Auto Quran audio
+  # Ensure your prayer time and location packages are updated
   sqflite: ^2.3.0
   sqflite_common_ffi: ^2.3.3
   path: ^1.9.0
   cupertino_icons: ^1.0.6
-  adhan: ^2.0.0+1
   intl: ^0.20.2
   quran: ^1.4.1
   quran_library: ^3.2.0
@@ -30,7 +32,7 @@ dependencies:
   flutter_local_notifications: ^17.2.3
   timezone: ^0.9.4
   flutter_timezone: ^4.1.1
-  file_picker: ^8.1.2
+  file_picker: ^10.3.10
   audioplayers: ^6.0.0
   audioplayers_platform_interface: ^7.1.1
   google_fonts: ^6.2.1

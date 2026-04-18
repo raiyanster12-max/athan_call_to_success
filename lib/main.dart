@@ -21,7 +21,7 @@ import 'quran_page.dart';
 import 'settings_page.dart';
 import 'tracker_page.dart';
 
-Future<void> main() async {
+Future<void> _initializeSharedPrayerEngines() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Desktop builds use sqflite_common_ffi; initialize before any DB access.
@@ -35,6 +35,21 @@ Future<void> main() async {
 
   await NotificationService.instance.initialize();
   HijriDate.setLocal('en');
+}
+
+Future<void> main() async {
+  // Initialize prayer and notification engines for the phone app entrypoint.
+  await _initializeSharedPrayerEngines();
+  runApp(const AthanApp());
+}
+
+@pragma('vm:entry-point')
+Future<void> carAppMain() async {
+  // Keep initialization shared so both entrypoints use the same core setup.
+  await _initializeSharedPrayerEngines();
+
+  // Android Auto in this project is currently driven by native CarAppService.
+  // If you add a Dart car host package, switch this to runCarApp(MyCarApp()).
   runApp(const AthanApp());
 }
 
@@ -199,7 +214,9 @@ class _PrayerEntry {
 }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, this.showSettingsButton = true});
+
+  final bool showSettingsButton;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -827,11 +844,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ),
             ],
           ),
-          IconButton(
-            icon: const Icon(Icons.menu, color: Colors.white),
-            tooltip: 'Settings',
-            onPressed: _openSettings,
-          ),
+          if (widget.showSettingsButton)
+            IconButton(
+              icon: const Icon(Icons.menu, color: Colors.white),
+              tooltip: 'Settings',
+              onPressed: _openSettings,
+            )
+          else
+            const SizedBox(width: 48),
         ],
       ),
     );

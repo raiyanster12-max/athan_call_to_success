@@ -8,6 +8,11 @@
 -keep class * extends io.flutter.embedding.engine.plugins.FlutterPlugin { *; }
 -keep class * extends io.flutter.plugin.common.MethodChannel$MethodCallHandler { *; }
 
+# flutter_local_notifications uses generic type tokens during boot rescheduling.
+# R8 must retain signature metadata and the plugin receiver classes.
+-keepattributes Signature
+-keep class com.dexterous.flutterlocalnotifications.** { *; }
+
 -dontwarn com.google.android.play.core.splitcompat.SplitCompatApplication
 -dontwarn com.google.android.play.core.splitinstall.SplitInstallException
 -dontwarn com.google.android.play.core.splitinstall.SplitInstallManager
