@@ -42,13 +42,25 @@ public class GooglecastPlugin implements FlutterPlugin, MethodCallHandler,Activi
   private EventChannel connectionstatechanenel;
   private EventChannel messagestatechannel;
   private BroadcastReceiver br;
+  private Context applicationContext;
+
   @Override
   public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
+    applicationContext = flutterPluginBinding.getApplicationContext();
     channel = new MethodChannel(flutterPluginBinding.getBinaryMessenger(), "googlecast");
     channel.setMethodCallHandler(this);
     flutterPluginBinding.getPlatformViewRegistry().registerViewFactory("ChromeCastButton",new ChromeCastViewFactory());
     connectionstatechanenel=new EventChannel(flutterPluginBinding.getBinaryMessenger(),chromecastconnectionstate);
     messagestatechannel=new EventChannel(flutterPluginBinding.getBinaryMessenger(), chromecastmediamessage);
+    
+    // Initialize for background execution where activity is null
+    if (chromeCastSession == null) {
+      try {
+        chromeCastSession = new ChromeCastSession(applicationContext);
+      } catch (Exception e) {
+        Log.e(TAG, "Failed to initialize ChromeCastSession in background", e);
+      }
+    }
   }
 
   @Override

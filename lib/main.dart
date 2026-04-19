@@ -9,6 +9,7 @@ import 'package:hijri_date/hijri.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 
 import 'app_palette.dart';
 import 'db_helper.dart';
@@ -31,6 +32,10 @@ Future<void> _initializeSharedPrayerEngines() async {
           defaultTargetPlatform == TargetPlatform.macOS)) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
+  }
+
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    await AndroidAlarmManager.initialize();
   }
 
   await NotificationService.instance.initialize();

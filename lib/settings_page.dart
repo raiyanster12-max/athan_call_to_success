@@ -942,12 +942,12 @@ class _SettingsPageState extends State<SettingsPage> {
                   child: FilledButton.icon(
                     onPressed: () async {
                       await _updateSpeakerRoute(draftSpeakerRoute);
+                      await _refreshCastConnectionState();
                       if (!mounted) return;
                       setState(() {
                         _testPrayerSelection = draftTestPrayerSelection;
                       });
-                      if (!sheetContext.mounted) return;
-                      Navigator.of(sheetContext).pop();
+                      Navigator.of(context).pop();
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Alert settings saved.')),
                       );
@@ -962,7 +962,11 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       ),
       ),
-    );
+    ).then((_) {
+      if (mounted) {
+        _refreshCastConnectionState();
+      }
+    });
   }
 
   void _openMoreSettingsSheet() {
