@@ -16,6 +16,8 @@ import 'db_helper.dart';
 import 'mosque_service.dart';
 import 'prayer_service.dart';
 
+import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // TOP-LEVEL background callback — must be a plain static/free function so
 // Flutter can invoke it in a background isolate when a notification fires.
@@ -40,6 +42,22 @@ Future<void> onDidReceiveBackgroundNotificationResponse(
         .timeout(const Duration(seconds: 12));
   } catch (e) {
     debugPrint('Background notification handler error: $e');
+  }
+}
+
+@pragma('vm:entry-point')
+Future<void> onDidReceiveAlarm(int id, Map<String, dynamic> params) async {
+  tz.initializeTimeZones();
+  try {
+    final payload = params['payload'] as String?;
+    await NotificationService.instance
+        ._triggerNetworkSpeakerIfConfigured(
+          payload: payload,
+          isBackground: true,
+        )
+        .timeout(const Duration(seconds: 15));
+  } catch (e) {
+    debugPrint('Background alarm handler error: $e');
   }
 }
 
@@ -327,8 +345,11 @@ class NotificationService {
         );
 
         try {
+          final id = _notificationIdFor(prayer.name, prayer.time);
+          final payload = '${prayer.name}|${prayer.time.toIso8601String()}';
+          
           await _plugin.zonedSchedule(
-            _notificationIdFor(prayer.name, prayer.time),
+            id,
             _notificationTitleForPrayer(prayer.name),
             _notificationBodyForPrayer(prayer.name),
             tz.TZDateTime.from(prayer.time, tz.local),
@@ -336,8 +357,23 @@ class NotificationService {
             androidScheduleMode: scheduleMode,
             uiLocalNotificationDateInterpretation:
                 UILocalNotificationDateInterpretation.absoluteTime,
-            payload: '${prayer.name}|${prayer.time.toIso8601String()}',
+            payload: payload,
           );
+          
+          if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+            // Use a unique ID to avoid overwriting the local notification's alarm intent.
+            final alarmManagerId = id + 1000000;
+            await AndroidAlarmManager.oneShotAt(
+              prayer.time,
+              alarmManagerId,
+              onDidReceiveAlarm,
+              exact: true,
+              wakeup: true,
+              rescheduleOnReboot: true,
+              params: {'payload': payload},
+            );
+          }
+          
           scheduledCount++;
         } catch (e) {
           debugPrint(
@@ -536,18 +572,15 @@ class NotificationService {
     try {
       if (await GoogleChromeCast.isConnected()) return true;
 
-      // In a background isolate (skipDiscovery=true) there is no active UI so
-      // Cast discovery cannot establish a new session — only honour an already
-      // connected session above.
-      if (skipDiscovery) return false;
+      // Even in a background isolate, we should allow the Cast framework
+      // time to auto-resume the session, or attempt discovery.
+      // Do not return early here.
 
       // Attempt to reconnect via discovery.
-      // Some versions of the googlecast package expose startDiscovery() —
-      // call it to begin scanning the local network.
       try {
         await GoogleChromeCast.startDiscovery();
       } catch (_) {
-        // Package may not expose this method; swallow and continue.
+        // Package may not expose this method or it may fail in background; swallow and continue.
       }
 
       // Poll for up to 8 seconds in case the session auto-reconnects.
