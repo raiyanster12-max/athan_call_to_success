@@ -9,19 +9,29 @@ import 'package:hijri_date/hijri.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 
 import 'app_palette.dart';
 import 'db_helper.dart';
 import 'notification_service.dart';
 import 'more_page.dart';
+import 'onboarding_page.dart';
 import 'mosque_service.dart';
 import 'qibla_page.dart';
 import 'prayer_service.dart';
 import 'quran_page.dart';
 import 'settings_page.dart';
 import 'tracker_page.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
-Future<void> main() async {
+// Use the Type 3 ID from your JSON: 896243268657-eoiqbejcc7qa...
+final GoogleSignIn _googleSignIn = GoogleSignIn(
+  clientId:
+      '896243268657-eoiqbejcc7qa6ataoqhdvhru92s7pr9f.apps.googleusercontent.com',
+  scopes: ['email', 'https://www.googleapis.com/auth/contacts.readonly'],
+);
+
+Future<void> _initializeSharedPrayerEngines() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Desktop builds use sqflite_common_ffi; initialize before any DB access.
@@ -33,13 +43,31 @@ Future<void> main() async {
     databaseFactory = databaseFactoryFfi;
   }
 
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    await AndroidAlarmManager.initialize();
+  }
+
   await NotificationService.instance.initialize();
   HijriDate.setLocal('en');
+}
+
+Future<void> main() async {
+  await _initializeSharedPrayerEngines();
+  final onboardingDone =
+      await DBHelper.getSetting('onboarding_complete') == 'true';
+  runApp(AthanApp(showOnboarding: !onboardingDone));
+}
+
+@pragma('vm:entry-point')
+Future<void> carAppMain() async {
+  await _initializeSharedPrayerEngines();
   runApp(const AthanApp());
 }
 
 class AthanApp extends StatelessWidget {
-  const AthanApp({super.key});
+  const AthanApp({super.key, this.showOnboarding = false});
+
+  final bool showOnboarding;
 
   @override
   Widget build(BuildContext context) {
@@ -136,7 +164,8 @@ class AthanApp extends StatelessWidget {
           checkColor: WidgetStateProperty.all(Colors.white),
         ),
       ),
-      home: const MainNavigation(),
+      home: showOnboarding ? const OnboardingPage() : const MainNavigation(),
+      routes: {'/home': (_) => const MainNavigation()},
     );
   }
 }
@@ -199,7 +228,9 @@ class _PrayerEntry {
 }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, this.showSettingsButton = true});
+
+  final bool showSettingsButton;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -363,14 +394,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
     final padded = offset.toString().padLeft(2, '0');
     return '+$padded';
-  }
-
-  String _masjidOffsetSuffix(String prayerName) {
-    final label = _masjidOffsetLabel(prayerName);
-    if (label == null) {
-      return '';
-    }
-    return ' $label';
   }
 
   ({double lat, double lng})? _activePrayerCoordinates() {
@@ -653,6 +676,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       Position position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 20),
         ),
       );
       if (!mounted) return;
@@ -667,7 +691,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _isLoading = false;
       });
 
-      await _resolveNearestMasjid(position);
+      await _resolveNearestMasjid(position).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          if (mounted) {
+            setState(() => _nearestMasjid = null);
+          }
+        },
+      );
       if (!mounted) return;
 
       _refreshPrayerTimesFromBestSource();
@@ -827,11 +858,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ),
             ],
           ),
-          IconButton(
-            icon: const Icon(Icons.menu, color: Colors.white),
-            tooltip: 'Settings',
-            onPressed: _openSettings,
-          ),
+          if (widget.showSettingsButton)
+            IconButton(
+              icon: const Icon(Icons.menu, color: Colors.white),
+              tooltip: 'Settings',
+              onPressed: _openSettings,
+            )
+          else
+            const SizedBox(width: 48),
         ],
       ),
     );
@@ -1212,4 +1246,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
     return row;
   }
+}
+
+extension on NotificationService {
+  void refreshBatchIfNeeded() {}
 }

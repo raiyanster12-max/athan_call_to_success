@@ -7,6 +7,7 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
+import com.google.android.gms.cast.CastDevice;
 import com.google.android.gms.cast.MediaInfo;
 import com.google.android.gms.cast.MediaLoadRequestData;
 import com.google.android.gms.cast.MediaMetadata;
@@ -190,7 +191,16 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
         });
         if(connectionEvent!=null){
             if (mCastSession.isConnected()){
-                broadcastMessage("SESSION_CONNECTED");
+                String deviceName = "";
+                try {
+                    CastDevice device = mCastSession.getCastDevice();
+                    if (device != null && device.getFriendlyName() != null) {
+                        deviceName = device.getFriendlyName();
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Could not get Cast device name", e);
+                }
+                broadcastMessage("SESSION_CONNECTED(" + deviceName + ")");
                 connectionEvent.success(true);
             }else{
                 broadcastMessage("SESSION_NOT_CONNECTED");
