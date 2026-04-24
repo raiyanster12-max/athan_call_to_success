@@ -7,15 +7,21 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.util.Log;
 import android.view.ContextThemeWrapper;
+import android.os.Handler;
+import android.os.Looper;
 
 import androidx.mediarouter.app.MediaRouteChooserDialog;
+import androidx.mediarouter.media.MediaRouter;
 import androidx.annotation.NonNull;
 import com.salamay.googlecast.ChromeCastViewFactory;
 import com.salamay.googlecast.Model.AudioData;
 import com.google.android.gms.cast.framework.CastButtonFactory;
 import com.google.android.gms.cast.framework.CastContext;
+import com.google.android.gms.cast.framework.CastSession;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.plugin.common.EventChannel;
@@ -68,7 +74,19 @@ public class GooglecastPlugin implements FlutterPlugin, MethodCallHandler,Activi
     if (call.method.equals("getPlatformVersion")) {
       result.success("Android " + android.os.Build.VERSION.RELEASE);
     } else if(call.method.equals("isConnected")) {
-      result.success(chromeCastSession != null && chromeCastSession.isConnected());
+      if (chromeCastSession != null && chromeCastSession.isConnected()) {
+        result.success(true);
+      } else {
+        // Fallback: check CastContext directly (handles background isolate where
+        // chromeCastSession may be null due to main-thread init constraint).
+        try {
+          CastSession s = CastContext.getSharedInstance(applicationContext)
+              .getSessionManager().getCurrentCastSession();
+          result.success(s != null && s.isConnected());
+        } catch (Exception e) {
+          result.success(false);
+        }
+      }
     } else if(call.method.equals("debugState")) {
       HashMap<String, Object> data = new HashMap<>();
       if (chromeCastSession == null) {
@@ -87,7 +105,9 @@ public class GooglecastPlugin implements FlutterPlugin, MethodCallHandler,Activi
       result.success(data);
     } else if(call.method.equals("showCastDialog")) {
       showCastDialog(result);
-    }else if(call.method.equals("loadAudio")){
+    } else if(call.method.equals("startDiscovery")) {
+      startDiscovery(result);
+    } else if(call.method.equals("loadAudio")){
       if(call.hasArgument("url")){
         loadAudio(call);
         result.success(true);
@@ -103,8 +123,18 @@ public class GooglecastPlugin implements FlutterPlugin, MethodCallHandler,Activi
     }else if(call.method.equals("stopAudio")){
       stopMedia();
       result.success(true);
-    }
-    else {
+    } else if(call.method.equals("stopDiscovery")) {
+      result.success(null);
+    } else if(call.method.equals("getDiscoveredDevices")) {
+      getDiscoveredDevices(result);
+    } else if(call.method.equals("reconnectToDevice")) {
+      String deviceName = call.argument("deviceName");
+      if (deviceName == null || deviceName.isEmpty()) {
+        result.success(false);
+      } else {
+        reconnectToDevice(deviceName, result);
+      }
+    } else {
       result.notImplemented();
     }
   }
@@ -232,6 +262,74 @@ public class GooglecastPlugin implements FlutterPlugin, MethodCallHandler,Activi
       Log.e(TAG, "showCastDialog outer failure", e);
       result.error("SHOW_DIALOG_FAILED", e.toString(), null);
     }
+  }
+
+  private void getDiscoveredDevices(@NonNull Result result) {
+    new Handler(Looper.getMainLooper()).post(() -> {
+      try {
+        CastContext.getSharedInstance(applicationContext);
+        MediaRouter mediaRouter = MediaRouter.getInstance(applicationContext);
+        List<String> names = new ArrayList<>();
+        for (MediaRouter.RouteInfo route : mediaRouter.getRoutes()) {
+          if (!route.isDefault() && route.isEnabled() && !route.getName().isEmpty()) {
+            names.add(route.getName());
+          }
+        }
+        Log.i(TAG, "getDiscoveredDevices: found " + names.size() + " routes");
+        result.success(names);
+      } catch (Exception e) {
+        Log.e(TAG, "getDiscoveredDevices failed", e);
+        result.success(new ArrayList<>());
+      }
+    });
+  }
+
+  private void reconnectToDevice(String deviceName, @NonNull Result result) {
+    new Handler(Looper.getMainLooper()).post(() -> {
+      try {
+        // Ensure CastContext is initialized so its MediaRouter callback is registered.
+        CastContext.getSharedInstance(applicationContext);
+        MediaRouter mediaRouter = MediaRouter.getInstance(applicationContext);
+        List<MediaRouter.RouteInfo> routes = mediaRouter.getRoutes();
+        Log.i(TAG, "reconnectToDevice: scanning " + routes.size() + " routes for '" + deviceName + "'");
+        for (MediaRouter.RouteInfo route : routes) {
+          if (deviceName.equals(route.getName())) {
+            Log.i(TAG, "reconnectToDevice: found route, selecting");
+            mediaRouter.selectRoute(route);
+            result.success(true);
+            return;
+          }
+        }
+        Log.i(TAG, "reconnectToDevice: route not yet discovered");
+        result.success(false);
+      } catch (Exception e) {
+        Log.e(TAG, "reconnectToDevice failed", e);
+        result.success(false);
+      }
+    });
+  }
+
+  private void startDiscovery(@NonNull Result result) {
+    new Handler(Looper.getMainLooper()).post(() -> {
+      try {
+        // Accessing CastContext initializes discovery.
+        CastContext.getSharedInstance(applicationContext);
+        // chromeCastSession may be null when called from a background isolate
+        // (onAttachedToEngine runs off-main-thread and the constructor throws).
+        // Re-initialize here on the main thread so isConnected() works after discovery.
+        if (chromeCastSession == null) {
+          try {
+            chromeCastSession = new ChromeCastSession(applicationContext);
+          } catch (Exception e) {
+            Log.e(TAG, "startDiscovery: ChromeCastSession init failed", e);
+          }
+        }
+        result.success(true);
+      } catch (Exception e) {
+        Log.e(TAG, "startDiscovery failed", e);
+        result.error("START_DISCOVERY_FAILED", e.toString(), null);
+      }
+    });
   }
 
 

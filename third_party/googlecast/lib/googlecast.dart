@@ -106,6 +106,39 @@ class GoogleChromeCast {
       // Best effort only; callers should still poll isConnected().
     }
   }
+
+  static Future<void> stopDiscovery() async {
+    try {
+      await _channel.invokeMethod<void>('stopDiscovery');
+    } catch (_) {
+      // Best effort only.
+    }
+  }
+
+  /// Returns names of all currently discovered Cast routes (mDNS, non-default).
+  static Future<List<String>> getDiscoveredDevices() async {
+    try {
+      final result = await _channel.invokeListMethod<String>('getDiscoveredDevices');
+      return result ?? [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Attempts to select the MediaRouter route matching [deviceName] so the
+  /// Cast SDK can resume a session without showing the chooser dialog.
+  /// Returns true if the route was found and selected, false otherwise.
+  static Future<bool> reconnectToDevice(String deviceName) async {
+    try {
+      final result = await _channel.invokeMethod<bool>(
+        'reconnectToDevice',
+        {'deviceName': deviceName},
+      );
+      return result ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
 }
 
 class Googlecast {

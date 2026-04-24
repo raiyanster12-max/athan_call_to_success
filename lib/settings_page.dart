@@ -42,7 +42,7 @@ class _SettingsPageState extends State<SettingsPage> {
   static const String _googleCastMediaUrlKey =
       NotificationService.googleCastMediaUrlKey;
   static const String _preferredCastSpeakerNameKey =
-      'preferred_cast_speaker_name';
+      NotificationService.preferredCastSpeakerNameKey;
   static const String _overrideMuteKey = NotificationService.overrideMuteKey;
   static const String _showHijriDateKey = 'settings_show_hijri_date';
   static const String _autoTestPrayerValue = '__auto_next__';
@@ -64,8 +64,9 @@ class _SettingsPageState extends State<SettingsPage> {
   LocationPermission? _locationPermission;
   PermissionStatus? _notificationPermission;
   PermissionStatus? _batteryOptimizationPermission;
+  PermissionStatus? _systemAlertWindowPermission;
   bool _isLoading = true;
-    String _speakerRoute = NotificationService.speakerPhoneSpeaker;
+  String _speakerRoute = NotificationService.speakerPhoneSpeaker;
   final TextEditingController _googleCastMediaUrlController =
       TextEditingController();
   final Map<String, String> _tonePreferences = {
@@ -96,6 +97,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _initializeCastConnectionListener();
     _loadSettings();
     _refreshCastConnectionState();
+    _startCastReconnectIfNeeded();
   }
 
   @override
@@ -123,17 +125,61 @@ class _SettingsPageState extends State<SettingsPage> {
     _castMessageSub = cast.messageStream.listen((state) {
       if (!mounted || state == null || state.trim().isEmpty) return;
       final message = state.trim();
+      String? parsedDeviceName;
+      if (message.startsWith('SESSION_CONNECTED')) {
+        final match = RegExp(r'SESSION_CONNECTED\((.+)\)').firstMatch(message);
+        final name = match?.group(1)?.trim();
+        if (name != null && name.isNotEmpty) {
+          parsedDeviceName = name;
+        }
+      }
       setState(() {
         _lastCastState = message;
         if (message.startsWith('SESSION_CONNECTED')) {
           _castConnected = true;
+          if (parsedDeviceName != null) {
+            _preferredCastSpeakerName = parsedDeviceName;
+          }
         } else if (message.startsWith('SESSION_ENDED') ||
             message.startsWith('SESSION_SUSPENDED') ||
             message.startsWith('NO_CAST_SESSION')) {
           _castConnected = false;
         }
       });
+      if (parsedDeviceName != null) {
+        DBHelper.setSetting(_preferredCastSpeakerNameKey, parsedDeviceName);
+      }
     });
+  }
+
+  void _startCastReconnectIfNeeded() {
+    if (defaultTargetPlatform != TargetPlatform.android) return;
+    GoogleChromeCast.startDiscovery().then((_) async {
+      final savedName = await DBHelper.getSetting(_preferredCastSpeakerNameKey);
+      if (savedName == null || savedName.isEmpty) {
+        if (mounted) await _refreshCastConnectionState();
+        return;
+      }
+      // Poll up to 12s for the saved device to appear in mDNS routes, then reconnect.
+      for (int i = 0; i < 12; i++) {
+        await Future.delayed(const Duration(seconds: 1));
+        if (!mounted) return;
+        if (await GoogleChromeCast.isConnected()) {
+          if (mounted) await _refreshCastConnectionState();
+          return;
+        }
+        final devices = await GoogleChromeCast.getDiscoveredDevices();
+        if (devices.contains(savedName)) {
+          final found = await GoogleChromeCast.reconnectToDevice(savedName);
+          if (found) {
+            await Future.delayed(const Duration(seconds: 2));
+            if (mounted) await _refreshCastConnectionState();
+            return;
+          }
+        }
+      }
+      if (mounted) await _refreshCastConnectionState();
+    }).catchError((_) {});
   }
 
   Future<void> _refreshCastConnectionState() async {
@@ -198,6 +244,9 @@ class _SettingsPageState extends State<SettingsPage> {
     final batteryOptimizationPermission = _supportsBatteryOptimizationPermission
         ? await Permission.ignoreBatteryOptimizations.status
         : null;
+    final systemAlertWindowPermission = _supportsBatteryOptimizationPermission
+        ? await Permission.systemAlertWindow.status
+        : null;
     final storedSpeakerRoute = await DBHelper.getSetting(_speakerRouteKey);
     if (storedSpeakerRoute != null &&
         _speakerRouteOptions.contains(storedSpeakerRoute)) {
@@ -244,6 +293,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _locationPermission = locationPermission;
       _notificationPermission = notificationPermission;
       _batteryOptimizationPermission = batteryOptimizationPermission;
+      _systemAlertWindowPermission = systemAlertWindowPermission;
       _isLoading = false;
     });
   }
@@ -334,6 +384,25 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _batteryOptimizationPermission = status);
   }
 
+  Future<void> _requestSystemAlertWindowPermission() async {
+    if (!_supportsBatteryOptimizationPermission) {
+      return;
+    }
+
+    final proceed = await _showPermissionDialog(
+      title: 'Display Over Other Apps',
+      message:
+          'This permission is required to show the Athan alert even when you are using other apps or when the screen is locked.',
+    );
+    if (!proceed) {
+      return;
+    }
+
+    final status = await Permission.systemAlertWindow.request();
+    if (!mounted) return;
+    setState(() => _systemAlertWindowPermission = status);
+  }
+
   Future<void> _updateTone(String prayer, String tone) async {
     await DBHelper.setSetting(_toneKey(prayer), tone);
     await NotificationService.instance.rescheduleUsingStoredLocation();
@@ -390,11 +459,7 @@ class _SettingsPageState extends State<SettingsPage> {
       }
 
       await _castController
-          .setMedia(
-        url: mediaUrl.trim(),
-        title: title,
-        subtitle: subtitle,
-      )
+          .setMedia(url: mediaUrl.trim(), title: title, subtitle: subtitle)
           .timeout(const Duration(seconds: 5));
       await _castController.loadAudio().timeout(const Duration(seconds: 10));
       await _castController.play().timeout(const Duration(seconds: 10));
@@ -463,8 +528,9 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       message = await NotificationService.instance.testSelectedSpeakerNow(
         routeOverride: activeRoute,
-        prayerOverride:
-            selectedPrayer == _autoTestPrayerValue ? null : selectedPrayer,
+        prayerOverride: selectedPrayer == _autoTestPrayerValue
+            ? null
+            : selectedPrayer,
       );
     } catch (e) {
       message = 'Trigger failed: $e';
@@ -654,6 +720,25 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  String _systemAlertWindowPermissionLabel() {
+    switch (_systemAlertWindowPermission) {
+      case PermissionStatus.granted:
+        return 'Granted';
+      case PermissionStatus.denied:
+        return 'Denied';
+      case PermissionStatus.permanentlyDenied:
+        return 'Denied permanently';
+      case PermissionStatus.restricted:
+        return 'Restricted';
+      case PermissionStatus.limited:
+        return 'Limited';
+      case PermissionStatus.provisional:
+        return 'Provisional';
+      case null:
+        return 'Unknown';
+    }
+  }
+
   String _speakerRouteLabel() {
     switch (_speakerRoute) {
       case NotificationService.speakerPhoneSpeaker:
@@ -706,9 +791,9 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _overrideMute = value);
     // Reschedule so notifications use the correct channel (alarm vs normal stream).
     unawaited(
-      NotificationService.instance
-          .rescheduleUsingStoredLocation()
-          .catchError((_) {}),
+      NotificationService.instance.rescheduleUsingStoredLocation().catchError(
+        (_) {},
+      ),
     );
   }
 
@@ -745,222 +830,234 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => StatefulBuilder(
-        builder: (sheetContext, setSheetState) => _buildBottomSheetScaffold(
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (_, setSheetState) => _buildBottomSheetScaffold(
           title: 'Alert Settings',
           child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Select where Athan notifications should play and test the route directly.',
-              style: TextStyle(color: _secondaryText),
-            ),
-            const SizedBox(height: 16),
-            RadioGroup<String>(
-              groupValue: draftSpeakerRoute,
-              onChanged: (value) {
-                if (value != null) {
-                  setSheetState(() => draftSpeakerRoute = value);
-                }
-              },
-              child: Column(
-                children: const [
-                  RadioListTile<String>(
-                    activeColor: _sectionAccent,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(
-                      'Phone',
-                      style: TextStyle(color: _primaryText),
-                    ),
-                    value: NotificationService.speakerPhoneSpeaker,
-                  ),
-                  RadioListTile<String>(
-                    activeColor: _sectionAccent,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(
-                      'Google/ChromeCast Speaker',
-                      style: TextStyle(color: _primaryText),
-                    ),
-                    value: NotificationService.speakerGoogleCast,
-                  ),
-                ],
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Select where Athan notifications should play and test the route directly.',
+                style: TextStyle(color: _secondaryText),
               ),
-            ),
-            if (draftSpeakerRoute == NotificationService.speakerGoogleCast) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _castConnected
-                              ? 'Cast connected. You can test playback now.'
-                              : 'Tap Select Speaker to choose your cast device.',
-                          style: const TextStyle(color: _primaryText),
-                        ),
-                        if (_preferredCastSpeakerName.isNotEmpty)
+              const SizedBox(height: 16),
+              RadioGroup<String>(
+                groupValue: draftSpeakerRoute,
+                onChanged: (value) {
+                  if (value != null) {
+                    setSheetState(() => draftSpeakerRoute = value);
+                  }
+                },
+                child: Column(
+                  children: const [
+                    RadioListTile<String>(
+                      activeColor: _sectionAccent,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        'Phone',
+                        style: TextStyle(color: _primaryText),
+                      ),
+                      value: NotificationService.speakerPhoneSpeaker,
+                    ),
+                    RadioListTile<String>(
+                      activeColor: _sectionAccent,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        'Google/ChromeCast Speaker',
+                        style: TextStyle(color: _primaryText),
+                      ),
+                      value: NotificationService.speakerGoogleCast,
+                    ),
+                  ],
+                ),
+              ),
+              if (draftSpeakerRoute ==
+                  NotificationService.speakerGoogleCast) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            'Preferred speaker: $_preferredCastSpeakerName',
+                            _castConnected
+                                ? 'Cast connected. You can test playback now.'
+                                : 'Tap Select Speaker to choose your cast device.',
+                            style: const TextStyle(color: _primaryText),
+                          ),
+                          if (_preferredCastSpeakerName.isNotEmpty)
+                            Text(
+                              'Preferred speaker: $_preferredCastSpeakerName',
+                              style: const TextStyle(
+                                color: _secondaryText,
+                                fontSize: 12,
+                              ),
+                            ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Cast state: $_lastCastState',
                             style: const TextStyle(
                               color: _secondaryText,
                               fontSize: 12,
                             ),
                           ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Cast state: $_lastCastState',
-                          style: const TextStyle(
-                            color: _secondaryText,
-                            fontSize: 12,
-                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          visualDensity: VisualDensity.compact,
                         ),
-                      ],
+                        onPressed: () async {
+                          final hasPermissions =
+                              await _ensureCastDiscoveryPermissions();
+                          if (!hasPermissions) return;
+
+                          debugPrint('Cast chooser: Starting discovery before dialog');
+                          await GoogleChromeCast.startDiscovery();
+                          await Future.delayed(const Duration(seconds: 2));
+
+                          debugPrint('Cast chooser: Select Speaker tapped');
+                          final shown = await GoogleChromeCast.showCastDialog();
+                          debugPrint(
+                            'Cast chooser: showCastDialog returned $shown',
+                          );
+                          if (!mounted) return;
+                          if (!shown) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Could not open Cast chooser dialog.',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+                          await Future.delayed(const Duration(seconds: 1));
+                          await _refreshCastConnectionState();
+                        },
+                        icon: const Icon(Icons.cast_connected),
+                        label: const Text('Select Speaker'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        onPressed: _testGoogleCastPlayback,
+                        icon: const Icon(Icons.play_arrow),
+                        label: const Text('Test Cast Audio'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _refreshCastConnectionState,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Refresh Cast State'),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: draftTestPrayerSelection,
+                dropdownColor: _surfaceBackground,
+                style: const TextStyle(color: _primaryText),
+                decoration: _sheetInputDecoration('Test prayer'),
+                items: [
+                  const DropdownMenuItem<String>(
+                    value: _autoTestPrayerValue,
+                    child: Text(
+                      'Auto (next prayer)',
+                      style: TextStyle(color: _primaryText),
+                    ),
+                  ),
+                  ..._prayerNames.map(
+                    (prayer) => DropdownMenuItem<String>(
+                      value: prayer,
+                      child: Text(
+                        prayer,
+                        style: const TextStyle(color: _primaryText),
+                      ),
                     ),
                   ),
                 ],
+                onChanged: (value) {
+                  if (value == null) return;
+                  setSheetState(() => draftTestPrayerSelection = value);
+                },
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        visualDensity: VisualDensity.compact,
+                    child: FilledButton.icon(
+                      onPressed: () => _testPrayerTriggerNow(
+                        routeOverride: draftSpeakerRoute,
+                        prayerSelectionOverride: draftTestPrayerSelection,
                       ),
-                      onPressed: () async {
-                        final hasPermissions =
-                            await _ensureCastDiscoveryPermissions();
-                        if (!hasPermissions) return;
-
-                        debugPrint('Cast chooser: Select Speaker tapped');
-                        final shown = await GoogleChromeCast.showCastDialog();
-                        debugPrint('Cast chooser: showCastDialog returned $shown');
-                        if (!mounted) return;
-                        if (!shown) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Could not open Cast chooser dialog.'),
-                            ),
-                          );
-                          return;
-                        }
-                        await Future.delayed(const Duration(seconds: 1));
-                        await _refreshCastConnectionState();
-                      },
-                      icon: const Icon(Icons.cast_connected),
-                      label: const Text('Select Speaker'),
+                      icon: const Icon(Icons.notifications_active_outlined),
+                      label: const Text('Test Prayer Trigger Now'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => _castController.stop(),
+                    icon: const Icon(Icons.stop),
+                    label: const Text('Stop'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(sheetContext).pop(),
+                      child: const Text('Cancel'),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      onPressed: _testGoogleCastPlayback,
-                      icon: const Icon(Icons.play_arrow),
-                      label: const Text('Test Cast Audio'),
+                    child: FilledButton.icon(
+                      onPressed: () async {
+                        await _updateSpeakerRoute(draftSpeakerRoute);
+                        await _refreshCastConnectionState();
+                        if (!mounted) return;
+                        setState(() {
+                          _testPrayerSelection = draftTestPrayerSelection;
+                        });
+                        if (!sheetContext.mounted) return;
+                        Navigator.of(sheetContext).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Alert settings saved.'),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.save_outlined),
+                      label: const Text('Save'),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _refreshCastConnectionState,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Refresh Cast State'),
-                ),
-              ),
             ],
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              initialValue: draftTestPrayerSelection,
-              dropdownColor: _surfaceBackground,
-              style: const TextStyle(color: _primaryText),
-              decoration: _sheetInputDecoration('Test prayer'),
-              items: [
-                const DropdownMenuItem<String>(
-                  value: _autoTestPrayerValue,
-                  child: Text(
-                    'Auto (next prayer)',
-                    style: TextStyle(color: _primaryText),
-                  ),
-                ),
-                ..._prayerNames.map(
-                  (prayer) => DropdownMenuItem<String>(
-                    value: prayer,
-                    child: Text(
-                      prayer,
-                      style: const TextStyle(color: _primaryText),
-                    ),
-                  ),
-                ),
-              ],
-              onChanged: (value) {
-                if (value == null) return;
-                setSheetState(() => draftTestPrayerSelection = value);
-              },
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () => _testPrayerTriggerNow(
-                      routeOverride: draftSpeakerRoute,
-                      prayerSelectionOverride: draftTestPrayerSelection,
-                    ),
-                    icon: const Icon(Icons.notifications_active_outlined),
-                    label: const Text('Test Prayer Trigger Now'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: () => _castController.stop(),
-                  icon: const Icon(Icons.stop),
-                  label: const Text('Stop'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(sheetContext).pop(),
-                    child: const Text('Cancel'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () async {
-                      await _updateSpeakerRoute(draftSpeakerRoute);
-                      await _refreshCastConnectionState();
-                      if (!mounted) return;
-                      setState(() {
-                        _testPrayerSelection = draftTestPrayerSelection;
-                      });
-                      Navigator.of(context).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Alert settings saved.')),
-                      );
-                    },
-                    icon: const Icon(Icons.save_outlined),
-                    label: const Text('Save'),
-                  ),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
-      ),
       ),
     ).then((_) {
       if (mounted) {
@@ -1348,6 +1445,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
     final batteryEnabled =
         _batteryOptimizationPermission == PermissionStatus.granted;
+    final systemAlertWindowEnabled =
+        _systemAlertWindowPermission == PermissionStatus.granted;
 
     return Scaffold(
       backgroundColor: _pageBackground,
@@ -1371,6 +1470,22 @@ class _SettingsPageState extends State<SettingsPage> {
                 subtitle: _notificationPermissionLabel(),
                 onTap: _requestNotificationPermission,
               ),
+              if (_supportsBatteryOptimizationPermission) ...[
+                _buildRowDivider(),
+                _buildSettingRow(
+                  icon: Icons.layers_outlined,
+                  title: 'Display Over Other Apps',
+                  subtitle: _systemAlertWindowPermissionLabel(),
+                  onTap: _requestSystemAlertWindowPermission,
+                  trailing: Checkbox(
+                    value: systemAlertWindowEnabled,
+                    onChanged: (_) => _requestSystemAlertWindowPermission(),
+                    activeColor: _sectionAccent,
+                    checkColor: _pageBackground,
+                    side: const BorderSide(color: _secondaryText),
+                  ),
+                ),
+              ],
             ]),
             _buildSectionLabel('Prayer Times'),
             _buildSectionCard([
