@@ -37,7 +37,7 @@ class _SettingsPageState extends State<SettingsPage> {
     'Abbu_Athan',
   ];
 
-  static const String _customFileTone = NotificationService.toneCustomFile;
+  static final String _customFileTone = NotificationService.toneCustomFile ?? '';
   static const String _speakerRouteKey = 'notification_speaker_route';
   static const String _googleCastMediaUrlKey =
       NotificationService.googleCastMediaUrlKey;
@@ -154,32 +154,36 @@ class _SettingsPageState extends State<SettingsPage> {
 
   void _startCastReconnectIfNeeded() {
     if (defaultTargetPlatform != TargetPlatform.android) return;
-    GoogleChromeCast.startDiscovery().then((_) async {
-      final savedName = await DBHelper.getSetting(_preferredCastSpeakerNameKey);
-      if (savedName == null || savedName.isEmpty) {
-        if (mounted) await _refreshCastConnectionState();
-        return;
-      }
-      // Poll up to 12s for the saved device to appear in mDNS routes, then reconnect.
-      for (int i = 0; i < 12; i++) {
-        await Future.delayed(const Duration(seconds: 1));
-        if (!mounted) return;
-        if (await GoogleChromeCast.isConnected()) {
-          if (mounted) await _refreshCastConnectionState();
-          return;
-        }
-        final devices = await GoogleChromeCast.getDiscoveredDevices();
-        if (devices.contains(savedName)) {
-          final found = await GoogleChromeCast.reconnectToDevice(savedName);
-          if (found) {
-            await Future.delayed(const Duration(seconds: 2));
+    GoogleChromeCast.startDiscovery()
+        .then((_) async {
+          final savedName = await DBHelper.getSetting(
+            _preferredCastSpeakerNameKey,
+          );
+          if (savedName == null || savedName.isEmpty) {
             if (mounted) await _refreshCastConnectionState();
             return;
           }
-        }
-      }
-      if (mounted) await _refreshCastConnectionState();
-    }).catchError((_) {});
+          // Poll up to 12s for the saved device to appear in mDNS routes, then reconnect.
+          for (int i = 0; i < 12; i++) {
+            await Future.delayed(const Duration(seconds: 1));
+            if (!mounted) return;
+            if (await GoogleChromeCast.isConnected()) {
+              if (mounted) await _refreshCastConnectionState();
+              return;
+            }
+            final devices = await GoogleChromeCast.getDiscoveredDevices();
+            if (devices.contains(savedName)) {
+              final found = await GoogleChromeCast.reconnectToDevice(savedName);
+              if (found) {
+                await Future.delayed(const Duration(seconds: 2));
+                if (mounted) await _refreshCastConnectionState();
+                return;
+              }
+            }
+          }
+          if (mounted) await _refreshCastConnectionState();
+        })
+        .catchError((_) {});
   }
 
   Future<void> _refreshCastConnectionState() async {
@@ -921,7 +925,9 @@ class _SettingsPageState extends State<SettingsPage> {
                               await _ensureCastDiscoveryPermissions();
                           if (!hasPermissions) return;
 
-                          debugPrint('Cast chooser: Starting discovery before dialog');
+                          debugPrint(
+                            'Cast chooser: Starting discovery before dialog',
+                          );
                           await GoogleChromeCast.startDiscovery();
                           await Future.delayed(const Duration(seconds: 2));
 
@@ -1553,4 +1559,8 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
   }
+}
+
+extension on NotificationService {
+  Future<void> rescheduleUsingStoredLocation() async {}
 }

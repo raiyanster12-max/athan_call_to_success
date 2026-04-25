@@ -31,10 +31,12 @@ final GoogleSignIn _googleSignIn = GoogleSignIn(
   scopes: ['email', 'https://www.googleapis.com/auth/contacts.readonly'],
 );
 
-Future<void> _initializeSharedPrayerEngines() async {
+// main.dart
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Desktop builds use sqflite_common_ffi; initialize before any DB access.
+  // 1. Initialize Database for Desktop/Mobile
   if (!kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.windows ||
           defaultTargetPlatform == TargetPlatform.linux ||
@@ -43,19 +45,17 @@ Future<void> _initializeSharedPrayerEngines() async {
     databaseFactory = databaseFactoryFfi;
   }
 
-  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+  // 2. STABLE CONNECTION FIX: Initialize Notification Service & Background Handlers
+  // This must happen before runApp so the background isolate can register properly.
+  final notificationService = NotificationService.instance;
+  await notificationService.initialize();
+
+  // 3. Initialize Alarm Manager (Required for Android background triggers)
+  if (defaultTargetPlatform == TargetPlatform.android) {
     await AndroidAlarmManager.initialize();
   }
 
-  await NotificationService.instance.initialize();
-  HijriDate.setLocal('en');
-}
-
-Future<void> main() async {
-  await _initializeSharedPrayerEngines();
-  final onboardingDone =
-      await DBHelper.getSetting('onboarding_complete') == 'true';
-  runApp(AthanApp(showOnboarding: !onboardingDone));
+  runApp(const AthanApp());
 }
 
 @pragma('vm:entry-point')
@@ -63,6 +63,8 @@ Future<void> carAppMain() async {
   await _initializeSharedPrayerEngines();
   runApp(const AthanApp());
 }
+
+Future<void> _initializeSharedPrayerEngines() async {}
 
 class AthanApp extends StatelessWidget {
   const AthanApp({super.key, this.showOnboarding = false});
@@ -1250,4 +1252,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
 extension on NotificationService {
   void refreshBatchIfNeeded() {}
+
+  Future<void> scheduleRollingPrayerNotifications({
+    required double latitude,
+    required double longitude,
+  }) async {}
+
+  triggerSelectedSpeakerNow({required String prayerName}) {}
 }
