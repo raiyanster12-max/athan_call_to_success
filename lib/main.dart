@@ -55,7 +55,9 @@ Future<void> main() async {
     await AndroidAlarmManager.initialize();
   }
 
-  runApp(const AthanApp());
+  final onboardingDone =
+      await DBHelper.getSetting('onboarding_complete') == 'true';
+  runApp(AthanApp(showOnboarding: !onboardingDone));
 }
 
 @pragma('vm:entry-point')
