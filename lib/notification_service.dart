@@ -83,7 +83,10 @@ class NotificationService {
   bool _initialized = false;
   Future<void>? _initializationFuture;
 
-  static String? get toneCustomFile => null;
+  static const int _notificationIdStart = 1000;
+  static const int _alarmIdStart = 2000;
+
+  static String? get toneCustomFile => toneCustom;
 
   Future<void> initialize() async {
     if (kIsWeb || _initialized) return;
@@ -94,6 +97,17 @@ class NotificationService {
   Future<void> _doInitialize() async {
     try {
       await _configureLocalTimezone();
+
+      // AUTO-RECONNECT ON STARTUP
+      // If we are on Android and the preferred route is Cast, try to reconnect
+      // in the background as soon as the app/service starts.
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        final route = await _loadSpeakerRoutePreference();
+        if (route == speakerGoogleCast) {
+          unawaited(_ensureCastConnected().catchError((_) => false));
+        }
+      }
+
       const androidInit = AndroidInitializationSettings(
         '@mipmap/launcher_icon',
       );
@@ -147,10 +161,16 @@ class NotificationService {
         );
         final found = await GoogleChromeCast.reconnectToDevice(savedName);
         if (found) {
-          debugPrint(
-            '[ATHAN_BG_SERVICE] Reconnected successfully to $savedName',
-          );
-          return true;
+          // After selecting the route, give the SDK a moment to actually connect
+          for (int j = 0; j < 5; j++) {
+            if (await GoogleChromeCast.isConnected()) {
+              debugPrint(
+                '[ATHAN_BG_SERVICE] Reconnected successfully to $savedName',
+              );
+              return true;
+            }
+            await Future.delayed(const Duration(seconds: 1));
+          }
         }
         await Future.delayed(const Duration(seconds: 1));
       }
@@ -175,7 +195,10 @@ class NotificationService {
         debugPrint(
           '[ATHAN_BG_SERVICE] Cast connection failed. Falling back to phone speaker.',
         );
-        if (isBackground) await _triggerPhoneSpeakerNow(prayerName: prayerName);
+        await _triggerPhoneSpeakerNow(prayerName: prayerName);
+        if (isBackground) {
+          await Future.delayed(const Duration(seconds: 180));
+        }
         return;
       }
 
@@ -183,7 +206,11 @@ class NotificationService {
       final mediaUrl = await _resolveCastUrlForPrayer(resolvedName);
 
       if (mediaUrl == null || mediaUrl.isEmpty) {
-        debugPrint('[ATHAN_BG_SERVICE] No media URL found for $resolvedName');
+        debugPrint('[ATHAN_BG_SERVICE] No media URL found for $resolvedName. Falling back.');
+        await _triggerPhoneSpeakerNow(prayerName: prayerName);
+        if (isBackground) {
+          await Future.delayed(const Duration(seconds: 180));
+        }
         return;
       }
 
@@ -206,6 +233,11 @@ class NotificationService {
       }
     } catch (e) {
       debugPrint('[ATHAN_BG_SERVICE] Cast Trigger Error: $e');
+      // Final fallback
+      await _triggerPhoneSpeakerNow(prayerName: prayerName);
+      if (isBackground) {
+        await Future.delayed(const Duration(seconds: 180));
+      }
     }
   }
 
@@ -221,9 +253,14 @@ class NotificationService {
         prayerName: prayerName,
         isBackground: isBackground,
       );
-    } else if (isBackground) {
-      // Direct local playback if route isn't Cast
+    } else {
+      // Direct local playback if route is Phone Speaker or as fallback
       await _triggerPhoneSpeakerNow(prayerName: prayerName);
+
+      if (isBackground) {
+        debugPrint('[ATHAN_BG_SERVICE] Isolate active for local playback...');
+        await Future.delayed(const Duration(seconds: 180));
+      }
     }
   }
 
@@ -233,7 +270,76 @@ class NotificationService {
 
   Future<void> _triggerPhoneSpeakerNow({String? prayerName}) async {
     debugPrint('[ATHAN_BG_SERVICE] Triggering Phone Speaker local playback...');
-    // Implementation for local AudioPlayer goes here
+    try {
+      final tone = await _loadTonePreference(prayerName);
+      final isOverrideMute =
+          (await DBHelper.getSetting(overrideMuteKey)) == 'true';
+
+      _testAudioPlayer?.stop();
+      _testAudioPlayer?.dispose();
+      _testAudioPlayer = AudioPlayer();
+
+      if (isOverrideMute) {
+        // On Android, using the Alarm stream often bypasses "Do Not Disturb" or "Mute"
+        // depending on system settings and how the player is configured.
+        // For audioplayers 6.x, we use AudioContext.
+        await _testAudioPlayer!.setAudioContext(AudioContext(
+          android: AudioContextAndroid(
+            usageType: AndroidUsageType.alarm,
+            contentType: AndroidContentType.music,
+            audioFocus: AndroidAudioFocus.gainTransient,
+          ),
+          iOS: AudioContextIOS(
+            category: AVAudioSessionCategory.playback,
+            options: {
+              AVAudioSessionOptions.duckOthers,
+              AVAudioSessionOptions.defaultToSpeaker,
+            },
+          ),
+        ));
+      }
+
+      Source source;
+      if (tone == toneCustom) {
+        final customPath = await DBHelper.getSetting(
+          'alarm_tone_custom_path_${prayerName?.toLowerCase() ?? "fajr"}',
+        );
+        if (customPath != null && customPath.isNotEmpty) {
+          source = DeviceFileSource(customPath);
+        } else {
+          source = AssetSource('audio/athan_beep.wav');
+        }
+      } else {
+        final assetPath = _mapToneToAsset(tone);
+        source = AssetSource(assetPath);
+      }
+
+      await _testAudioPlayer!.play(source);
+    } catch (e) {
+      debugPrint('[ATHAN_BG_SERVICE] Phone speaker trigger error: $e');
+    }
+  }
+
+  String _mapToneToAsset(String tone) {
+    switch (tone) {
+      case 'Muezzin Voice 1 with Fajr Athan':
+        return 'audio/athan_muezzin_1.mp3';
+      case 'Muezzin Voice 2 with Mishary Alafasi':
+        return 'audio/athan_muezzin_2.mp3';
+      case 'Abbu_Athan':
+        return 'audio/athan_abbu_athan.mp3';
+      case 'Beep':
+      default:
+        return 'audio/athan_beep.wav';
+    }
+  }
+
+  Future<String> _loadTonePreference(String? prayerName) async {
+    if (prayerName == null) return 'Beep';
+    final stored = await DBHelper.getSetting(
+      'alarm_tone_${prayerName.toLowerCase()}',
+    );
+    return stored ?? 'Beep';
   }
 
   Future<void> stopAllPlayback() async {
@@ -288,10 +394,149 @@ class NotificationService {
     return await DBHelper.getSetting(googleCastMediaUrlKey);
   }
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // SCHEDULING LOGIC
+  // ───────────────────────────────────────────────────────────────────────────
+
+  Future<void> refreshBatchIfNeeded() async {
+    // Check if we have scheduled notifications for the next 24 hours
+    // If not, reschedule. This is a simple way to keep them rolling.
+    // For now, we can just call rescheduleUsingStoredLocation if the app is opened.
+    await rescheduleUsingStoredLocation();
+  }
+
+  Future<void> rescheduleUsingStoredLocation() async {
+    final pinned = await DBHelper.getPinnedMasjid();
+    if (pinned != null) {
+      await scheduleRollingPrayerNotifications(
+        latitude: pinned['lat'] as double,
+        longitude: pinned['lng'] as double,
+      );
+      return;
+    }
+
+    final latStr = await DBHelper.getSetting('last_known_lat');
+    final lngStr = await DBHelper.getSetting('last_known_lng');
+    if (latStr != null && lngStr != null) {
+      await scheduleRollingPrayerNotifications(
+        latitude: double.parse(latStr),
+        longitude: double.parse(lngStr),
+      );
+    }
+  }
+
+  Future<void> scheduleRollingPrayerNotifications({
+    required double latitude,
+    required double longitude,
+  }) async {
+    if (kIsWeb) return;
+    await initialize();
+
+    // Save location for rescheduling
+    await DBHelper.setSetting('last_known_lat', latitude.toString());
+    await DBHelper.setSetting('last_known_lng', longitude.toString());
+
+    // Cancel all existing to avoid duplicates (especially for Alarms)
+    await _plugin.cancelAll();
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      // Note: AndroidAlarmManager doesn't have a cancelAll,
+      // but we overwrite by ID.
+      // We'll manage IDs carefully.
+    }
+
+    final now = DateTime.now();
+    int count = 0;
+
+    // Schedule for next 7 days
+    for (int i = 0; i < 7; i++) {
+      final date = now.add(Duration(days: i));
+      final times = PrayerService.getTimesForDate(latitude, longitude, date);
+      final prayers = PrayerService.getObligatoryPrayers(times);
+
+      for (final prayer in prayers) {
+        if (prayer.time.isBefore(now)) continue;
+
+        final id = _notificationIdStart + count;
+        final alarmId = _alarmIdStart + count;
+        count++;
+
+        // 1. Local Notification
+        await _plugin.zonedSchedule(
+          id,
+          prayer.name,
+          'Time for ${prayer.name} Athan',
+          tz.TZDateTime.from(prayer.time, tz.local),
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'athan_alerts',
+              'Athan Alerts',
+              channelDescription: 'Prayer time notifications and Athan playback',
+              importance: Importance.max,
+              priority: Priority.high,
+              fullScreenIntent: true,
+              category: AndroidNotificationCategory.alarm,
+              actions: [
+                AndroidNotificationAction(
+                  actionStopAthan,
+                  'Stop Athan',
+                  showsUserInterface: true,
+                ),
+              ],
+            ),
+            iOS: DarwinNotificationDetails(
+              presentAlert: true,
+              presentBadge: true,
+              presentSound: true,
+            ),
+          ),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          payload: 'PRAYER_${prayer.name}',
+        );
+
+        // 2. Android Alarm for Background Processing (Casting/Phone Speaker)
+        if (defaultTargetPlatform == TargetPlatform.android) {
+          await AndroidAlarmManager.oneShotAt(
+            prayer.time,
+            alarmId,
+            onDidReceiveAlarm,
+            exact: true,
+            wakeup: true,
+            rescheduleOnReboot: true,
+            params: {'payload': 'PRAYER_${prayer.name}'},
+          );
+        }
+      }
+    }
+    debugPrint('[ATHAN_BG_SERVICE] Scheduled $count rolling notifications/alarms');
+  }
+
+  Future<void> triggerSelectedSpeakerNow({required String prayerName}) async {
+    await _triggerNetworkSpeakerIfConfigured(
+      payload: 'PRAYER_$prayerName',
+      isBackground: false,
+    );
+  }
+
   Future<String> testSelectedSpeakerNow({
     required String routeOverride,
     String? prayerOverride,
   }) async {
-    return '';
+    final prayerName = prayerOverride ?? 'Fajr';
+    try {
+      if (routeOverride == speakerGoogleCast) {
+        await _triggerGoogleCastIfConfigured(
+          prayerName: prayerName,
+          isBackground: false,
+        );
+        return 'Test command sent to Google Cast ($prayerName)';
+      } else {
+        await _triggerPhoneSpeakerNow(prayerName: prayerName);
+        return 'Local playback started ($prayerName)';
+      }
+    } catch (e) {
+      return 'Test failed: $e';
+    }
   }
 }

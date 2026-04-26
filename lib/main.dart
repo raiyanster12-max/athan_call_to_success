@@ -1253,12 +1253,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 }
 
 extension on NotificationService {
-  void refreshBatchIfNeeded() {}
+  Future<void> refreshBatchIfNeeded() =>
+      NotificationService.instance.refreshBatchIfNeeded();
 
   Future<void> scheduleRollingPrayerNotifications({
     required double latitude,
     required double longitude,
-  }) async {}
+  }) =>
+      NotificationService.instance.scheduleRollingPrayerNotifications(
+        latitude: latitude,
+        longitude: longitude,
+      );
 
-  triggerSelectedSpeakerNow({required String prayerName}) {}
+  Future<void> triggerSelectedSpeakerNow({required String prayerName}) =>
+      NotificationService.instance.triggerSelectedSpeakerNow(
+        prayerName: prayerName,
+      );
 }

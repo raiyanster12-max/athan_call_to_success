@@ -1562,5 +1562,6 @@ class _SettingsPageState extends State<SettingsPage> {
 }
 
 extension on NotificationService {
-  Future<void> rescheduleUsingStoredLocation() async {}
+  Future<void> rescheduleUsingStoredLocation() =>
+      NotificationService.instance.rescheduleUsingStoredLocation();
 }

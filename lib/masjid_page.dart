@@ -312,6 +312,7 @@ class _MasjidPageState extends State<MasjidPage> {
       });
 
       final mapped = nearby
+          .where((m) => m.lat != null && m.lng != null)
           .map(
             (m) => MasjidResult(
               id: 'mawaqit_${m.uuid}',
