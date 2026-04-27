@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 /// A single mosque entry returned by OSM/Nominatim search.
@@ -239,21 +240,38 @@ class MosqueService {
     'https://overpass.openstreetmap.ru/api/interpreter',
   ];
 
+  static const String _googleMapsApiKey = String.fromEnvironment('GOOGLE_MAPS_API_KEY');
+
   Future<List<MasjidResult>> findNearbyMosques(
     double lat,
     double lng, {
     int radiusMeters = _defaultRadiusMeters,
     String? zipcode,
+    String? mawaqitToken,
   }) async {
-    final futures = await Future.wait([
-      _fetchFromOverpass(lat, lng, radiusMeters),
+    final List<Future<List<MasjidResult>>> searchFutures = [];
+
+    // Prioritize Mawaqit results if token is available
+    if (mawaqitToken != null && mawaqitToken.isNotEmpty) {
+      searchFutures.add(_fetchFromMawaqit(mawaqitToken, lat, lng, keyword: zipcode));
+    }
+
+    searchFutures.add(_fetchFromOverpass(lat, lng, radiusMeters, zipcode: zipcode));
+    searchFutures.add(
       _fetchFromNominatim(
         lat: lat,
         lng: lng,
         radiusMeters: radiusMeters,
         zipcode: zipcode,
       ),
-    ], eagerError: false);
+    );
+
+    // Add Google Places search if API key is available
+    if (_googleMapsApiKey.isNotEmpty) {
+      searchFutures.add(_fetchFromGooglePlaces(lat, lng, radiusMeters, zipcode: zipcode));
+    }
+
+    final futures = await Future.wait(searchFutures, eagerError: false);
 
     final merged = _mergeAndSortByDistance(lat: lat, lng: lng, lists: futures);
     if (merged.isNotEmpty) return merged;
@@ -261,6 +279,101 @@ class MosqueService {
     throw const MosqueLookupException(
       'Unable to load nearby masjids right now. Please retry in a moment.',
     );
+  }
+
+  Future<List<MasjidResult>> _fetchFromMawaqit(
+    String token,
+    double lat,
+    double lng, {
+    String? keyword,
+  }) async {
+    try {
+      final List<MosqueSummary> mosques;
+      final k = keyword?.trim() ?? '';
+
+      if (k.isNotEmpty) {
+        // Mawaqit's keyword search is often more effective for specific areas or zipcodes.
+        // We perform both and merge to ensure we don't miss anything nearby OR matching the keyword.
+        final results = await Future.wait([
+          searchByKeyword(token, k),
+          searchNearby(token, lat, lng),
+        ]);
+
+        final seen = <String>{};
+        mosques = [];
+        for (final list in results) {
+          for (final m in list) {
+            if (m.uuid.isNotEmpty && seen.add(m.uuid)) {
+              mosques.add(m);
+            }
+          }
+        }
+      } else {
+        mosques = await searchNearby(token, lat, lng);
+      }
+
+      return mosques.map((m) {
+        return MasjidResult(
+          id: 'mawaqit_${m.uuid}',
+          name: m.displayName,
+          address: m.fullAddress,
+          lat: m.lat ?? 0.0,
+          lng: m.lng ?? 0.0,
+        );
+      }).toList();
+    } catch (e) {
+      debugPrint('Mawaqit search failed: $e');
+      return [];
+    }
+  }
+
+  Future<List<MasjidResult>> _fetchFromGooglePlaces(
+    double lat,
+    double lng,
+    int radiusMeters, {
+    String? zipcode,
+  }) async {
+    try {
+      final bool isZip = zipcode != null && RegExp(r'^\d{5}$').hasMatch(zipcode.trim());
+      final Uri uri;
+
+      if (isZip) {
+        // Use Text Search for better zipcode-targeted results
+        uri = Uri.parse(
+          'https://maps.googleapis.com/maps/api/place/textsearch/json'
+          '?query=mosque+in+${zipcode.trim()}'
+          '&key=$_googleMapsApiKey',
+        );
+      } else {
+        uri = Uri.parse(
+          'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
+          '?location=$lat,$lng'
+          '&radius=$radiusMeters'
+          '&type=mosque'
+          '&key=$_googleMapsApiKey',
+        );
+      }
+
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+      if (response.statusCode != 200) return [];
+
+      final data = json.decode(response.body) as Map<String, dynamic>;
+      final results = data['results'] as List<dynamic>? ?? [];
+
+      return results.map((item) {
+        final loc = item['geometry']['location'];
+        return MasjidResult(
+          id: 'google_${item['place_id']}',
+          name: item['name'] as String? ?? 'Masjid',
+          address: item['vicinity'] as String? ?? '',
+          lat: (loc['lat'] as num).toDouble(),
+          lng: (loc['lng'] as num).toDouble(),
+        );
+      }).toList();
+    } catch (e) {
+      debugPrint('Google Places search failed: $e');
+      return [];
+    }
   }
 
   Future<({double lat, double lng})> geocodeQuery(String query) async {
@@ -323,8 +436,15 @@ class MosqueService {
   Future<List<MasjidResult>> _fetchFromOverpass(
     double lat,
     double lng,
-    int radiusMeters,
-  ) async {
+    int radiusMeters, {
+    String? zipcode,
+  }) async {
+    String zipFilter = '';
+    if (zipcode != null && zipcode.trim().isNotEmpty) {
+      final z = zipcode.trim();
+      zipFilter = 'nwr["addr:postcode"~"$z"](around:50000,$lat,$lng);';
+    }
+
     final query = '''
 [out:json][timeout:18];
 (
@@ -334,6 +454,7 @@ class MosqueService {
   nwr["building"="mosque"](around:$radiusMeters,$lat,$lng);
   nwr["name"~"$_nameRegex",i]["amenity"](around:$radiusMeters,$lat,$lng);
   nwr["name"~"$_nameRegex",i]["building"](around:$radiusMeters,$lat,$lng);
+  $zipFilter
 );
 out center;
 ''';
@@ -416,45 +537,95 @@ out center;
     final right = (lng + lngDelta).toStringAsFixed(6);
     final top = (lat + latDelta).toStringAsFixed(6);
     final bottom = (lat - latDelta).toStringAsFixed(6);
-    final queries = ['masjid', 'mosque', 'islamic center'];
-    if (zipcode != null && zipcode.trim().isNotEmpty) queries.add('masjid $zipcode');
+
+    final List<({String q, bool bounded})> tasks = [
+      (q: 'masjid', bounded: true),
+      (q: 'mosque', bounded: true),
+      (q: 'islamic center', bounded: true),
+    ];
+
+    if (zipcode != null && zipcode.trim().isNotEmpty) {
+      final z = zipcode.trim();
+      tasks.add((q: 'masjid $z', bounded: false));
+      tasks.add((q: 'mosque $z', bounded: false));
+      tasks.add((q: 'islamic center $z', bounded: false));
+      // If it's a 5-digit zipcode, it's very specific
+      if (RegExp(r'^\d{5}$').hasMatch(z)) {
+        tasks.add((q: z, bounded: false));
+      }
+    }
+
     final results = <MasjidResult>[];
-    for (final q in queries) {
+    for (final task in tasks) {
       final params = <String, String>{
         'format': 'jsonv2',
-        'q': q,
-        'bounded': '1',
+        'q': task.q,
         'limit': '50',
         'addressdetails': '1',
-        'viewbox': '$left,$top,$right,$bottom',
       };
+      if (task.bounded) {
+        params['bounded'] = '1';
+        params['viewbox'] = '$left,$top,$right,$bottom';
+      }
+
       for (final host in _geocodeFallbackHosts) {
         try {
           final uri = Uri.https(host, '/search', params);
           final response = await http
-              .get(uri, headers: {'User-Agent': _userAgent, 'Accept': 'application/json'})
+              .get(
+                uri,
+                headers: {
+                  'User-Agent': _userAgent,
+                  'Accept': 'application/json',
+                },
+              )
               .timeout(const Duration(seconds: 5));
+
           if (response.statusCode != 200) continue;
           final data = json.decode(response.body) as List<dynamic>;
+
           for (final item in data) {
             final map = item as Map<String, dynamic>;
             final lat2 = double.tryParse(map['lat'] as String? ?? '');
             final lng2 = double.tryParse(map['lon'] as String? ?? '');
             if (lat2 == null || lng2 == null) continue;
+
             final name = (map['name'] as String?)?.trim().isNotEmpty == true
                 ? (map['name'] as String).trim()
-                : ((map['display_name'] as String?) ?? '').split(',').first.trim();
+                : ((map['display_name'] as String?) ?? '')
+                    .split(',')
+                    .first
+                    .trim();
             if (name.isEmpty) continue;
-            if (_distanceMeters(lat, lng, lat2, lng2) > radiusMeters * 1.5) continue;
+
+            // If bounded, we trust the viewbox. If NOT bounded, we still filter
+            // to a broad area (e.g. 100km) to avoid global noise if the zipcode
+            // is misinterpreted.
+            if (!task.bounded) {
+              if (_distanceMeters(lat, lng, lat2, lng2) > 100000) continue;
+            } else {
+              if (_distanceMeters(lat, lng, lat2, lng2) > radiusMeters * 1.5) {
+                continue;
+              }
+            }
+
             final id = 'nominatim_${map['osm_type']}_${map['osm_id']}';
-            results.add(MasjidResult(id: id, name: name, address: (map['display_name'] as String?) ?? '', lat: lat2, lng: lng2));
+            results.add(
+              MasjidResult(
+                id: id,
+                name: name,
+                address: (map['display_name'] as String?) ?? '',
+                lat: lat2,
+                lng: lng2,
+              ),
+            );
           }
-          break;
+          break; // Next query
         } catch (_) {
           continue;
         }
       }
-      if (results.length >= 20) break;
+      if (results.length >= 50) break;
     }
     return results;
   }
@@ -468,12 +639,24 @@ out center;
     final seen = <String>{};
     for (final list in lists) {
       for (final item in list) {
-        final key = '${item.name.toLowerCase()}_${item.lat.toStringAsFixed(4)}_${item.lng.toStringAsFixed(4)}';
+        // Normalize name: lowercase and single-space only
+        final normName = item.name.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+        // Composite key: name + rounded lat/lng (approx 11m precision)
+        final key = '${normName}_${item.lat.toStringAsFixed(4)}_${item.lng.toStringAsFixed(4)}';
+
         if (!seen.add(key)) continue;
         merged.add(item);
       }
     }
+
     merged.sort((a, b) {
+      // 1. Prioritize Mawaqit results
+      final aIsMawaqit = a.id.startsWith('mawaqit_');
+      final bIsMawaqit = b.id.startsWith('mawaqit_');
+      if (aIsMawaqit && !bIsMawaqit) return -1;
+      if (!aIsMawaqit && bIsMawaqit) return 1;
+
+      // 2. Then sort by distance
       final da = _distanceMeters(lat, lng, a.lat, a.lng);
       final db = _distanceMeters(lat, lng, b.lat, b.lng);
       return da.compareTo(db);

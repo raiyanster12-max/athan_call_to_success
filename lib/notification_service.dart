@@ -233,7 +233,34 @@ class NotificationService {
 
   Future<void> _triggerPhoneSpeakerNow({String? prayerName}) async {
     debugPrint('[ATHAN_BG_SERVICE] Triggering Phone Speaker local playback...');
-    // Implementation for local AudioPlayer goes here
+    try {
+      final resolvedName = await _resolvePrayerNameForTrigger(prayerName);
+      final assetPath = await _resolveLocalAssetForPrayer(resolvedName);
+
+      if (assetPath == null || assetPath.isEmpty) {
+        debugPrint('[ATHAN_BG_SERVICE] No local asset found for $resolvedName');
+        return;
+      }
+
+      _testAudioPlayer?.dispose();
+      _testAudioPlayer = AudioPlayer();
+      _testAudioPlayer!.setReleaseMode(ReleaseMode.stop);
+
+      // Use the Alarm stream for background reliability if possible,
+      // though audioplayers defaults to media.
+      await _testAudioPlayer!.play(AssetSource(assetPath));
+
+      debugPrint('[ATHAN_BG_SERVICE] Local playback started: $assetPath');
+    } catch (e) {
+      debugPrint('[ATHAN_BG_SERVICE] Local playback error: $e');
+    }
+  }
+
+  Future<String?> _resolveLocalAssetForPrayer(String resolvedName) async {
+    // Default asset names based on prayer
+    final name = resolvedName.toLowerCase();
+    if (name == 'fajr') return 'audio/fajr_athan.mp3';
+    return 'audio/standard_athan.mp3';
   }
 
   Future<void> stopAllPlayback() async {

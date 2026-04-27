@@ -304,6 +304,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    DBHelper.pinnedChangeNotifier.addListener(_loadPinnedMasjidForHome);
     NotificationService.instance.refreshBatchIfNeeded();
     unawaited(_loadPinnedMasjidForHome());
     unawaited(_loadIqamahSettingsForHome());
@@ -323,6 +324,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    DBHelper.pinnedChangeNotifier.removeListener(_loadPinnedMasjidForHome);
     _clockTimer?.cancel();
     _countdownTimer?.cancel();
     super.dispose();
@@ -431,9 +433,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
 
     try {
+      final token = await DBHelper.getSetting('mawaqit_token');
       final nearby = await _mosqueService.findNearbyMosques(
         position.latitude,
         position.longitude,
+        mawaqitToken: token,
       );
       if (!mounted || _pinnedMasjid != null) return;
 
@@ -1260,5 +1264,5 @@ extension on NotificationService {
     required double longitude,
   }) async {}
 
-  triggerSelectedSpeakerNow({required String prayerName}) {}
+  Future<void> triggerSelectedSpeakerNow({required String prayerName}) async {}
 }
