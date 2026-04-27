@@ -154,11 +154,13 @@ class _MasjidPageState extends State<MasjidPage> {
     double lng, {
     String? zipcode,
   }) async {
+    final token = await DBHelper.getSetting(_kMawaqitToken);
     return _mosqueService.findNearbyMosques(
       lat,
       lng,
       radiusMeters: _searchRadiusMeters,
       zipcode: zipcode,
+      mawaqitToken: token,
     );
   }
 
@@ -474,10 +476,15 @@ class _MasjidPageState extends State<MasjidPage> {
 
     try {
       final coords = await _mosqueService.geocodeQuery(input);
-      final items = await _findNearbyWithExpandedRadius(
+      final radiusMeters = (_searchRadiusMiles * 1609.34).toInt();
+      final token = await DBHelper.getSetting(_kMawaqitToken);
+
+      final items = await _mosqueService.findNearbyMosques(
         coords.lat,
         coords.lng,
+        radiusMeters: radiusMeters,
         zipcode: input,
+        mawaqitToken: token,
       );
 
       if (!mounted) return;
@@ -726,50 +733,85 @@ class _MasjidPageState extends State<MasjidPage> {
 
   // -- Dialogs / sheets -------------------------------------------------------
 
+  int _searchRadiusMiles = 10;
+
   void _showSearchDialog() {
     _locationController.clear();
     showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppPalette.surfaceRaised,
-        title: const Text(
-          'Search by Location',
-          style: TextStyle(color: AppPalette.textPrimary),
-        ),
-        content: TextField(
-          controller: _locationController,
-          autofocus: true,
-          textInputAction: TextInputAction.search,
-          style: const TextStyle(color: AppPalette.textPrimary),
-          decoration: InputDecoration(
-            hintText: 'Zip code or city name',
-            hintStyle: const TextStyle(color: AppPalette.textMuted),
-            filled: true,
-            fillColor: AppPalette.surface,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppPalette.surfaceRaised,
+          title: const Text(
+            'Search Masjid',
+            style: TextStyle(color: AppPalette.textPrimary),
           ),
-          onSubmitted: (_) {
-            Navigator.of(ctx).pop();
-            _searchByLocation();
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: AppPalette.textSecondary),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _locationController,
+                autofocus: true,
+                textInputAction: TextInputAction.search,
+                style: const TextStyle(color: AppPalette.textPrimary),
+                decoration: InputDecoration(
+                  hintText: 'Zip code or city name',
+                  hintStyle: const TextStyle(color: AppPalette.textMuted),
+                  filled: true,
+                  fillColor: AppPalette.surface,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onSubmitted: (_) {
+                  Navigator.of(ctx).pop();
+                  _searchByLocation();
+                },
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  const Text(
+                    'Radius:',
+                    style: TextStyle(color: AppPalette.textSecondary),
+                  ),
+                  Expanded(
+                    child: Slider(
+                      value: _searchRadiusMiles.toDouble(),
+                      min: 5,
+                      max: 50,
+                      divisions: 9,
+                      activeColor: AppPalette.accent,
+                      label: '$_searchRadiusMiles miles',
+                      onChanged: (val) {
+                        setDialogState(() => _searchRadiusMiles = val.toInt());
+                      },
+                    ),
+                  ),
+                  Text(
+                    '$_searchRadiusMiles mi',
+                    style: const TextStyle(color: AppPalette.textPrimary),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: AppPalette.textSecondary),
+              ),
             ),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppPalette.accent),
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              _searchByLocation();
-            },
-            child: const Text('Search', style: TextStyle(color: Colors.black)),
-          ),
-        ],
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppPalette.accent),
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _searchByLocation();
+              },
+              child: const Text('Search', style: TextStyle(color: Colors.black)),
+            ),
+          ],
+        ),
       ),
     );
   }
