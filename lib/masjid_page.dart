@@ -1046,16 +1046,20 @@ class _MasjidPageState extends State<MasjidPage> {
   @override
   Widget build(BuildContext context) {
     final hasPinned = _pinnedMasjid != null;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final isSmallScreen = screenHeight < 700;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
+        toolbarHeight: isSmallScreen ? 50 : 56,
         title: Text(
           _view == _MasjidView.results || _view == _MasjidView.map
               ? _resultsTitle
               : (hasPinned
                     ? (_pinnedMasjid!['name'] as String)
                     : 'Masjid Finder'),
+          style: TextStyle(fontSize: isSmallScreen ? 18 : 20),
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -1541,6 +1545,9 @@ class _MasjidPageState extends State<MasjidPage> {
   }
 
   Widget _buildResults() {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final isSmallScreen = screenHeight < 700;
+
     if (_isLoading) {
       return const Center(
         child: Column(
@@ -1575,15 +1582,18 @@ class _MasjidPageState extends State<MasjidPage> {
         // Map/List toggle bar
         Container(
           color: AppPalette.surfaceRaised,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: isSmallScreen ? 4 : 8,
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 '${_results.length} masjids found',
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppPalette.textPrimary,
-                  fontSize: 13,
+                  fontSize: isSmallScreen ? 12 : 13,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -1597,14 +1607,18 @@ class _MasjidPageState extends State<MasjidPage> {
                       },
                       tooltip: 'Map view',
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 40),
+                      constraints: BoxConstraints(
+                        minWidth: isSmallScreen ? 32 : 40,
+                      ),
                     ),
                   IconButton(
                     icon: const Icon(Icons.close, color: AppPalette.textMuted),
                     onPressed: _goHome,
                     tooltip: 'Close',
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 40),
+                    constraints: BoxConstraints(
+                      minWidth: isSmallScreen ? 32 : 40,
+                    ),
                   ),
                 ],
               ),
@@ -1614,7 +1628,12 @@ class _MasjidPageState extends State<MasjidPage> {
         // List of masjids
         Expanded(
           child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              isSmallScreen ? 8 : 16,
+              16,
+              16,
+            ),
             itemCount: _results.length,
             separatorBuilder: (context, index) => const SizedBox(height: 8),
             itemBuilder: (context, index) {
@@ -1626,17 +1645,26 @@ class _MasjidPageState extends State<MasjidPage> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: ListTile(
+                  dense: isSmallScreen,
                   leading: Icon(
                     Icons.mosque,
                     color: isPinned ? AppPalette.accent : AppPalette.textMuted,
                   ),
                   title: Text(
                     item.name,
-                    style: const TextStyle(color: AppPalette.textPrimary),
+                    style: TextStyle(
+                      color: AppPalette.textPrimary,
+                      fontSize: isSmallScreen ? 14 : 16,
+                    ),
                   ),
                   subtitle: Text(
                     item.address.isEmpty ? 'Address unavailable' : item.address,
-                    style: const TextStyle(color: AppPalette.textSecondary),
+                    style: TextStyle(
+                      color: AppPalette.textSecondary,
+                      fontSize: isSmallScreen ? 11 : 13,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   trailing: isPinned
                       ? const Icon(
