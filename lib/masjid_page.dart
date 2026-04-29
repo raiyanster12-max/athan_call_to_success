@@ -1187,6 +1187,7 @@ class _MasjidPageState extends State<MasjidPage> {
                           icon: const Icon(Icons.search, size: 16),
                           label: const Text('By Location'),
                         ),
+                        /*
                         FilledButton.icon(
                           onPressed: _isMawaqitBusy
                               ? null
@@ -1198,6 +1199,7 @@ class _MasjidPageState extends State<MasjidPage> {
                                 : 'Mawaqit Sign In',
                           ),
                         ),
+                        */
                       ],
                     ),
                     if ((_selectedMawaqitMosqueName ?? '').isNotEmpty) ...[
@@ -1423,6 +1425,7 @@ class _MasjidPageState extends State<MasjidPage> {
                 label: 'BY LOCATION',
                 onTap: _showSearchDialog,
               ),
+            /*
               _GridTile(
                 icon: Icons.login,
                 label: _isMawaqitBusy ? 'SIGNING IN' : 'MAWAQIT LOGIN',
@@ -1430,6 +1433,7 @@ class _MasjidPageState extends State<MasjidPage> {
                     ? () {}
                     : _signInAndFindNearestMawaqitMasjid,
               ),
+            */
             ],
           ),
         ),
