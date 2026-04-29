@@ -69,8 +69,11 @@ class NotificationService {
   // Constants for DB keys and routes
   static const String preferredCastSpeakerNameKey =
       'preferred_cast_speaker_name';
+  static const String preferredCastSpeakerIpKey =
+      'preferred_cast_speaker_ip';
   static const String _speakerRouteKey = 'notification_speaker_route';
   static const String speakerGoogleCast = 'Google/Chromecast Speaker';
+  static const String speakerGoogleCastIp = 'Google Cast (Static IP)';
   static const String speakerPhoneSpeaker = 'Phone Speaker (Alarm Stream)';
   static const String overrideMuteKey = 'settings_override_mute';
   static const String actionStopAthan = 'stop_athan_action';
@@ -103,7 +106,7 @@ class NotificationService {
       // in the background as soon as the app/service starts.
       if (defaultTargetPlatform == TargetPlatform.android) {
         final route = await _loadSpeakerRoutePreference();
-        if (route == speakerGoogleCast) {
+        if (route == speakerGoogleCast || route == speakerGoogleCastIp) {
           unawaited(_ensureCastConnected().catchError((_) => false));
         }
       }
@@ -143,36 +146,55 @@ class NotificationService {
   Future<bool> _ensureCastConnected() async {
     debugPrint('[ATHAN_BG_SERVICE] Google Cast: Ensuring connection...');
     try {
-      if (await GoogleChromeCast.isConnected()) return true;
+      // 1. Initial check: Is the SDK already reporting a connected session?
+      if (await GoogleChromeCast.isConnected()) {
+        debugPrint('[ATHAN_BG_SERVICE] Already connected to Cast.');
+        return true;
+      }
 
-      // Force discovery to refresh the mDNS cache
-      await GoogleChromeCast.startDiscovery();
-
+      final savedIp = await DBHelper.getSetting(preferredCastSpeakerIpKey);
       final savedName = await DBHelper.getSetting(preferredCastSpeakerNameKey);
-      if (savedName == null || savedName.isEmpty) {
-        debugPrint('[ATHAN_BG_SERVICE] No preferred speaker name found in DB.');
+
+      if ((savedIp == null || savedIp.isEmpty) && (savedName == null || savedName.isEmpty)) {
+        debugPrint('[ATHAN_BG_SERVICE] No preferred speaker IP or Name found.');
         return false;
       }
 
-      // Reconnection Loop: Background isolates need extra time to resolve mDNS
-      for (int i = 0; i < 5; i++) {
-        debugPrint(
-          '[ATHAN_BG_SERVICE] Attempting reconnection to $savedName (Try ${i + 1}/5)',
-        );
-        final found = await GoogleChromeCast.reconnectToDevice(savedName);
+      // 2. Refresh discovery to populate MediaRouter
+      await GoogleChromeCast.startDiscovery();
+      // Discovery takes a moment to warm up, especially in background isolates
+      await Future.delayed(const Duration(seconds: 3));
+
+      // 3. PRIORITY 1: Connect by IP (Most reliable in background)
+      if (savedIp != null && savedIp.isNotEmpty) {
+        debugPrint('[ATHAN_BG_SERVICE] Attempting IP connection to $savedIp');
+        final found = await GoogleChromeCast.connectToIp(savedIp);
         if (found) {
-          // After selecting the route, give the SDK a moment to actually connect
-          for (int j = 0; j < 5; j++) {
+          // Polling wait for session establishment
+          for (int j = 0; j < 10; j++) {
             if (await GoogleChromeCast.isConnected()) {
-              debugPrint(
-                '[ATHAN_BG_SERVICE] Reconnected successfully to $savedName',
-              );
+              debugPrint('[ATHAN_BG_SERVICE] Connected successfully by IP to $savedIp');
               return true;
             }
             await Future.delayed(const Duration(seconds: 1));
           }
         }
-        await Future.delayed(const Duration(seconds: 1));
+        debugPrint('[ATHAN_BG_SERVICE] IP connection to $savedIp failed or timed out.');
+      }
+
+      // 4. PRIORITY 2: Reconnect by Name (mDNS fallback)
+      if (savedName != null && savedName.isNotEmpty) {
+        debugPrint('[ATHAN_BG_SERVICE] Attempting mDNS reconnection to $savedName');
+        final found = await GoogleChromeCast.reconnectToDevice(savedName);
+        if (found) {
+          for (int j = 0; j < 10; j++) {
+            if (await GoogleChromeCast.isConnected()) {
+              debugPrint('[ATHAN_BG_SERVICE] Reconnected successfully to $savedName');
+              return true;
+            }
+            await Future.delayed(const Duration(seconds: 1));
+          }
+        }
       }
 
       return false;
@@ -229,7 +251,7 @@ class NotificationService {
         debugPrint(
           '[ATHAN_BG_SERVICE] Isolate active for streaming duration...',
         );
-        await Future.delayed(const Duration(seconds: 180));
+        await Future.delayed(const Duration(seconds: 300));
       }
     } catch (e) {
       debugPrint('[ATHAN_BG_SERVICE] Cast Trigger Error: $e');
@@ -248,7 +270,7 @@ class NotificationService {
     final route = await _loadSpeakerRoutePreference();
     final prayerName = _prayerNameFromPayload(payload);
 
-    if (route == speakerGoogleCast) {
+    if (route == speakerGoogleCast || route == speakerGoogleCastIp) {
       await _triggerGoogleCastIfConfigured(
         prayerName: prayerName,
         isBackground: isBackground,
@@ -259,7 +281,7 @@ class NotificationService {
 
       if (isBackground) {
         debugPrint('[ATHAN_BG_SERVICE] Isolate active for local playback...');
-        await Future.delayed(const Duration(seconds: 180));
+        await Future.delayed(const Duration(seconds: 300));
       }
     }
   }
@@ -525,7 +547,7 @@ class NotificationService {
   }) async {
     final prayerName = prayerOverride ?? 'Fajr';
     try {
-      if (routeOverride == speakerGoogleCast) {
+      if (routeOverride == speakerGoogleCast || routeOverride == speakerGoogleCastIp) {
         await _triggerGoogleCastIfConfigured(
           prayerName: prayerName,
           isBackground: false,

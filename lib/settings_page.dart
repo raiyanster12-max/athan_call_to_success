@@ -43,6 +43,8 @@ class _SettingsPageState extends State<SettingsPage> {
       NotificationService.googleCastMediaUrlKey;
   static const String _preferredCastSpeakerNameKey =
       NotificationService.preferredCastSpeakerNameKey;
+  static const String _preferredCastSpeakerIpKey =
+      NotificationService.preferredCastSpeakerIpKey;
   static const String _overrideMuteKey = NotificationService.overrideMuteKey;
   static const String _showHijriDateKey = 'settings_show_hijri_date';
   static const String _autoTestPrayerValue = '__auto_next__';
@@ -59,6 +61,7 @@ class _SettingsPageState extends State<SettingsPage> {
   static const List<String> _speakerRouteOptions = [
     NotificationService.speakerPhoneSpeaker,
     NotificationService.speakerGoogleCast,
+    NotificationService.speakerGoogleCastIp,
   ];
 
   LocationPermission? _locationPermission;
@@ -84,6 +87,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _castConnected = false;
   String _lastCastState = 'Not connected';
   String _preferredCastSpeakerName = '';
+  String _preferredCastSpeakerIp = '';
   bool _overrideMute = true;
   bool _showHijriDate = true;
   String _testPrayerSelection = _autoTestPrayerValue;
@@ -261,6 +265,9 @@ class _SettingsPageState extends State<SettingsPage> {
     final storedPreferredCastName = await DBHelper.getSetting(
       _preferredCastSpeakerNameKey,
     );
+    final storedPreferredCastIp = await DBHelper.getSetting(
+      _preferredCastSpeakerIpKey,
+    );
     if (storedCastUrl != null && storedCastUrl.trim().isNotEmpty) {
       _googleCastMediaUrlController.text = storedCastUrl;
     } else {
@@ -268,6 +275,7 @@ class _SettingsPageState extends State<SettingsPage> {
           'https://download.samplelib.com/mp3/sample-3s.mp3';
     }
     _preferredCastSpeakerName = (storedPreferredCastName ?? '').trim();
+    _preferredCastSpeakerIp = (storedPreferredCastIp ?? '').trim();
 
     _overrideMute = await _loadBoolSetting(_overrideMuteKey, fallback: true);
     _showHijriDate = await _loadBoolSetting(_showHijriDateKey, fallback: true);
@@ -748,7 +756,9 @@ class _SettingsPageState extends State<SettingsPage> {
       case NotificationService.speakerPhoneSpeaker:
         return 'Phone speaker';
       case NotificationService.speakerGoogleCast:
-        return 'Google/Chromecast speaker';
+        return 'Google Speaker';
+      case NotificationService.speakerGoogleCastIp:
+        return 'Google Cast (IP)';
       default:
         return 'Phone speaker';
     }
@@ -756,8 +766,13 @@ class _SettingsPageState extends State<SettingsPage> {
 
   String _alertSettingsSummary() {
     final route = _speakerRouteLabel();
-    if (_speakerRoute == NotificationService.speakerGoogleCast) {
+    if (_speakerRoute == NotificationService.speakerGoogleCast ||
+        _speakerRoute == NotificationService.speakerGoogleCastIp) {
       final castState = _castConnected ? 'Connected' : 'Not connected';
+      if (_speakerRoute == NotificationService.speakerGoogleCastIp &&
+          _preferredCastSpeakerIp.isNotEmpty) {
+        return '$route • $castState • $_preferredCastSpeakerIp';
+      }
       if (_preferredCastSpeakerName.isNotEmpty) {
         return '$route • $castState • $_preferredCastSpeakerName';
       }
@@ -829,6 +844,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _refreshCastConnectionState();
     var draftSpeakerRoute = _speakerRoute;
     var draftTestPrayerSelection = _testPrayerSelection;
+    final ipController = TextEditingController(text: _preferredCastSpeakerIp);
 
     showModalBottomSheet<void>(
       context: context,
@@ -867,16 +883,59 @@ class _SettingsPageState extends State<SettingsPage> {
                       activeColor: _sectionAccent,
                       contentPadding: EdgeInsets.zero,
                       title: Text(
-                        'Google/ChromeCast Speaker',
+                        'Google Speaker',
                         style: TextStyle(color: _primaryText),
                       ),
                       value: NotificationService.speakerGoogleCast,
                     ),
+                    RadioListTile<String>(
+                      activeColor: _sectionAccent,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        'Google Cast (IP Address Selection)',
+                        style: TextStyle(color: _primaryText),
+                      ),
+                      value: NotificationService.speakerGoogleCastIp,
+                    ),
                   ],
                 ),
               ),
-              if (draftSpeakerRoute ==
-                  NotificationService.speakerGoogleCast) ...[
+              if (draftSpeakerRoute == NotificationService.speakerGoogleCast) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onPressed: () async {
+                      final hasPermissions = await _ensureCastDiscoveryPermissions();
+                      if (!hasPermissions) return;
+                      await GoogleChromeCast.startDiscovery();
+                      await Future.delayed(const Duration(seconds: 1));
+                      await GoogleChromeCast.showCastDialog();
+                      await Future.delayed(const Duration(seconds: 1));
+                      await _refreshCastConnectionState();
+                    },
+                    icon: const Icon(Icons.cast_connected),
+                    label: const Text('Select Speaker'),
+                  ),
+                ),
+              ],
+              if (draftSpeakerRoute == NotificationService.speakerGoogleCastIp) ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: ipController,
+                  style: const TextStyle(color: _primaryText),
+                  decoration: _sheetInputDecoration(
+                    'Speaker IP Address',
+                    hint: 'e.g. 192.168.1.100',
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+              ],
+              if (draftSpeakerRoute == NotificationService.speakerGoogleCast ||
+                  draftSpeakerRoute == NotificationService.speakerGoogleCastIp) ...[
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -886,21 +945,21 @@ class _SettingsPageState extends State<SettingsPage> {
                         children: [
                           Text(
                             _castConnected
-                                ? 'Cast connected. You can test playback now.'
-                                : 'Tap Select Speaker to choose your cast device.',
+                                ? 'Cast connected.'
+                                : 'Cast not connected.',
                             style: const TextStyle(color: _primaryText),
                           ),
-                          if (_preferredCastSpeakerName.isNotEmpty)
+                          if (_preferredCastSpeakerName.isNotEmpty &&
+                              draftSpeakerRoute == NotificationService.speakerGoogleCast)
                             Text(
-                              'Preferred speaker: $_preferredCastSpeakerName',
+                              'Speaker: $_preferredCastSpeakerName',
                               style: const TextStyle(
                                 color: _secondaryText,
                                 fontSize: 12,
                               ),
                             ),
-                          const SizedBox(height: 4),
                           Text(
-                            'Cast state: $_lastCastState',
+                            'State: $_lastCastState',
                             style: const TextStyle(
                               color: _secondaryText,
                               fontSize: 12,
@@ -909,73 +968,12 @@ class _SettingsPageState extends State<SettingsPage> {
                         ],
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                        onPressed: () async {
-                          final hasPermissions =
-                              await _ensureCastDiscoveryPermissions();
-                          if (!hasPermissions) return;
-
-                          debugPrint(
-                            'Cast chooser: Starting discovery before dialog',
-                          );
-                          await GoogleChromeCast.startDiscovery();
-                          await Future.delayed(const Duration(seconds: 2));
-
-                          debugPrint('Cast chooser: Select Speaker tapped');
-                          final shown = await GoogleChromeCast.showCastDialog();
-                          debugPrint(
-                            'Cast chooser: showCastDialog returned $shown',
-                          );
-                          if (!mounted) return;
-                          if (!shown) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Could not open Cast chooser dialog.',
-                                ),
-                              ),
-                            );
-                            return;
-                          }
-                          await Future.delayed(const Duration(seconds: 1));
-                          await _refreshCastConnectionState();
-                        },
-                        icon: const Icon(Icons.cast_connected),
-                        label: const Text('Select Speaker'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                        onPressed: _testGoogleCastPlayback,
-                        icon: const Icon(Icons.play_arrow),
-                        label: const Text('Test Cast Audio'),
-                      ),
+                    ElevatedButton.icon(
+                      onPressed: _testGoogleCastPlayback,
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('Test Audio'),
                     ),
                   ],
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _refreshCastConnectionState,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Refresh Cast State'),
-                  ),
                 ),
               ],
               const SizedBox(height: 16),
@@ -1042,10 +1040,13 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: FilledButton.icon(
                       onPressed: () async {
                         await _updateSpeakerRoute(draftSpeakerRoute);
+                        final newIp = ipController.text.trim();
+                        await DBHelper.setSetting(_preferredCastSpeakerIpKey, newIp);
                         await _refreshCastConnectionState();
                         if (!mounted) return;
                         setState(() {
                           _testPrayerSelection = draftTestPrayerSelection;
+                          _preferredCastSpeakerIp = newIp;
                         });
                         if (!sheetContext.mounted) return;
                         Navigator.of(sheetContext).pop();

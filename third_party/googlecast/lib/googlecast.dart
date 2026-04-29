@@ -70,6 +70,21 @@ class GoogleChromeCast {
     }
   }
 
+  /// Attempts to connect directly to a Cast device by its IP address.
+  /// This is more robust than mDNS in background states.
+  static Future<bool> connectToIp(String ip) async {
+    try {
+      final result = await _channel.invokeMethod<bool>(
+        'connectToIp',
+        {'ip': ip},
+      );
+      return result ?? false;
+    } catch (e) {
+      debugPrint('connectToIp failed: $e');
+      return false;
+    }
+  }
+
   static Future<Map<String, dynamic>> debugState() async {
     try {
       final state = await _channel.invokeMapMethod<String, dynamic>('debugState');
