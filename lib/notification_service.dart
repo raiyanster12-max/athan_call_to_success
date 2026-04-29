@@ -210,6 +210,7 @@ class NotificationService {
   }) async {
     if (defaultTargetPlatform != TargetPlatform.android) return;
 
+    debugPrint('[ATHAN_SIGNAL] START_TRIGGER: $prayerName (Background: $isBackground)');
     try {
       final connected = await _ensureCastConnected();
 
