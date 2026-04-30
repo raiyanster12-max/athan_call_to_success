@@ -1,11 +1,15 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
 class DBHelper {
   static const String trackerPrayerKeyPrefix = 'prayer_status_date_';
   static const String trackerRamadanKeyPrefix = 'ramadan_status_year_';
+
+  /// Notifier to alert listeners (like HomePage) when the pinned masjid changes.
+  static final ChangeNotifier pinnedChangeNotifier = ChangeNotifier();
 
   static Future<void> _createFavoriteMasjidsTable(Database db) async {
     await db.execute(
@@ -270,6 +274,7 @@ class DBHelper {
         }, conflictAlgorithm: ConflictAlgorithm.replace);
       }
     });
+    pinnedChangeNotifier.notifyListeners();
   }
 
   static Future<void> clearPinnedMasjid() async {
@@ -285,6 +290,7 @@ class DBHelper {
         _kPinnedLng,
       ],
     );
+    pinnedChangeNotifier.notifyListeners();
   }
 
   // ──────────────────────────────────────────────────────────────────────────

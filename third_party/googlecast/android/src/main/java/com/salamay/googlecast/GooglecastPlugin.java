@@ -15,6 +15,7 @@ import androidx.mediarouter.media.MediaRouter;
 import androidx.annotation.NonNull;
 import com.salamay.googlecast.ChromeCastViewFactory;
 import com.salamay.googlecast.Model.AudioData;
+import com.google.android.gms.cast.CastDevice;
 import com.google.android.gms.cast.framework.CastButtonFactory;
 import com.google.android.gms.cast.framework.CastContext;
 import com.google.android.gms.cast.framework.CastSession;
@@ -59,14 +60,18 @@ public class GooglecastPlugin implements FlutterPlugin, MethodCallHandler,Activi
     connectionstatechanenel=new EventChannel(flutterPluginBinding.getBinaryMessenger(),chromecastconnectionstate);
     messagestatechannel=new EventChannel(flutterPluginBinding.getBinaryMessenger(), chromecastmediamessage);
     
-    // Initialize for background execution where activity is null
-    if (chromeCastSession == null) {
-      try {
-        chromeCastSession = new ChromeCastSession(applicationContext);
-      } catch (Exception e) {
-        Log.e(TAG, "Failed to initialize ChromeCastSession in background", e);
+    // Initialize session for background execution where activity is null.
+    // Use the UI thread to ensure CastContext.getSharedInstance doesn't crash.
+    new Handler(Looper.getMainLooper()).post(() -> {
+      if (chromeCastSession == null) {
+        try {
+          chromeCastSession = new ChromeCastSession(applicationContext);
+          connectionstatechanenel.setStreamHandler(chromeCastSession);
+        } catch (Exception e) {
+          Log.e(TAG, "Failed to initialize ChromeCastSession in onAttachedToEngine", e);
+        }
       }
-    }
+    });
   }
 
   @Override
@@ -134,6 +139,13 @@ public class GooglecastPlugin implements FlutterPlugin, MethodCallHandler,Activi
       } else {
         reconnectToDevice(deviceName, result);
       }
+    } else if(call.method.equals("connectToIp")) {
+      String ip = call.argument("ip");
+      if (ip == null || ip.isEmpty()) {
+        result.success(false);
+      } else {
+        connectToIp(ip, result);
+      }
     } else {
       result.notImplemented();
     }
@@ -142,9 +154,9 @@ public class GooglecastPlugin implements FlutterPlugin, MethodCallHandler,Activi
 
   @Override
   public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
-    if (chromeCastSession != null) {
-      chromeCastSession.endSession();
-    }
+    // DO NOT call chromeCastSession.endSession() here.
+    // We want the Cast session to persist even if the Flutter engine is detached,
+    // allowing it to be picked up again by a background service or the next activity attach.
     if (channel != null) {
       channel.setMethodCallHandler(null);
     }
@@ -158,19 +170,28 @@ public class GooglecastPlugin implements FlutterPlugin, MethodCallHandler,Activi
 
   @Override
   public void  onAttachedToActivity(@NonNull ActivityPluginBinding  binding) {
-    setupResources(binding);
-  }
-  public void setupResources(@NonNull ActivityPluginBinding binding){
     Log.i(TAG,"ON ATTACHED TO ACTIVITY");
     activity = binding.getActivity();
     ChromeCastViewFactory.activity=activity;
-    chromeCastSession=new ChromeCastSession(activity);
+    
+    // If we already have a session (from engine attach), just update the context/activity
+    // and re-attach listeners if needed.
+    if (chromeCastSession == null) {
+        chromeCastSession = new ChromeCastSession(activity);
+    } else {
+        chromeCastSession.addSessionListener();
+    }
+
     chromeCastSreamHandler= new ChromeCastSreamHandler();
     connectionstatechanenel.setStreamHandler(chromeCastSession);
     messagestatechannel.setStreamHandler(chromeCastSreamHandler);
     br = chromeCastSreamHandler;
     IntentFilter filter = new IntentFilter(ChromeCastSession.ACTION);
-    activity.getApplicationContext().registerReceiver(br, filter);
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        activity.getApplicationContext().registerReceiver(br, filter, Context.RECEIVER_EXPORTED);
+    } else {
+        activity.getApplicationContext().registerReceiver(br, filter);
+    }
   }
   public void freeResources(){
     Log.i(TAG,"ON DETACHED TO ACTIVITY");
@@ -200,7 +221,22 @@ public class GooglecastPlugin implements FlutterPlugin, MethodCallHandler,Activi
   @Override
   public void onReattachedToActivityForConfigChanges(@NonNull ActivityPluginBinding  binding) {
     Log.i(TAG,"ON RE-ATTACHED TO ACTIVITY");
-    setupResources(binding);
+    activity = binding.getActivity();
+    if (chromeCastSession == null) {
+        chromeCastSession = new ChromeCastSession(activity);
+    } else {
+        chromeCastSession.addSessionListener();
+    }
+    chromeCastSreamHandler= new ChromeCastSreamHandler();
+    connectionstatechanenel.setStreamHandler(chromeCastSession);
+    messagestatechannel.setStreamHandler(chromeCastSreamHandler);
+    br = chromeCastSreamHandler;
+    IntentFilter filter = new IntentFilter(ChromeCastSession.ACTION);
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        activity.getApplicationContext().registerReceiver(br, filter, Context.RECEIVER_EXPORTED);
+    } else {
+        activity.getApplicationContext().registerReceiver(br, filter);
+    }
   }
 
   @Override
@@ -284,27 +320,106 @@ public class GooglecastPlugin implements FlutterPlugin, MethodCallHandler,Activi
     });
   }
 
-  private void reconnectToDevice(String deviceName, @NonNull Result result) {
-    new Handler(Looper.getMainLooper()).post(() -> {
-      try {
-        // Ensure CastContext is initialized so its MediaRouter callback is registered.
-        CastContext.getSharedInstance(applicationContext);
-        MediaRouter mediaRouter = MediaRouter.getInstance(applicationContext);
-        List<MediaRouter.RouteInfo> routes = mediaRouter.getRoutes();
-        Log.i(TAG, "reconnectToDevice: scanning " + routes.size() + " routes for '" + deviceName + "'");
-        for (MediaRouter.RouteInfo route : routes) {
-          if (deviceName.equals(route.getName())) {
-            Log.i(TAG, "reconnectToDevice: found route, selecting");
-            mediaRouter.selectRoute(route);
-            result.success(true);
-            return;
+  private void reconnectToDevice(final String deviceName, @NonNull final Result result) {
+    final Handler handler = new Handler(Looper.getMainLooper());
+    handler.post(new Runnable() {
+      int retries = 0;
+      @Override
+      public void run() {
+        try {
+          CastContext castContext = CastContext.getSharedInstance(applicationContext);
+          MediaRouter mediaRouter = MediaRouter.getInstance(applicationContext);
+
+          // 1. Check if we're already connected to THIS device
+          CastSession currentSession = castContext.getSessionManager().getCurrentCastSession();
+          if (currentSession != null && currentSession.isConnected()) {
+            CastDevice device = currentSession.getCastDevice();
+            if (device != null && deviceName.equals(device.getFriendlyName())) {
+              Log.i(TAG, "reconnectToDevice: already connected to " + deviceName);
+              result.success(true);
+              return;
+            }
           }
+
+          // 2. Scan discovered routes
+          List<MediaRouter.RouteInfo> routes = mediaRouter.getRoutes();
+          Log.d(TAG, "reconnectToDevice: scanning " + routes.size() + " routes for '" + deviceName + "' (try " + retries + ")");
+          for (MediaRouter.RouteInfo route : routes) {
+            if (deviceName.equals(route.getName())) {
+              Log.i(TAG, "reconnectToDevice: found route, selecting");
+              mediaRouter.selectRoute(route);
+              result.success(true);
+              return;
+            }
+          }
+
+          // 3. Retry while discovery runs
+          if (retries < 25) { // Wait up to 25s for mDNS to resolve
+            retries++;
+            handler.postDelayed(this, 1000);
+          } else {
+            Log.i(TAG, "reconnectToDevice: device '" + deviceName + "' not found after timeout");
+            result.success(false);
+          }
+        } catch (Exception e) {
+          Log.e(TAG, "reconnectToDevice failure", e);
+          result.success(false);
         }
-        Log.i(TAG, "reconnectToDevice: route not yet discovered");
-        result.success(false);
-      } catch (Exception e) {
-        Log.e(TAG, "reconnectToDevice failed", e);
-        result.success(false);
+      }
+    });
+  }
+
+  private void connectToIp(final String ip, @NonNull final Result result) {
+    final Handler handler = new Handler(Looper.getMainLooper());
+    handler.post(new Runnable() {
+      int retries = 0;
+      @Override
+      public void run() {
+        try {
+          CastContext castContext = CastContext.getSharedInstance(applicationContext);
+          MediaRouter mediaRouter = MediaRouter.getInstance(applicationContext);
+
+          // 1. Check if we're already connected to THIS IP
+          CastSession currentSession = castContext.getSessionManager().getCurrentCastSession();
+          if (currentSession != null && currentSession.isConnected()) {
+            CastDevice device = currentSession.getCastDevice();
+            if (device != null && device.getIpAddress() != null) {
+              if (ip.equals(device.getIpAddress().getHostAddress())) {
+                Log.i(TAG, "connectToIp: already connected to " + ip);
+                result.success(true);
+                return;
+              }
+            }
+          }
+
+          // 2. Scan routes by IP
+          List<MediaRouter.RouteInfo> routes = mediaRouter.getRoutes();
+          Log.d(TAG, "connectToIp: scanning " + routes.size() + " routes for IP " + ip + " (try " + retries + ")");
+          for (MediaRouter.RouteInfo route : routes) {
+            CastDevice d = CastDevice.getFromBundle(route.getExtras());
+            if (d != null && d.getIpAddress() != null) {
+              String deviceIp = d.getIpAddress().getHostAddress();
+              if (ip.equals(deviceIp)) {
+                Log.i(TAG, "connectToIp: found route by IP, selecting");
+                mediaRouter.selectRoute(route);
+                result.success(true);
+                return;
+              }
+            }
+          }
+
+          // 3. Retry while discovery runs
+          if (retries < 20) { // Wait up to 20s for IP discovery
+            retries++;
+            handler.postDelayed(this, 1000);
+          } else {
+            Log.i(TAG, "connectToIp: IP " + ip + " not found after timeout");
+            result.success(false);
+          }
+        } catch (Exception e) {
+          Log.e(TAG, "connectToIp failure", e);
+          result.success(false);
+        }
       }
     });
   }

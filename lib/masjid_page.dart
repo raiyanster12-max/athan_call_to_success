@@ -154,11 +154,13 @@ class _MasjidPageState extends State<MasjidPage> {
     double lng, {
     String? zipcode,
   }) async {
+    final token = await DBHelper.getSetting(_kMawaqitToken);
     return _mosqueService.findNearbyMosques(
       lat,
       lng,
       radiusMeters: _searchRadiusMeters,
       zipcode: zipcode,
+      mawaqitToken: token,
     );
   }
 
@@ -312,6 +314,7 @@ class _MasjidPageState extends State<MasjidPage> {
       });
 
       final mapped = nearby
+          .where((m) => m.lat != null && m.lng != null)
           .map(
             (m) => MasjidResult(
               id: 'mawaqit_${m.uuid}',
@@ -474,10 +477,15 @@ class _MasjidPageState extends State<MasjidPage> {
 
     try {
       final coords = await _mosqueService.geocodeQuery(input);
-      final items = await _findNearbyWithExpandedRadius(
+      final radiusMeters = (_searchRadiusMiles * 1609.34).toInt();
+      final token = await DBHelper.getSetting(_kMawaqitToken);
+
+      final items = await _mosqueService.findNearbyMosques(
         coords.lat,
         coords.lng,
+        radiusMeters: radiusMeters,
         zipcode: input,
+        mawaqitToken: token,
       );
 
       if (!mounted) return;
@@ -726,50 +734,85 @@ class _MasjidPageState extends State<MasjidPage> {
 
   // -- Dialogs / sheets -------------------------------------------------------
 
+  int _searchRadiusMiles = 10;
+
   void _showSearchDialog() {
     _locationController.clear();
     showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppPalette.surfaceRaised,
-        title: const Text(
-          'Search by Location',
-          style: TextStyle(color: AppPalette.textPrimary),
-        ),
-        content: TextField(
-          controller: _locationController,
-          autofocus: true,
-          textInputAction: TextInputAction.search,
-          style: const TextStyle(color: AppPalette.textPrimary),
-          decoration: InputDecoration(
-            hintText: 'Zip code or city name',
-            hintStyle: const TextStyle(color: AppPalette.textMuted),
-            filled: true,
-            fillColor: AppPalette.surface,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppPalette.surfaceRaised,
+          title: const Text(
+            'Search Masjid',
+            style: TextStyle(color: AppPalette.textPrimary),
           ),
-          onSubmitted: (_) {
-            Navigator.of(ctx).pop();
-            _searchByLocation();
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: AppPalette.textSecondary),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _locationController,
+                autofocus: true,
+                textInputAction: TextInputAction.search,
+                style: const TextStyle(color: AppPalette.textPrimary),
+                decoration: InputDecoration(
+                  hintText: 'Zip code or city name',
+                  hintStyle: const TextStyle(color: AppPalette.textMuted),
+                  filled: true,
+                  fillColor: AppPalette.surface,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onSubmitted: (_) {
+                  Navigator.of(ctx).pop();
+                  _searchByLocation();
+                },
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  const Text(
+                    'Radius:',
+                    style: TextStyle(color: AppPalette.textSecondary),
+                  ),
+                  Expanded(
+                    child: Slider(
+                      value: _searchRadiusMiles.toDouble(),
+                      min: 5,
+                      max: 50,
+                      divisions: 9,
+                      activeColor: AppPalette.accent,
+                      label: '$_searchRadiusMiles miles',
+                      onChanged: (val) {
+                        setDialogState(() => _searchRadiusMiles = val.toInt());
+                      },
+                    ),
+                  ),
+                  Text(
+                    '$_searchRadiusMiles mi',
+                    style: const TextStyle(color: AppPalette.textPrimary),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: AppPalette.textSecondary),
+              ),
             ),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppPalette.accent),
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              _searchByLocation();
-            },
-            child: const Text('Search', style: TextStyle(color: Colors.black)),
-          ),
-        ],
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppPalette.accent),
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _searchByLocation();
+              },
+              child: const Text('Search', style: TextStyle(color: Colors.black)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1003,16 +1046,20 @@ class _MasjidPageState extends State<MasjidPage> {
   @override
   Widget build(BuildContext context) {
     final hasPinned = _pinnedMasjid != null;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final isSmallScreen = screenHeight < 700;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
+        toolbarHeight: isSmallScreen ? 50 : 56,
         title: Text(
           _view == _MasjidView.results || _view == _MasjidView.map
               ? _resultsTitle
               : (hasPinned
                     ? (_pinnedMasjid!['name'] as String)
                     : 'Masjid Finder'),
+          style: TextStyle(fontSize: isSmallScreen ? 18 : 20),
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -1145,6 +1192,7 @@ class _MasjidPageState extends State<MasjidPage> {
                           icon: const Icon(Icons.search, size: 16),
                           label: const Text('By Location'),
                         ),
+                        /*
                         FilledButton.icon(
                           onPressed: _isMawaqitBusy
                               ? null
@@ -1156,6 +1204,7 @@ class _MasjidPageState extends State<MasjidPage> {
                                 : 'Mawaqit Sign In',
                           ),
                         ),
+                        */
                       ],
                     ),
                     if ((_selectedMawaqitMosqueName ?? '').isNotEmpty) ...[
@@ -1381,6 +1430,7 @@ class _MasjidPageState extends State<MasjidPage> {
                 label: 'BY LOCATION',
                 onTap: _showSearchDialog,
               ),
+            /*
               _GridTile(
                 icon: Icons.login,
                 label: _isMawaqitBusy ? 'SIGNING IN' : 'MAWAQIT LOGIN',
@@ -1388,6 +1438,7 @@ class _MasjidPageState extends State<MasjidPage> {
                     ? () {}
                     : _signInAndFindNearestMawaqitMasjid,
               ),
+            */
             ],
           ),
         ),
@@ -1494,6 +1545,9 @@ class _MasjidPageState extends State<MasjidPage> {
   }
 
   Widget _buildResults() {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final isSmallScreen = screenHeight < 700;
+
     if (_isLoading) {
       return const Center(
         child: Column(
@@ -1528,15 +1582,18 @@ class _MasjidPageState extends State<MasjidPage> {
         // Map/List toggle bar
         Container(
           color: AppPalette.surfaceRaised,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: isSmallScreen ? 4 : 8,
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 '${_results.length} masjids found',
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppPalette.textPrimary,
-                  fontSize: 13,
+                  fontSize: isSmallScreen ? 12 : 13,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -1550,14 +1607,18 @@ class _MasjidPageState extends State<MasjidPage> {
                       },
                       tooltip: 'Map view',
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 40),
+                      constraints: BoxConstraints(
+                        minWidth: isSmallScreen ? 32 : 40,
+                      ),
                     ),
                   IconButton(
                     icon: const Icon(Icons.close, color: AppPalette.textMuted),
                     onPressed: _goHome,
                     tooltip: 'Close',
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 40),
+                    constraints: BoxConstraints(
+                      minWidth: isSmallScreen ? 32 : 40,
+                    ),
                   ),
                 ],
               ),
@@ -1567,7 +1628,12 @@ class _MasjidPageState extends State<MasjidPage> {
         // List of masjids
         Expanded(
           child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              isSmallScreen ? 8 : 16,
+              16,
+              16,
+            ),
             itemCount: _results.length,
             separatorBuilder: (context, index) => const SizedBox(height: 8),
             itemBuilder: (context, index) {
@@ -1579,17 +1645,26 @@ class _MasjidPageState extends State<MasjidPage> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: ListTile(
+                  dense: isSmallScreen,
                   leading: Icon(
                     Icons.mosque,
                     color: isPinned ? AppPalette.accent : AppPalette.textMuted,
                   ),
                   title: Text(
                     item.name,
-                    style: const TextStyle(color: AppPalette.textPrimary),
+                    style: TextStyle(
+                      color: AppPalette.textPrimary,
+                      fontSize: isSmallScreen ? 14 : 16,
+                    ),
                   ),
                   subtitle: Text(
                     item.address.isEmpty ? 'Address unavailable' : item.address,
-                    style: const TextStyle(color: AppPalette.textSecondary),
+                    style: TextStyle(
+                      color: AppPalette.textSecondary,
+                      fontSize: isSmallScreen ? 11 : 13,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   trailing: isPinned
                       ? const Icon(

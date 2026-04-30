@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 
@@ -69,6 +70,21 @@ class GoogleChromeCast {
     }
   }
 
+  /// Attempts to connect directly to a Cast device by its IP address.
+  /// This is more robust than mDNS in background states.
+  static Future<bool> connectToIp(String ip) async {
+    try {
+      final result = await _channel.invokeMethod<bool>(
+        'connectToIp',
+        {'ip': ip},
+      );
+      return result ?? false;
+    } catch (e) {
+      debugPrint('connectToIp failed: $e');
+      return false;
+    }
+  }
+
   static Future<Map<String, dynamic>> debugState() async {
     try {
       final state = await _channel.invokeMapMethod<String, dynamic>('debugState');
@@ -92,18 +108,9 @@ class GoogleChromeCast {
 
   static Future<void> startDiscovery() async {
     try {
-      // Older native plugin builds may not expose startDiscovery directly.
-      // Fall back to showing the Cast chooser, which also performs discovery.
-      final started = await _channel.invokeMethod<bool>('startDiscovery');
-      if (started == true) return;
-    } catch (_) {
-      // Ignore and try chooser fallback below.
-    }
-
-    try {
-      await _channel.invokeMethod<bool>('showCastDialog');
-    } catch (_) {
-      // Best effort only; callers should still poll isConnected().
+      await _channel.invokeMethod<void>('startDiscovery');
+    } catch (e) {
+      debugPrint('startDiscovery failed: $e');
     }
   }
 

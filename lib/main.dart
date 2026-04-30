@@ -31,10 +31,12 @@ final GoogleSignIn _googleSignIn = GoogleSignIn(
   scopes: ['email', 'https://www.googleapis.com/auth/contacts.readonly'],
 );
 
-Future<void> _initializeSharedPrayerEngines() async {
+// main.dart
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Desktop builds use sqflite_common_ffi; initialize before any DB access.
+  // 1. Initialize Database for Desktop/Mobile
   if (!kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.windows ||
           defaultTargetPlatform == TargetPlatform.linux ||
@@ -43,16 +45,16 @@ Future<void> _initializeSharedPrayerEngines() async {
     databaseFactory = databaseFactoryFfi;
   }
 
-  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+  // 2. STABLE CONNECTION FIX: Initialize Notification Service & Background Handlers
+  // This must happen before runApp so the background isolate can register properly.
+  final notificationService = NotificationService.instance;
+  await notificationService.initialize();
+
+  // 3. Initialize Alarm Manager (Required for Android background triggers)
+  if (defaultTargetPlatform == TargetPlatform.android) {
     await AndroidAlarmManager.initialize();
   }
 
-  await NotificationService.instance.initialize();
-  HijriDate.setLocal('en');
-}
-
-Future<void> main() async {
-  await _initializeSharedPrayerEngines();
   final onboardingDone =
       await DBHelper.getSetting('onboarding_complete') == 'true';
   runApp(AthanApp(showOnboarding: !onboardingDone));
@@ -63,6 +65,8 @@ Future<void> carAppMain() async {
   await _initializeSharedPrayerEngines();
   runApp(const AthanApp());
 }
+
+Future<void> _initializeSharedPrayerEngines() async {}
 
 class AthanApp extends StatelessWidget {
   const AthanApp({super.key, this.showOnboarding = false});
@@ -300,6 +304,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    DBHelper.pinnedChangeNotifier.addListener(_loadPinnedMasjidForHome);
     NotificationService.instance.refreshBatchIfNeeded();
     unawaited(_loadPinnedMasjidForHome());
     unawaited(_loadIqamahSettingsForHome());
@@ -319,6 +324,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    DBHelper.pinnedChangeNotifier.removeListener(_loadPinnedMasjidForHome);
     _clockTimer?.cancel();
     _countdownTimer?.cancel();
     super.dispose();
@@ -427,9 +433,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
 
     try {
+      final token = await DBHelper.getSetting('mawaqit_token');
       final nearby = await _mosqueService.findNearbyMosques(
         position.latitude,
         position.longitude,
+        mawaqitToken: token,
       );
       if (!mounted || _pinnedMasjid != null) return;
 
@@ -801,8 +809,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final current = _getCurrentPrayer();
     final screenHeight = MediaQuery.sizeOf(context).height;
-    final heroHeight = (screenHeight * 0.34).clamp(250.0, 360.0);
-    final timetableTopGap = (screenHeight * 0.018).clamp(8.0, 20.0);
+    final isSmallScreen = screenHeight < 700;
+    final heroHeight = (screenHeight * 0.34).clamp(isSmallScreen ? 200.0 : 250.0, 360.0);
+    final timetableTopGap = (screenHeight * 0.018).clamp(isSmallScreen ? 4.0 : 8.0, 20.0);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -815,14 +824,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
           ),
           SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildTopBar(),
-                _buildHeroSection(current, heroHeight: heroHeight),
-                SizedBox(height: timetableTopGap),
-                Expanded(child: _buildPrayerList(current?.name)),
-              ],
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildTopBar(),
+                  _buildHeroSection(current, heroHeight: heroHeight),
+                  SizedBox(height: timetableTopGap),
+                  _buildPrayerList(current?.name),
+                ],
+              ),
             ),
           ),
         ],
@@ -831,8 +843,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Widget _buildTopBar() {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final isSmallScreen = screenHeight < 700;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 4, 0),
+      padding: EdgeInsets.fromLTRB(20, isSmallScreen ? 4 : 8, 4, 0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -841,18 +856,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             children: [
               Text(
                 _hijriShortLabel,
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppPalette.textSecondary,
-                  fontSize: 20,
+                  fontSize: isSmallScreen ? 18 : 20,
                   fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 _todayDateLabel,
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppPalette.textMuted,
-                  fontSize: 16,
+                  fontSize: isSmallScreen ? 14 : 16,
                   fontWeight: FontWeight.w400,
                 ),
               ),
@@ -875,20 +890,32 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _PrayerEntry? current, {
     required double heroHeight,
   }) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final isSmallScreen = screenHeight < 700;
+
     final countdown = _nextPrayerCountdownLabel();
     final prayerLabel = current?.name ?? (_nextPrayerName ?? '—');
     final locationLabel = _heroLocationLabel();
-    final textTopPadding = (heroHeight * 0.28).clamp(80.0, 120.0);
-    final textBottomPadding = (heroHeight * 0.12).clamp(20.0, 36.0);
+
+    final textTopPadding = isSmallScreen
+        ? (heroHeight * 0.22).clamp(40.0, 80.0)
+        : (heroHeight * 0.28).clamp(80.0, 120.0);
+    final textBottomPadding = isSmallScreen
+        ? 8.0
+        : (heroHeight * 0.12).clamp(20.0, 36.0);
     final cloudTop = (heroHeight * 0.48).clamp(108.0, 150.0);
 
-    return SizedBox(
-      height: heroHeight,
+    return Container(
+      constraints: BoxConstraints(minHeight: heroHeight),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           // Keep decoration below the top bar so the settings/menu icon remains visible.
-          Positioned(top: 8, right: -8, child: _buildMoonDecoration()),
+          Positioned(
+            top: isSmallScreen ? -10 : 8,
+            right: isSmallScreen ? -20 : -8,
+            child: _buildMoonDecoration(isSmallScreen: isSmallScreen),
+          ),
           Positioned(top: cloudTop, right: 34, child: _buildCloudWisps()),
           // Current prayer text + qibla button
           Padding(
@@ -904,23 +931,24 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         prayerLabel,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Colors.white,
-                          fontSize: 52,
+                          fontSize: isSmallScreen ? 42 : 52,
                           fontWeight: FontWeight.bold,
                           letterSpacing: -1.0,
                           height: 1.0,
                         ),
                       ),
                       const SizedBox(height: 2),
-                      const Text(
+                      Text(
                         'In Prayer.',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 22,
+                          fontSize: isSmallScreen ? 18 : 22,
                           fontWeight: FontWeight.w300,
                         ),
                       ),
@@ -928,9 +956,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         const SizedBox(height: 6),
                         Text(
                           countdown,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
-                            fontSize: 22,
+                            fontSize: isSmallScreen ? 18 : 22,
                             fontWeight: FontWeight.w300,
                           ),
                         ),
@@ -939,9 +967,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         const SizedBox(height: 4),
                         Text(
                           locationLabel,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppPalette.textMuted,
-                            fontSize: 15,
+                            fontSize: isSmallScreen ? 13 : 15,
                           ),
                         ),
                       ],
@@ -949,7 +977,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   ),
                 ),
                 const SizedBox(width: 12),
-                _buildQiblaFab(),
+                _buildQiblaFab(isSmallScreen: isSmallScreen),
               ],
             ),
           ),
@@ -958,82 +986,89 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildMoonDecoration() {
+  Widget _buildMoonDecoration({bool isSmallScreen = false}) {
+    final size = isSmallScreen ? 110.0 : 130.0;
     return SizedBox(
-      width: 130,
-      height: 130,
-      child: Stack(
-        children: [
-          // Base moon circle
-          Container(
-            width: 130,
-            height: 130,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFF9EA8D8),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF9EA8D8).withValues(alpha: 0.25),
-                  blurRadius: 24,
-                  spreadRadius: 6,
+      width: size,
+      height: size,
+      child: FittedBox(
+        child: SizedBox(
+          width: 130,
+          height: 130,
+          child: Stack(
+            children: [
+              // Base moon circle
+              Container(
+                width: 130,
+                height: 130,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF9EA8D8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF9EA8D8).withValues(alpha: 0.25),
+                      blurRadius: 24,
+                      spreadRadius: 6,
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-          // Large crater
-          Positioned(
-            top: 22,
-            left: 28,
-            child: Container(
-              width: 26,
-              height: 26,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0xFF7A84B8),
               ),
-            ),
-          ),
-          // Medium crater
-          Positioned(
-            top: 56,
-            left: 72,
-            child: Container(
-              width: 16,
-              height: 16,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0xFF8088C0),
-              ),
-            ),
-          ),
-          // Small crater
-          Positioned(
-            top: 84,
-            left: 36,
-            child: Container(
-              width: 10,
-              height: 10,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0xFF8490C4),
-              ),
-            ),
-          ),
-          // Shadow overlay on right edge
-          Align(
-            alignment: Alignment.centerRight,
-            child: Container(
-              width: 38,
-              height: 130,
-              decoration: BoxDecoration(
-                borderRadius: const BorderRadius.horizontal(
-                  right: Radius.circular(65),
+              // Large crater
+              Positioned(
+                top: 22,
+                left: 28,
+                child: Container(
+                  width: 26,
+                  height: 26,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFF7A84B8),
+                  ),
                 ),
-                color: const Color(0xFF1B1744).withValues(alpha: 0.55),
               ),
-            ),
+              // Medium crater
+              Positioned(
+                top: 56,
+                left: 72,
+                child: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFF8088C0),
+                  ),
+                ),
+              ),
+              // Small crater
+              Positioned(
+                top: 84,
+                left: 36,
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFF8490C4),
+                  ),
+                ),
+              ),
+              // Shadow overlay on right edge
+              Align(
+                alignment: Alignment.centerRight,
+                child: Container(
+                  width: 38,
+                  height: 130,
+                  decoration: BoxDecoration(
+                    borderRadius: const BorderRadius.horizontal(
+                      right: Radius.circular(65),
+                    ),
+                    color: const Color(0xFF1B1744).withValues(alpha: 0.55),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1063,14 +1098,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildQiblaFab() {
+  Widget _buildQiblaFab({bool isSmallScreen = false}) {
+    final size = isSmallScreen ? 56.0 : 68.0;
+    final iconSize = isSmallScreen ? 28.0 : 32.0;
+
     return GestureDetector(
       onTap: () => Navigator.of(
         context,
       ).push(MaterialPageRoute(builder: (_) => const QiblaPage())),
       child: Container(
-        width: 68,
-        height: 68,
+        width: size,
+        height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: const Color(0xFF2A2270),
@@ -1082,13 +1120,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            const Icon(Icons.mosque, color: Colors.white, size: 32),
+            Icon(Icons.mosque, color: Colors.white, size: iconSize),
             Positioned(
-              bottom: 11,
-              right: 11,
+              bottom: isSmallScreen ? 8 : 11,
+              right: isSmallScreen ? 8 : 11,
               child: Container(
-                width: 10,
-                height: 10,
+                width: isSmallScreen ? 8 : 10,
+                height: isSmallScreen ? 8 : 10,
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
                   color: AppPalette.accent,
@@ -1167,6 +1205,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Widget _buildPrayerRow(String name, DateTime time, {bool isActive = false}) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final isSmallScreen = screenHeight < 700;
+
     final offsetLabel = _masjidOffsetLabel(name);
     final offsetMinutes = _iqamahOffsetForPrayer(name);
     final timeLabel = _formatTime(time);
@@ -1175,7 +1216,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ? '$name at $timeLabel'
           : '$name at $timeLabel with iqamah offset plus $offsetMinutes minutes',
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+        padding: EdgeInsets.symmetric(
+          horizontal: 24,
+          vertical: isSmallScreen ? 12 : 18,
+        ),
         child: Row(
           children: [
             Expanded(
@@ -1183,7 +1227,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 name,
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 18,
+                  fontSize: isSmallScreen ? 16 : 18,
                   fontWeight: isActive ? FontWeight.w500 : FontWeight.w300,
                 ),
               ),
@@ -1195,9 +1239,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   Text(
                     timeLabel,
                     textAlign: TextAlign.right,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white,
-                      fontSize: 18,
+                      fontSize: isSmallScreen ? 16 : 18,
                       fontWeight: FontWeight.w300,
                     ),
                   ),
@@ -1249,5 +1293,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 }
 
 extension on NotificationService {
-  void refreshBatchIfNeeded() {}
+  Future<void> refreshBatchIfNeeded() =>
+      NotificationService.instance.refreshBatchIfNeeded();
+
+  Future<void> scheduleRollingPrayerNotifications({
+    required double latitude,
+    required double longitude,
+  }) =>
+      NotificationService.instance.scheduleRollingPrayerNotifications(
+        latitude: latitude,
+        longitude: longitude,
+      );
+
+  Future<void> triggerSelectedSpeakerNow({required String prayerName}) =>
+      NotificationService.instance.triggerSelectedSpeakerNow(
+        prayerName: prayerName,
+      );
 }

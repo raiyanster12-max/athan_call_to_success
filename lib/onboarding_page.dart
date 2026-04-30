@@ -123,26 +123,28 @@ class _OnboardingPageState extends State<OnboardingPage> {
     });
   }
 
+  // onboarding_page.dart - Update the _selectDevice method
   Future<void> _selectDevice(String deviceName) async {
     _discoveryTimer?.cancel();
-    // Store the preferred name immediately
+
+    // 1. Store the exact device name for the background service to find
     await DBHelper.setSetting(
       NotificationService.preferredCastSpeakerNameKey,
       deviceName,
     );
 
-    // Set the routing to Google Cast
+    // 2. Explicitly set the route to Google Cast
     await DBHelper.setSetting(
       'notification_speaker_route',
       NotificationService.speakerGoogleCast,
     );
 
-    // CRITICAL: Attempt a physical connection during onboarding to cache
-    // internal Cast IDs within the native plugin, which aids background discovery.
+    // 3. HANDSHAKE: Force a connection now. This primes the native
+    // Cast SDK to remember this device's route.
     try {
       await GoogleChromeCast.reconnectToDevice(deviceName);
     } catch (e) {
-      debugPrint('Initial connection handshake failed: $e');
+      debugPrint('Handshake failed, but name is saved: $e');
     }
 
     await _finishOnboarding();
