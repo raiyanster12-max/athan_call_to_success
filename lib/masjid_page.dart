@@ -636,24 +636,35 @@ class _MasjidPageState extends State<MasjidPage> {
                 return;
               }
 
-              // Save to local favorites (community input)
-              if (_pinnedMasjid != null) {
+              // Capture before async + pop
+              final pinnedSnapshot = _pinnedMasjid;
+              if (ctx.mounted) Navigator.of(ctx).pop();
+
+              if (pinnedSnapshot != null) {
+                final lat = pinnedSnapshot['lat'] as double;
+                final lng = pinnedSnapshot['lng'] as double;
+                final id = 'community_${DateTime.now().millisecondsSinceEpoch}';
                 await DBHelper.insertMasjid({
-                  'id': 'community_${DateTime.now().millisecondsSinceEpoch}',
+                  'id': id,
                   'name': name,
                   'address': address,
-                  'lat': _pinnedMasjid!['lat'] as double,
-                  'lng': _pinnedMasjid!['lng'] as double,
+                  'lat': lat,
+                  'lng': lng,
                 });
+                await DBHelper.setPinnedMasjid(
+                  id: id,
+                  name: name,
+                  address: address,
+                  lat: lat,
+                  lng: lng,
+                );
+                await _loadPinnedMasjid();
               }
 
               if (mounted) {
-                Navigator.of(ctx).pop();
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text(
-                      'Mosque added! Thank you for your contribution.',
-                    ),
+                    content: Text('Masjid saved and set as your masjid.'),
                   ),
                 );
               }

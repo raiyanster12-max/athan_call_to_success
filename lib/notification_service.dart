@@ -204,6 +204,30 @@ class NotificationService {
     }
   }
 
+  Future<void> _showFallbackNotification(String? prayerName, String message) async {
+    try {
+      final title = prayerName != null ? '$prayerName Athan' : 'Athan';
+      await _plugin.show(
+        _notificationIdStart - 1,
+        title,
+        message,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'athan_alerts',
+            'Athan Alerts',
+            channelDescription: 'Prayer time notifications and Athan playback',
+            importance: Importance.max,
+            priority: Priority.high,
+            fullScreenIntent: true,
+            category: AndroidNotificationCategory.alarm,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('[ATHAN_BG_SERVICE] Fallback notification error: $e');
+    }
+  }
+
   Future<void> _triggerGoogleCastIfConfigured({
     String? prayerName,
     bool isBackground = false,
@@ -218,6 +242,12 @@ class NotificationService {
         debugPrint(
           '[ATHAN_BG_SERVICE] Cast connection failed. Falling back to phone speaker.',
         );
+        if (isBackground) {
+          await _showFallbackNotification(
+            prayerName,
+            'Cast unavailable — athan playing on phone.',
+          );
+        }
         await _triggerPhoneSpeakerNow(prayerName: prayerName);
         if (isBackground) {
           await Future.delayed(const Duration(seconds: 180));
@@ -230,6 +260,12 @@ class NotificationService {
 
       if (mediaUrl == null || mediaUrl.isEmpty) {
         debugPrint('[ATHAN_BG_SERVICE] No media URL found for $resolvedName. Falling back.');
+        if (isBackground) {
+          await _showFallbackNotification(
+            prayerName,
+            'No Cast media URL set — athan playing on phone.',
+          );
+        }
         await _triggerPhoneSpeakerNow(prayerName: prayerName);
         if (isBackground) {
           await Future.delayed(const Duration(seconds: 180));
@@ -256,7 +292,12 @@ class NotificationService {
       }
     } catch (e) {
       debugPrint('[ATHAN_BG_SERVICE] Cast Trigger Error: $e');
-      // Final fallback
+      if (isBackground) {
+        await _showFallbackNotification(
+          prayerName,
+          'Cast error — athan playing on phone.',
+        );
+      }
       await _triggerPhoneSpeakerNow(prayerName: prayerName);
       if (isBackground) {
         await Future.delayed(const Duration(seconds: 180));
