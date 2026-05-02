@@ -49,15 +49,15 @@ class _SettingsPageState extends State<SettingsPage> {
   static const String _showHijriDateKey = 'settings_show_hijri_date';
   static const String _autoTestPrayerValue = '__auto_next__';
 
-  Color get _pageBackground => AppPalette.of(context).backgroundTop;
-  Color get _surfaceBackground => AppPalette.of(context).surface;
-  Color get _surfaceHighlight => AppPalette.of(context).surfaceRaised;
-  Color get _dividerColor => AppPalette.of(context).outline;
-  Color get _primaryText => AppPalette.of(context).textPrimary;
-  Color get _secondaryText => AppPalette.of(context).textSecondary;
-  Color get _textMuted => AppPalette.of(context).textMuted;
+  Color get _pageBackground => AppPalette.pageBackground;
+  Color get _surfaceBackground => AppPalette.dark.surface;
+  Color get _surfaceHighlight => AppPalette.dark.surfaceRaised;
+  Color get _dividerColor => AppPalette.dark.outline;
+  Color get _primaryText => AppPalette.dark.textPrimary;
+  Color get _secondaryText => AppPalette.dark.textSecondary;
+  Color get _textMuted => AppPalette.dark.textMuted;
   static const Color _sectionAccent = AppPalette.accent;
-  Color get _iconBackground => AppPalette.of(context).panel;
+  Color get _iconBackground => AppPalette.dark.panel;
 
   static const List<String> _speakerRouteOptions = [
     NotificationService.speakerPhoneSpeaker,

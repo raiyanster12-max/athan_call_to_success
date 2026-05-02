@@ -194,10 +194,10 @@ class _MasjidPageState extends State<MasjidPage> {
     final result = await showDialog<Map<String, String>>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppPalette.of(context).surfaceRaised,
+        backgroundColor: AppPalette.dark.surfaceRaised,
         title: Text(
           'Mawaqit Sign In',
-          style: TextStyle(color: AppPalette.of(context).textPrimary),
+          style: TextStyle(color: AppPalette.dark.textPrimary),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -206,7 +206,7 @@ class _MasjidPageState extends State<MasjidPage> {
               controller: emailController,
               keyboardType: TextInputType.emailAddress,
               autofillHints: const [AutofillHints.email],
-              style: TextStyle(color: AppPalette.of(context).textPrimary),
+              style: TextStyle(color: AppPalette.dark.textPrimary),
               decoration: const InputDecoration(labelText: 'Email'),
             ),
             const SizedBox(height: 12),
@@ -214,13 +214,13 @@ class _MasjidPageState extends State<MasjidPage> {
               controller: passwordController,
               obscureText: true,
               autofillHints: const [AutofillHints.password],
-              style: TextStyle(color: AppPalette.of(context).textPrimary),
+              style: TextStyle(color: AppPalette.dark.textPrimary),
               decoration: const InputDecoration(labelText: 'Password'),
             ),
             const SizedBox(height: 8),
             Text(
               'Used only to request a Mawaqit API token on-device.',
-              style: TextStyle(color: AppPalette.of(context).textSecondary, fontSize: 12),
+              style: TextStyle(color: AppPalette.dark.textSecondary, fontSize: 12),
             ),
           ],
         ),
@@ -572,22 +572,22 @@ class _MasjidPageState extends State<MasjidPage> {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppPalette.of(ctx).surfaceRaised,
+        backgroundColor: AppPalette.dark.surfaceRaised,
         title: Text(
           'Add New Mosque',
-          style: TextStyle(color: AppPalette.of(ctx).textPrimary),
+          style: TextStyle(color: AppPalette.dark.textPrimary),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameCtrl,
-              style: TextStyle(color: AppPalette.of(ctx).textPrimary),
+              style: TextStyle(color: AppPalette.dark.textPrimary),
               decoration: InputDecoration(
                 hintText: 'Mosque Name',
-                hintStyle: TextStyle(color: AppPalette.of(ctx).textMuted),
+                hintStyle: TextStyle(color: AppPalette.dark.textMuted),
                 filled: true,
-                fillColor: AppPalette.of(ctx).surface,
+                fillColor: AppPalette.dark.surface,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -596,12 +596,12 @@ class _MasjidPageState extends State<MasjidPage> {
             const SizedBox(height: 12),
             TextField(
               controller: addressCtrl,
-              style: TextStyle(color: AppPalette.of(ctx).textPrimary),
+              style: TextStyle(color: AppPalette.dark.textPrimary),
               decoration: InputDecoration(
                 hintText: 'Address',
-                hintStyle: TextStyle(color: AppPalette.of(ctx).textMuted),
+                hintStyle: TextStyle(color: AppPalette.dark.textMuted),
                 filled: true,
-                fillColor: AppPalette.of(ctx).surface,
+                fillColor: AppPalette.dark.surface,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -611,7 +611,7 @@ class _MasjidPageState extends State<MasjidPage> {
             const SizedBox(height: 12),
             Text(
               'Currently using pinned location coordinates.',
-              style: TextStyle(color: AppPalette.of(ctx).textSecondary, fontSize: 12),
+              style: TextStyle(color: AppPalette.dark.textSecondary, fontSize: 12),
             ),
           ],
         ),
@@ -620,7 +620,7 @@ class _MasjidPageState extends State<MasjidPage> {
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
               'Cancel',
-              style: TextStyle(color: AppPalette.of(ctx).textSecondary),
+              style: TextStyle(color: AppPalette.dark.textSecondary),
             ),
           ),
           FilledButton(
@@ -683,10 +683,10 @@ class _MasjidPageState extends State<MasjidPage> {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppPalette.of(ctx).surfaceRaised,
+        backgroundColor: AppPalette.dark.surfaceRaised,
         title: Text(
           item.name,
-          style: TextStyle(color: AppPalette.of(ctx).textPrimary),
+          style: TextStyle(color: AppPalette.dark.textPrimary),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -698,14 +698,14 @@ class _MasjidPageState extends State<MasjidPage> {
                 child: Text(
                   item.address,
                   style: TextStyle(
-                    color: AppPalette.of(ctx).textSecondary,
+                    color: AppPalette.dark.textSecondary,
                     fontSize: 13,
                   ),
                 ),
               ),
             Text(
               'Coordinates: ${item.lat.toStringAsFixed(4)}, ${item.lng.toStringAsFixed(4)}',
-              style: TextStyle(color: AppPalette.of(ctx).textMuted, fontSize: 12),
+              style: TextStyle(color: AppPalette.dark.textMuted, fontSize: 12),
             ),
           ],
         ),
@@ -714,7 +714,7 @@ class _MasjidPageState extends State<MasjidPage> {
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
               'Close',
-              style: TextStyle(color: AppPalette.of(ctx).textSecondary),
+              style: TextStyle(color: AppPalette.dark.textSecondary),
             ),
           ),
           FilledButton.icon(
@@ -753,10 +753,10 @@ class _MasjidPageState extends State<MasjidPage> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: AppPalette.of(ctx).surfaceRaised,
+          backgroundColor: AppPalette.dark.surfaceRaised,
           title: Text(
             'Search Masjid',
-            style: TextStyle(color: AppPalette.of(ctx).textPrimary),
+            style: TextStyle(color: AppPalette.dark.textPrimary),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -765,12 +765,12 @@ class _MasjidPageState extends State<MasjidPage> {
                 controller: _locationController,
                 autofocus: true,
                 textInputAction: TextInputAction.search,
-                style: TextStyle(color: AppPalette.of(ctx).textPrimary),
+                style: TextStyle(color: AppPalette.dark.textPrimary),
                 decoration: InputDecoration(
                   hintText: 'Zip code or city name',
-                  hintStyle: TextStyle(color: AppPalette.of(ctx).textMuted),
+                  hintStyle: TextStyle(color: AppPalette.dark.textMuted),
                   filled: true,
-                  fillColor: AppPalette.of(ctx).surface,
+                  fillColor: AppPalette.dark.surface,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 onSubmitted: (_) {
@@ -783,7 +783,7 @@ class _MasjidPageState extends State<MasjidPage> {
                 children: [
                   Text(
                     'Radius:',
-                    style: TextStyle(color: AppPalette.of(ctx).textSecondary),
+                    style: TextStyle(color: AppPalette.dark.textSecondary),
                   ),
                   Expanded(
                     child: Slider(
@@ -800,7 +800,7 @@ class _MasjidPageState extends State<MasjidPage> {
                   ),
                   Text(
                     '$_searchRadiusMiles mi',
-                    style: TextStyle(color: AppPalette.of(ctx).textPrimary),
+                    style: TextStyle(color: AppPalette.dark.textPrimary),
                   ),
                 ],
               ),
@@ -811,7 +811,7 @@ class _MasjidPageState extends State<MasjidPage> {
               onPressed: () => Navigator.of(ctx).pop(),
               child: Text(
                 'Cancel',
-                style: TextStyle(color: AppPalette.of(ctx).textSecondary),
+                style: TextStyle(color: AppPalette.dark.textSecondary),
               ),
             ),
             FilledButton(
@@ -831,7 +831,7 @@ class _MasjidPageState extends State<MasjidPage> {
   void _showMasjidOptionsSheet(MasjidResult item) {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: AppPalette.of(context).surfaceRaised,
+      backgroundColor: AppPalette.dark.surfaceRaised,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -846,7 +846,7 @@ class _MasjidPageState extends State<MasjidPage> {
                 child: Text(
                   item.name,
                   style: TextStyle(
-                    color: AppPalette.of(ctx).textPrimary,
+                    color: AppPalette.dark.textPrimary,
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
                   ),
@@ -858,19 +858,19 @@ class _MasjidPageState extends State<MasjidPage> {
                   child: Text(
                     item.address,
                     style: TextStyle(
-                      color: AppPalette.of(ctx).textSecondary,
+                      color: AppPalette.dark.textSecondary,
                       fontSize: 12,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              Divider(color: AppPalette.of(ctx).outline),
+              Divider(color: AppPalette.dark.outline),
               ListTile(
                 leading: const Icon(Icons.star, color: AppPalette.accent),
                 title: Text(
                   'Set as My Masjid',
-                  style: TextStyle(color: AppPalette.of(ctx).textPrimary),
+                  style: TextStyle(color: AppPalette.dark.textPrimary),
                 ),
                 onTap: () {
                   Navigator.of(ctx).pop();
@@ -881,7 +881,7 @@ class _MasjidPageState extends State<MasjidPage> {
                 leading: const Icon(Icons.directions, color: AppPalette.accent),
                 title: Text(
                   'Open in Google Maps',
-                  style: TextStyle(color: AppPalette.of(ctx).textPrimary),
+                  style: TextStyle(color: AppPalette.dark.textPrimary),
                 ),
                 onTap: () {
                   Navigator.of(ctx).pop();
@@ -892,7 +892,7 @@ class _MasjidPageState extends State<MasjidPage> {
                 leading: const Icon(Icons.add, color: AppPalette.accent),
                 title: Text(
                   'View Details',
-                  style: TextStyle(color: AppPalette.of(ctx).textPrimary),
+                  style: TextStyle(color: AppPalette.dark.textPrimary),
                 ),
                 onTap: () {
                   Navigator.of(ctx).pop();
@@ -902,11 +902,11 @@ class _MasjidPageState extends State<MasjidPage> {
               ListTile(
                 leading: Icon(
                   Icons.close,
-                  color: AppPalette.of(ctx).textSecondary,
+                  color: AppPalette.dark.textSecondary,
                 ),
                 title: Text(
                   'Cancel',
-                  style: TextStyle(color: AppPalette.of(ctx).textSecondary),
+                  style: TextStyle(color: AppPalette.dark.textSecondary),
                 ),
                 onTap: () => Navigator.of(ctx).pop(),
               ),
@@ -934,7 +934,7 @@ class _MasjidPageState extends State<MasjidPage> {
 
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: AppPalette.of(context).surfaceRaised,
+      backgroundColor: AppPalette.dark.surfaceRaised,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -951,7 +951,7 @@ class _MasjidPageState extends State<MasjidPage> {
                 Text(
                   'Iqamah Offsets (minutes)',
                   style: TextStyle(
-                    color: AppPalette.of(ctx).textPrimary,
+                    color: AppPalette.dark.textPrimary,
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
                   ),
@@ -969,7 +969,7 @@ class _MasjidPageState extends State<MasjidPage> {
                 Text(
                   "Jum'a Times",
                   style: TextStyle(
-                    color: AppPalette.of(ctx).textSecondary,
+                    color: AppPalette.dark.textSecondary,
                     fontSize: 13,
                   ),
                 ),
@@ -1166,9 +1166,9 @@ class _MasjidPageState extends State<MasjidPage> {
                 margin: const EdgeInsets.fromLTRB(16, 16, 16, 12),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppPalette.of(context).surface,
+                  color: AppPalette.dark.surface,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppPalette.of(context).outline),
+                  border: Border.all(color: AppPalette.dark.outline),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1176,7 +1176,7 @@ class _MasjidPageState extends State<MasjidPage> {
                     Text(
                       'Masjid Finder',
                       style: TextStyle(
-                        color: AppPalette.of(context).textPrimary,
+                        color: AppPalette.dark.textPrimary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -1184,7 +1184,7 @@ class _MasjidPageState extends State<MasjidPage> {
                     Text(
                       'Search and switch to another masjid anytime.',
                       style: TextStyle(
-                        color: AppPalette.of(context).textSecondary,
+                        color: AppPalette.dark.textSecondary,
                         fontSize: 12,
                       ),
                     ),
@@ -1223,7 +1223,7 @@ class _MasjidPageState extends State<MasjidPage> {
                       Text(
                         'Selected Mawaqit mosque: $_selectedMawaqitMosqueName',
                         style: TextStyle(
-                          color: AppPalette.of(context).textSecondary,
+                          color: AppPalette.dark.textSecondary,
                           fontSize: 12,
                         ),
                       ),
@@ -1237,9 +1237,9 @@ class _MasjidPageState extends State<MasjidPage> {
                 margin: const EdgeInsets.symmetric(horizontal: 16),
                 clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
-                  color: AppPalette.of(context).surfaceRaised,
+                  color: AppPalette.dark.surfaceRaised,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppPalette.of(context).outline),
+                  border: Border.all(color: AppPalette.dark.outline),
                 ),
                 child: Column(
                   children: [
@@ -1267,14 +1267,14 @@ class _MasjidPageState extends State<MasjidPage> {
                       children: [
                         Icon(
                           Icons.wb_sunny_outlined,
-                          color: AppPalette.of(context).textMuted,
+                          color: AppPalette.dark.textMuted,
                           size: 15,
                         ),
                         const SizedBox(width: 6),
                         Text(
                           'Sunrise  ${fmt.format(times.sunrise)}',
                           style: TextStyle(
-                            color: AppPalette.of(context).textMuted,
+                            color: AppPalette.dark.textSecondary,
                             fontSize: 13,
                           ),
                         ),
@@ -1286,14 +1286,14 @@ class _MasjidPageState extends State<MasjidPage> {
                         children: [
                           Icon(
                             Icons.mosque,
-                            color: AppPalette.of(context).textMuted,
+                            color: AppPalette.dark.textMuted,
                             size: 15,
                           ),
                           const SizedBox(width: 6),
                           Text(
                             "Jum'a  $jumaa1${jumaa2.isNotEmpty ? '  |  $jumaa2' : ''}",
                             style: TextStyle(
-                              color: AppPalette.of(context).textMuted,
+                              color: AppPalette.dark.textSecondary,
                               fontSize: 13,
                             ),
                           ),
@@ -1310,11 +1310,11 @@ class _MasjidPageState extends State<MasjidPage> {
                   icon: Icon(
                     Icons.clear,
                     size: 15,
-                    color: AppPalette.of(context).textMuted,
+                    color: AppPalette.dark.textMuted,
                   ),
                   label: Text(
                     'Clear pinned masjid',
-                    style: TextStyle(color: AppPalette.of(context).textMuted, fontSize: 12),
+                    style: TextStyle(color: AppPalette.dark.textSecondary, fontSize: 12),
                   ),
                   onPressed: () async {
                     await DBHelper.clearPinnedMasjid();
@@ -1342,7 +1342,7 @@ class _MasjidPageState extends State<MasjidPage> {
         color: isNext ? AppPalette.accent.withAlpha(38) : null,
         border: isLast
             ? null
-            : Border(bottom: BorderSide(color: AppPalette.of(context).outline)),
+            : Border(bottom: BorderSide(color: AppPalette.dark.outline)),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -1353,7 +1353,7 @@ class _MasjidPageState extends State<MasjidPage> {
               child: Text(
                 prayer.name,
                 style: TextStyle(
-                  color: isNext ? AppPalette.accent : AppPalette.of(context).textSecondary,
+                  color: isNext ? AppPalette.accent : AppPalette.dark.textSecondary,
                   fontWeight: isNext ? FontWeight.bold : FontWeight.normal,
                   fontSize: 14,
                 ),
@@ -1369,7 +1369,7 @@ class _MasjidPageState extends State<MasjidPage> {
                   Text(
                     fmt.format(prayer.adhanTime),
                     style: TextStyle(
-                      color: AppPalette.of(context).textPrimary,
+                      color: AppPalette.dark.textPrimary,
                       fontWeight: isNext ? FontWeight.bold : FontWeight.w500,
                       fontSize: isNext ? 26 : 22,
                     ),
@@ -1380,7 +1380,7 @@ class _MasjidPageState extends State<MasjidPage> {
                     style: TextStyle(
                       color: isNext
                           ? AppPalette.accentSoft
-                          : AppPalette.of(context).textMuted,
+                          : AppPalette.dark.textSecondary,
                       fontSize: 13,
                     ),
                   ),
@@ -1403,19 +1403,19 @@ class _MasjidPageState extends State<MasjidPage> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: AppPalette.of(context).surface,
+              color: AppPalette.dark.surface,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppPalette.of(context).outline),
+              border: Border.all(color: AppPalette.dark.outline),
             ),
             child: Row(
               children: [
-                Icon(Icons.mosque, color: AppPalette.of(context).textMuted, size: 20),
+                Icon(Icons.mosque, color: AppPalette.dark.textMuted, size: 20),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     'No local masjid set. Search below and tap a result to pin it as My Masjid.',
                     style: TextStyle(
-                      color: AppPalette.of(context).textSecondary,
+                      color: AppPalette.dark.textSecondary,
                       fontSize: 13,
                     ),
                   ),
@@ -1464,7 +1464,7 @@ class _MasjidPageState extends State<MasjidPage> {
       return Center(
         child: Text(
           'Map not available',
-          style: TextStyle(color: AppPalette.of(context).textSecondary),
+          style: TextStyle(color: AppPalette.dark.textSecondary),
         ),
       );
     }
@@ -1492,7 +1492,7 @@ class _MasjidPageState extends State<MasjidPage> {
           right: 16,
           child: Container(
             decoration: BoxDecoration(
-              color: AppPalette.of(context).surfaceRaised,
+              color: AppPalette.dark.surfaceRaised,
               borderRadius: BorderRadius.circular(12),
               boxShadow: const [
                 BoxShadow(
@@ -1510,7 +1510,7 @@ class _MasjidPageState extends State<MasjidPage> {
                     child: Text(
                       '${_results.length} masjids found',
                       style: TextStyle(
-                        color: AppPalette.of(context).textPrimary,
+                        color: AppPalette.dark.textPrimary,
                         fontSize: 14,
                       ),
                     ),
@@ -1522,7 +1522,7 @@ class _MasjidPageState extends State<MasjidPage> {
                   tooltip: 'List view',
                 ),
                 IconButton(
-                  icon: Icon(Icons.close, color: AppPalette.of(context).textMuted),
+                  icon: Icon(Icons.close, color: AppPalette.dark.textMuted),
                   onPressed: _goHome,
                   tooltip: 'Close',
                 ),
@@ -1568,7 +1568,7 @@ class _MasjidPageState extends State<MasjidPage> {
             const SizedBox(height: 16),
             Text(
               'Searching for masjids...',
-              style: TextStyle(color: AppPalette.of(context).textSecondary),
+              style: TextStyle(color: AppPalette.dark.textSecondary),
             ),
           ],
         ),
@@ -1592,7 +1592,7 @@ class _MasjidPageState extends State<MasjidPage> {
       children: [
         // Map/List toggle bar
         Container(
-          color: AppPalette.of(context).surfaceRaised,
+          color: AppPalette.dark.surfaceRaised,
           padding: EdgeInsets.symmetric(
             horizontal: 16,
             vertical: isSmallScreen ? 4 : 8,
@@ -1603,7 +1603,7 @@ class _MasjidPageState extends State<MasjidPage> {
               Text(
                 '${_results.length} masjids found',
                 style: TextStyle(
-                  color: AppPalette.of(context).textPrimary,
+                  color: AppPalette.dark.textPrimary,
                   fontSize: isSmallScreen ? 12 : 13,
                   fontWeight: FontWeight.w500,
                 ),
@@ -1623,7 +1623,7 @@ class _MasjidPageState extends State<MasjidPage> {
                       ),
                     ),
                   IconButton(
-                    icon: Icon(Icons.close, color: AppPalette.of(context).textMuted),
+                    icon: Icon(Icons.close, color: AppPalette.dark.textMuted),
                     onPressed: _goHome,
                     tooltip: 'Close',
                     padding: EdgeInsets.zero,
@@ -1651,7 +1651,7 @@ class _MasjidPageState extends State<MasjidPage> {
               final item = _results[index];
               final isPinned = _pinnedMasjid?['id'] == item.id;
               return Card(
-                color: AppPalette.of(context).surfaceRaised,
+                color: AppPalette.dark.surfaceRaised,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -1659,19 +1659,19 @@ class _MasjidPageState extends State<MasjidPage> {
                   dense: isSmallScreen,
                   leading: Icon(
                     Icons.mosque,
-                    color: isPinned ? AppPalette.accent : AppPalette.of(context).textMuted,
+                    color: isPinned ? AppPalette.accent : AppPalette.dark.textMuted,
                   ),
                   title: Text(
                     item.name,
                     style: TextStyle(
-                      color: AppPalette.of(context).textPrimary,
+                      color: AppPalette.dark.textPrimary,
                       fontSize: isSmallScreen ? 14 : 16,
                     ),
                   ),
                   subtitle: Text(
                     item.address.isEmpty ? 'Address unavailable' : item.address,
                     style: TextStyle(
-                      color: AppPalette.of(context).textSecondary,
+                      color: AppPalette.dark.textSecondary,
                       fontSize: isSmallScreen ? 11 : 13,
                     ),
                     maxLines: 2,
@@ -1685,7 +1685,7 @@ class _MasjidPageState extends State<MasjidPage> {
                         )
                       : Icon(
                           Icons.chevron_right,
-                          color: AppPalette.of(context).textMuted,
+                          color: AppPalette.dark.textMuted,
                         ),
                   onTap: () => _showMasjidOptionsSheet(item),
                 ),
@@ -1720,12 +1720,12 @@ class _OffsetRow extends StatelessWidget {
               width: 80,
               child: Text(
                 label,
-                style: TextStyle(color: AppPalette.of(context).textPrimary),
+                style: TextStyle(color: AppPalette.dark.textPrimary),
               ),
             ),
             const Spacer(),
             IconButton(
-              icon: Icon(Icons.remove, color: AppPalette.of(context).textSecondary),
+              icon: Icon(Icons.remove, color: AppPalette.dark.textSecondary),
               onPressed: value > 0 ? () => notifier.value = value - 1 : null,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
@@ -1743,7 +1743,7 @@ class _OffsetRow extends StatelessWidget {
               ),
             ),
             IconButton(
-              icon: Icon(Icons.add, color: AppPalette.of(context).textSecondary),
+              icon: Icon(Icons.add, color: AppPalette.dark.textSecondary),
               onPressed: value < 90 ? () => notifier.value = value + 1 : null,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
@@ -1765,12 +1765,12 @@ class _JumaaField extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
-      style: TextStyle(color: AppPalette.of(context).textPrimary),
+      style: TextStyle(color: AppPalette.dark.textPrimary),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: AppPalette.of(context).textMuted, fontSize: 12),
+        labelStyle: TextStyle(color: AppPalette.dark.textMuted, fontSize: 12),
         filled: true,
-        fillColor: AppPalette.of(context).surface,
+        fillColor: AppPalette.dark.surface,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 12,

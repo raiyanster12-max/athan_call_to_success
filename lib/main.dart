@@ -1055,20 +1055,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final textBottomPadding = isSmallScreen
         ? 8.0
         : (heroHeight * 0.12).clamp(20.0, 36.0);
-    final cloudTop = (heroHeight * 0.48).clamp(108.0, 150.0);
 
     return Container(
       constraints: BoxConstraints(minHeight: heroHeight),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // Keep decoration below the top bar so the settings/menu icon remains visible.
-          Positioned(
-            top: isSmallScreen ? -10 : 8,
-            right: isSmallScreen ? -20 : -8,
-            child: _buildMoonDecoration(isSmallScreen: isSmallScreen),
-          ),
-          Positioned(top: cloudTop, right: 34, child: _buildCloudWisps()),
           // Current prayer text + qibla button
           Padding(
             padding: EdgeInsets.fromLTRB(

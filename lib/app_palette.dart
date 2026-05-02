@@ -104,6 +104,8 @@ class AppPalette {
     heroTextColor: Colors.white,
   );
 
+  static AppPaletteData get dark => _dark;
+
   static AppPaletteData of(BuildContext context) {
     return Theme.of(context).brightness == Brightness.dark ? _dark : _light;
   }

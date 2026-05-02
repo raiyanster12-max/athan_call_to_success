@@ -1551,7 +1551,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
     if (!mounted) return;
     await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: AppPalette.of(context).surfaceRaised,
+      backgroundColor: AppPalette.dark.surfaceRaised,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
@@ -1578,7 +1578,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                         Text(
                           'Surah Controls',
                           style: TextStyle(
-                            color: AppPalette.of(context).textPrimary,
+                            color: AppPalette.dark.textPrimary,
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                           ),
@@ -1589,7 +1589,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                           onPressed: () => Navigator.of(sheetContext).pop(),
                           icon: Icon(
                             Icons.close,
-                            color: AppPalette.of(context).textSecondary,
+                            color: AppPalette.dark.textSecondary,
                           ),
                         ),
                       ],
@@ -1633,7 +1633,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                         Text(
                           'Tajweed',
                           style: TextStyle(
-                            color: AppPalette.of(context).textSecondary,
+                            color: AppPalette.dark.textSecondary,
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1653,7 +1653,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                         Text(
                           'Jump to',
                           style: TextStyle(
-                            color: AppPalette.of(context).textMuted,
+                            color: AppPalette.dark.textSecondary,
                             fontSize: 12,
                           ),
                         ),
@@ -1682,7 +1682,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                         Text(
                           'Last read: ${widget.surah.number}:$_lastReadAyah',
                           style: TextStyle(
-                            color: AppPalette.of(context).textMuted,
+                            color: AppPalette.dark.textSecondary,
                             fontSize: 12,
                           ),
                         ),
@@ -1816,7 +1816,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
         children: [
           FloatingActionButton.small(
             heroTag: 'quran-surah-controls',
-            backgroundColor: AppPalette.of(context).surfaceRaised,
+            backgroundColor: AppPalette.dark.surfaceRaised,
             foregroundColor: const Color(0xFFE8E6FF),
             onPressed: _openSurahControlsSheet,
             tooltip: 'Surah controls',
@@ -1825,7 +1825,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
           const SizedBox(height: 10),
           FloatingActionButton.small(
             heroTag: 'quran-scroll-top',
-            backgroundColor: AppPalette.of(context).surfaceRaised,
+            backgroundColor: AppPalette.dark.surfaceRaised,
             foregroundColor: const Color(0xFFE8E6FF),
             onPressed: _scrollToTop,
             tooltip: 'Back to top',
@@ -1853,7 +1853,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
             children: [
             Card(
               elevation: 0,
-              color: AppPalette.of(context).surfaceRaised,
+              color: AppPalette.dark.surfaceRaised,
               child: Padding(
                 padding: const EdgeInsets.all(14),
                 child: Column(
@@ -1862,7 +1862,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                     Text(
                       'Page ${widget.surah.pageNumber} | Juz ${widget.surah.juzNumber}',
                       style: TextStyle(
-                        color: AppPalette.of(context).textSecondary,
+                        color: AppPalette.dark.textSecondary,
                         fontSize: 13,
                       ),
                     ),
@@ -1870,7 +1870,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                     Text(
                       widget.surah.meaning,
                       style: TextStyle(
-                        color: AppPalette.of(context).textSecondary,
+                        color: AppPalette.dark.textSecondary,
                         fontSize: 14,
                       ),
                     ),
@@ -1935,7 +1935,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                           Text(
                             'Tajweed',
                             style: TextStyle(
-                              color: AppPalette.of(context).textSecondary,
+                              color: AppPalette.dark.textSecondary,
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                             ),
@@ -1958,7 +1958,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                           Text(
                             'Jump to',
                             style: TextStyle(
-                              color: AppPalette.of(context).textMuted,
+                              color: AppPalette.dark.textSecondary,
                               fontSize: 12,
                             ),
                           ),
@@ -1987,7 +1987,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                           Text(
                             'Last read: ${widget.surah.number}:$_lastReadAyah',
                             style: TextStyle(
-                              color: AppPalette.of(context).textMuted,
+                              color: AppPalette.dark.textSecondary,
                               fontSize: 12,
                             ),
                           ),
@@ -2006,9 +2006,9 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                   horizontal: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: AppPalette.of(context).surface,
+                  color: AppPalette.dark.surface,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppPalette.of(context).outline),
+                  border: Border.all(color: AppPalette.dark.outline),
                 ),
                 child: Text(
                   quran.basmala,
@@ -2028,11 +2028,11 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                 margin: const EdgeInsets.only(bottom: 10),
                 decoration: BoxDecoration(
                   color: isCurrent
-                      ? AppPalette.of(context).surfaceHighlight
-                      : AppPalette.of(context).panel,
+                      ? AppPalette.dark.surfaceHighlight
+                      : AppPalette.dark.panel,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: isCurrent ? AppPalette.accent : AppPalette.of(context).outline,
+                    color: isCurrent ? AppPalette.accent : AppPalette.dark.outline,
                   ),
                 ),
                 child: Padding(
@@ -2110,7 +2110,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                           textAlign: TextAlign.left,
                           style: TextStyle(
                             fontSize: _translationFontSize,
-                            color: AppPalette.of(context).textSecondary,
+                            color: AppPalette.dark.textSecondary,
                             height: 1.5,
                           ),
                         ),
@@ -2167,7 +2167,7 @@ class _ControlRow extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              color: AppPalette.of(context).textSecondary,
+              color: AppPalette.dark.textSecondary,
               fontSize: 13,
               fontWeight: FontWeight.w600,
             ),
@@ -2183,7 +2183,7 @@ class _ControlRow extends StatelessWidget {
           child: Text(
             '$value',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: AppPalette.of(context).textSecondary),
+            style: TextStyle(fontSize: 13, color: AppPalette.dark.textSecondary),
           ),
         ),
         IconButton(
