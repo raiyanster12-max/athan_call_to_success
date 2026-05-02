@@ -46,11 +46,17 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
         this.context=context;
         mSessionManager = CastContext.getSharedInstance(context).getSessionManager();
         mSessionManagerListener = new ChromeCastSessionListener();
-        mSessionManager.addSessionManagerListener(mSessionManagerListener, CastSession.class);
+        addSessionListener();
         mCastSession=mSessionManager.getCurrentCastSession();
-        if(mCastSession!=null){
-            updateStatus();
+        if(mCastSession!=null && mCastSession.isConnected()){
             startSession(mCastSession);
+        }
+    }
+    public void addSessionListener(){
+        if (mSessionManager != null && mSessionManagerListener != null) {
+            // Remove first to avoid double registration if called multiple times
+            mSessionManager.removeSessionManagerListener(mSessionManagerListener, CastSession.class);
+            mSessionManager.addSessionManagerListener(mSessionManagerListener, CastSession.class);
         }
     }
     public void endSession(){
@@ -63,11 +69,23 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
         }
     }
     public void removeSessionListener(){
-        mSessionManager.removeSessionManagerListener(mSessionManagerListener, CastSession.class);
-        mCastSession = null;
+        if (mSessionManager != null && mSessionManagerListener != null) {
+            mSessionManager.removeSessionManagerListener(mSessionManagerListener, CastSession.class);
+        }
+        // DO NOT set mCastSession = null here. We want to maintain knowledge of the session
+        // even if we are not listening to lifecycle events temporarily (e.g. activity detach).
     }
 
     public boolean isConnected(){
+        if (mSessionManager != null) {
+            CastSession session = mSessionManager.getCurrentCastSession();
+            if (session != null && session.isConnected()) {
+                if (mCastSession != session) {
+                    startSession(session);
+                }
+                return true;
+            }
+        }
         return mCastSession != null && mCastSession.isConnected();
     }
 
@@ -163,9 +181,13 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
     @Override
     public void onListen(Object o, EventChannel.EventSink eventSink) {
         this.connectionEvent=eventSink;
-        if(mCastSession!=null){
+        if(isConnected()){
             if(connectionEvent!=null){
                 connectionEvent.success(true);
+            }
+        } else {
+            if(connectionEvent!=null){
+                connectionEvent.success(false);
             }
         }
         Log.i(TAG,"LISTENING TO CHROMECAST STREAM");
@@ -176,6 +198,10 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
         connectionEvent=null;
     }
     public void startSession(CastSession castSession){
+        if (mCastSession == castSession && remoteMediaClient != null) {
+            // Session already active and registered
+            return;
+        }
         mCastSession = castSession;
         remoteMediaClient = castSession.getRemoteMediaClient();
         if(remoteMediaClient == null){

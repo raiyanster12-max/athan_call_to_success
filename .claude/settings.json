@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -File \"C:\\Users\\r88st\\OneDrive\\Desktop\\athan_call_to_success\\flutter_hot_reload.ps1\"",
+            "statusMessage": "Hot reloading Windows app...",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

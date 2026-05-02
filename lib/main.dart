@@ -75,29 +75,50 @@ class AthanApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Dark palette colors — must mirror AppPalette._dark (#262943 base)
+    const Color darkBg = Color(0xFF262943);
+    const Color darkSurface = Color(0xFF2E3252);
+    const Color darkSurfaceRaised = Color(0xFF353960);
+    const Color darkPanel = Color(0xFF202340);
+    const Color darkOutline = Color(0xFF4A4F7A);
+    const Color darkTextPrimary = Color(0xFFE8E6FF);
+    const Color darkTextSecondary = Color(0xFFB0ADDB);
+    const Color darkTextMuted = Color(0xFF7B79A8);
+
+    // Light palette colors
+    const Color lightBg = Color(0xFFF8F8F8);
+    const Color lightSurface = Color(0xFFFFFFFF);
+    const Color lightSurfaceRaised = Color(0xFFF2F2F2);
+    const Color lightPanel = Color(0xFFF5F5F5);
+    const Color lightOutline = Color(0xFFD0D0D8);
+    const Color lightTextPrimary = Color(0xFF0D0D0D);
+    const Color lightTextSecondary = Color(0xFF4A4A52);
+    const Color lightTextMuted = Color(0xFF8A8A92);
+
     return MaterialApp(
       title: 'Athan - Call to Success',
+      themeMode: ThemeMode.system,
       theme: ThemeData(
         useMaterial3: true,
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: AppPalette.backgroundTop,
-        colorScheme: const ColorScheme.dark(
+        brightness: Brightness.light,
+        scaffoldBackgroundColor: lightBg,
+        colorScheme: const ColorScheme.light(
           primary: AppPalette.accent,
           onPrimary: Colors.white,
           secondary: AppPalette.accentSoft,
           onSecondary: Colors.white,
-          surface: AppPalette.surface,
-          onSurface: Colors.white,
-          outline: AppPalette.outline,
+          surface: lightSurface,
+          onSurface: lightTextPrimary,
+          outline: lightOutline,
         ),
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.transparent,
-          foregroundColor: Colors.white,
+          foregroundColor: lightTextPrimary,
           elevation: 0,
           scrolledUnderElevation: 0,
         ),
         cardTheme: CardThemeData(
-          color: AppPalette.surface,
+          color: lightSurface,
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -105,15 +126,15 @@ class AthanApp extends StatelessWidget {
           margin: EdgeInsets.zero,
         ),
         bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: AppPalette.panel,
+          backgroundColor: lightPanel,
           selectedItemColor: AppPalette.accent,
-          unselectedItemColor: AppPalette.textMuted,
+          unselectedItemColor: lightTextMuted,
           type: BottomNavigationBarType.fixed,
           elevation: 0,
         ),
         listTileTheme: const ListTileThemeData(
           iconColor: AppPalette.accent,
-          subtitleTextStyle: TextStyle(color: AppPalette.textSecondary),
+          subtitleTextStyle: TextStyle(color: lightTextSecondary),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
@@ -127,7 +148,7 @@ class AthanApp extends StatelessWidget {
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
             foregroundColor: AppPalette.accent,
-            side: const BorderSide(color: AppPalette.outline),
+            side: const BorderSide(color: lightOutline),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
@@ -135,28 +156,120 @@ class AthanApp extends StatelessWidget {
         ),
         inputDecorationTheme: const InputDecorationTheme(
           filled: true,
-          fillColor: AppPalette.surfaceRaised,
+          fillColor: lightSurfaceRaised,
           border: OutlineInputBorder(
-            borderSide: BorderSide(color: AppPalette.outline),
+            borderSide: BorderSide(color: lightOutline),
           ),
           enabledBorder: OutlineInputBorder(
-            borderSide: BorderSide(color: AppPalette.outline),
+            borderSide: BorderSide(color: lightOutline),
           ),
           focusedBorder: OutlineInputBorder(
             borderSide: BorderSide(color: AppPalette.accent, width: 2),
           ),
-          labelStyle: TextStyle(color: AppPalette.textSecondary),
-          hintStyle: TextStyle(color: AppPalette.textMuted),
+          labelStyle: TextStyle(color: lightTextSecondary),
+          hintStyle: TextStyle(color: lightTextMuted),
         ),
         chipTheme: const ChipThemeData(
-          backgroundColor: AppPalette.surface,
-          labelStyle: TextStyle(color: Colors.white),
-          side: BorderSide(color: AppPalette.outline),
+          backgroundColor: lightSurface,
+          labelStyle: TextStyle(color: lightTextPrimary),
+          side: BorderSide(color: lightOutline),
         ),
-        dividerTheme: const DividerThemeData(color: AppPalette.outline),
+        dividerTheme: const DividerThemeData(color: lightOutline),
         tabBarTheme: const TabBarThemeData(
           labelColor: AppPalette.accent,
-          unselectedLabelColor: AppPalette.textMuted,
+          unselectedLabelColor: lightTextMuted,
+          indicatorColor: AppPalette.accent,
+        ),
+        checkboxTheme: CheckboxThemeData(
+          fillColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? AppPalette.accent
+                : null,
+          ),
+          checkColor: WidgetStateProperty.all(Colors.white),
+        ),
+      ),
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: darkBg,
+        colorScheme: const ColorScheme.dark(
+          primary: AppPalette.accent,
+          onPrimary: Colors.white,
+          secondary: AppPalette.accentSoft,
+          onSecondary: Colors.white,
+          surface: darkSurface,
+          onSurface: darkTextPrimary,
+          outline: darkOutline,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.transparent,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+        ),
+        cardTheme: CardThemeData(
+          color: darkSurface,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          margin: EdgeInsets.zero,
+        ),
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+          backgroundColor: darkPanel,
+          selectedItemColor: AppPalette.accent,
+          unselectedItemColor: darkTextMuted,
+          type: BottomNavigationBarType.fixed,
+          elevation: 0,
+        ),
+        listTileTheme: ListTileThemeData(
+          iconColor: AppPalette.accent,
+          titleTextStyle: TextStyle(color: darkTextPrimary, fontSize: 16),
+          subtitleTextStyle: TextStyle(color: darkTextSecondary),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppPalette.accent,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppPalette.accent,
+            side: const BorderSide(color: darkOutline),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        inputDecorationTheme: const InputDecorationTheme(
+          filled: true,
+          fillColor: darkSurfaceRaised,
+          border: OutlineInputBorder(
+            borderSide: BorderSide(color: darkOutline),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: darkOutline),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: AppPalette.accent, width: 2),
+          ),
+          labelStyle: TextStyle(color: darkTextSecondary),
+          hintStyle: TextStyle(color: darkTextMuted),
+        ),
+        chipTheme: const ChipThemeData(
+          backgroundColor: darkSurface,
+          labelStyle: TextStyle(color: Colors.white),
+          side: BorderSide(color: darkOutline),
+        ),
+        dividerTheme: const DividerThemeData(color: darkOutline),
+        tabBarTheme: const TabBarThemeData(
+          labelColor: AppPalette.accent,
+          unselectedLabelColor: darkTextMuted,
           indicatorColor: AppPalette.accent,
         ),
         checkboxTheme: CheckboxThemeData(
@@ -221,6 +334,45 @@ class _MainNavigationState extends State<MainNavigation> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _HeroBackground extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    const imagePath = 'assets/images/hero_bg.png';
+    // Check if asset exists at runtime; fall back to gradient if not yet added.
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image(
+          image: const AssetImage(imagePath),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            decoration: BoxDecoration(
+              gradient: AppPalette.of(context).heroGradient,
+            ),
+          ),
+        ),
+        // Semi-transparent overlay for text legibility
+        // Bottom stop blends into #262943 so the hero image flows
+        // seamlessly into the prayer timetable section below.
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: [0.0, 0.45, 1.0],
+              colors: [
+                Color(0x44000020), // very light tint at top
+                Color(0x99000030), // moderate at mid
+                Color(0xFF262943), // solid #262943 at bottom — matches prayer list bg
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -809,28 +961,32 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final current = _getCurrentPrayer();
     final screenHeight = MediaQuery.sizeOf(context).height;
-    final heroHeight = (screenHeight * 0.34).clamp(250.0, 360.0);
-    final timetableTopGap = (screenHeight * 0.018).clamp(8.0, 20.0);
+    final isSmallScreen = screenHeight < 700;
+    final heroHeight = (screenHeight * 0.34).clamp(isSmallScreen ? 200.0 : 250.0, 360.0);
+    final timetableTopGap = (screenHeight * 0.018).clamp(isSmallScreen ? 4.0 : 8.0, 20.0);
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppPalette.pageBackground,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: AppPalette.backgroundGradient,
-            ),
-          ),
+          _HeroBackground(),
           SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildTopBar(),
-                _buildHeroSection(current, heroHeight: heroHeight),
-                SizedBox(height: timetableTopGap),
-                Expanded(child: _buildPrayerList(current?.name)),
-              ],
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildTopBar(),
+                  _buildHeroSection(current, heroHeight: heroHeight),
+                  // Prayer list section — sits on solid #262943 for WCAG contrast.
+                  Container(
+                    color: AppPalette.pageBackground,
+                    padding: EdgeInsets.only(bottom: timetableTopGap),
+                    child: _buildPrayerList(current?.name),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -839,8 +995,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Widget _buildTopBar() {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final isSmallScreen = screenHeight < 700;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 4, 0),
+      padding: EdgeInsets.fromLTRB(20, isSmallScreen ? 4 : 8, 4, 0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -849,18 +1008,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             children: [
               Text(
                 _hijriShortLabel,
-                style: const TextStyle(
-                  color: AppPalette.textSecondary,
-                  fontSize: 20,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  fontSize: isSmallScreen ? 18 : 20,
                   fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 _todayDateLabel,
-                style: const TextStyle(
-                  color: AppPalette.textMuted,
-                  fontSize: 16,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.6),
+                  fontSize: isSmallScreen ? 14 : 16,
                   fontWeight: FontWeight.w400,
                 ),
               ),
@@ -883,21 +1042,25 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _PrayerEntry? current, {
     required double heroHeight,
   }) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final isSmallScreen = screenHeight < 700;
+
     final countdown = _nextPrayerCountdownLabel();
     final prayerLabel = current?.name ?? (_nextPrayerName ?? '—');
     final locationLabel = _heroLocationLabel();
-    final textTopPadding = (heroHeight * 0.28).clamp(80.0, 120.0);
-    final textBottomPadding = (heroHeight * 0.12).clamp(20.0, 36.0);
-    final cloudTop = (heroHeight * 0.48).clamp(108.0, 150.0);
 
-    return SizedBox(
-      height: heroHeight,
+    final textTopPadding = isSmallScreen
+        ? (heroHeight * 0.22).clamp(40.0, 80.0)
+        : (heroHeight * 0.28).clamp(80.0, 120.0);
+    final textBottomPadding = isSmallScreen
+        ? 8.0
+        : (heroHeight * 0.12).clamp(20.0, 36.0);
+
+    return Container(
+      constraints: BoxConstraints(minHeight: heroHeight),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // Keep decoration below the top bar so the settings/menu icon remains visible.
-          Positioned(top: 8, right: -8, child: _buildMoonDecoration()),
-          Positioned(top: cloudTop, right: 34, child: _buildCloudWisps()),
           // Current prayer text + qibla button
           Padding(
             padding: EdgeInsets.fromLTRB(
@@ -912,23 +1075,24 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         prayerLabel,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Colors.white,
-                          fontSize: 52,
+                          fontSize: isSmallScreen ? 42 : 52,
                           fontWeight: FontWeight.bold,
                           letterSpacing: -1.0,
                           height: 1.0,
                         ),
                       ),
                       const SizedBox(height: 2),
-                      const Text(
+                      Text(
                         'In Prayer.',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 22,
+                          fontSize: isSmallScreen ? 18 : 22,
                           fontWeight: FontWeight.w300,
                         ),
                       ),
@@ -936,9 +1100,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         const SizedBox(height: 6),
                         Text(
                           countdown,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
-                            fontSize: 22,
+                            fontSize: isSmallScreen ? 18 : 22,
                             fontWeight: FontWeight.w300,
                           ),
                         ),
@@ -947,9 +1111,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         const SizedBox(height: 4),
                         Text(
                           locationLabel,
-                          style: const TextStyle(
-                            color: AppPalette.textMuted,
-                            fontSize: 15,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.6),
+                            fontSize: isSmallScreen ? 13 : 15,
                           ),
                         ),
                       ],
@@ -957,7 +1121,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   ),
                 ),
                 const SizedBox(width: 12),
-                _buildQiblaFab(),
+                _buildQiblaFab(isSmallScreen: isSmallScreen),
               ],
             ),
           ),
@@ -966,82 +1130,89 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildMoonDecoration() {
+  Widget _buildMoonDecoration({bool isSmallScreen = false}) {
+    final size = isSmallScreen ? 110.0 : 130.0;
     return SizedBox(
-      width: 130,
-      height: 130,
-      child: Stack(
-        children: [
-          // Base moon circle
-          Container(
-            width: 130,
-            height: 130,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFF9EA8D8),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF9EA8D8).withValues(alpha: 0.25),
-                  blurRadius: 24,
-                  spreadRadius: 6,
+      width: size,
+      height: size,
+      child: FittedBox(
+        child: SizedBox(
+          width: 130,
+          height: 130,
+          child: Stack(
+            children: [
+              // Base moon circle
+              Container(
+                width: 130,
+                height: 130,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF9EA8D8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF9EA8D8).withValues(alpha: 0.25),
+                      blurRadius: 24,
+                      spreadRadius: 6,
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-          // Large crater
-          Positioned(
-            top: 22,
-            left: 28,
-            child: Container(
-              width: 26,
-              height: 26,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0xFF7A84B8),
               ),
-            ),
-          ),
-          // Medium crater
-          Positioned(
-            top: 56,
-            left: 72,
-            child: Container(
-              width: 16,
-              height: 16,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0xFF8088C0),
-              ),
-            ),
-          ),
-          // Small crater
-          Positioned(
-            top: 84,
-            left: 36,
-            child: Container(
-              width: 10,
-              height: 10,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0xFF8490C4),
-              ),
-            ),
-          ),
-          // Shadow overlay on right edge
-          Align(
-            alignment: Alignment.centerRight,
-            child: Container(
-              width: 38,
-              height: 130,
-              decoration: BoxDecoration(
-                borderRadius: const BorderRadius.horizontal(
-                  right: Radius.circular(65),
+              // Large crater
+              Positioned(
+                top: 22,
+                left: 28,
+                child: Container(
+                  width: 26,
+                  height: 26,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFF7A84B8),
+                  ),
                 ),
-                color: const Color(0xFF1B1744).withValues(alpha: 0.55),
               ),
-            ),
+              // Medium crater
+              Positioned(
+                top: 56,
+                left: 72,
+                child: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFF8088C0),
+                  ),
+                ),
+              ),
+              // Small crater
+              Positioned(
+                top: 84,
+                left: 36,
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFF8490C4),
+                  ),
+                ),
+              ),
+              // Shadow overlay on right edge
+              Align(
+                alignment: Alignment.centerRight,
+                child: Container(
+                  width: 38,
+                  height: 130,
+                  decoration: BoxDecoration(
+                    borderRadius: const BorderRadius.horizontal(
+                      right: Radius.circular(65),
+                    ),
+                    color: const Color(0xFF1B1744).withValues(alpha: 0.55),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1071,14 +1242,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildQiblaFab() {
+  Widget _buildQiblaFab({bool isSmallScreen = false}) {
+    final size = isSmallScreen ? 56.0 : 68.0;
+    final iconSize = isSmallScreen ? 28.0 : 32.0;
+
     return GestureDetector(
       onTap: () => Navigator.of(
         context,
       ).push(MaterialPageRoute(builder: (_) => const QiblaPage())),
       child: Container(
-        width: 68,
-        height: 68,
+        width: size,
+        height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: const Color(0xFF2A2270),
@@ -1090,13 +1264,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            const Icon(Icons.mosque, color: Colors.white, size: 32),
+            Icon(Icons.mosque, color: Colors.white, size: iconSize),
             Positioned(
-              bottom: 11,
-              right: 11,
+              bottom: isSmallScreen ? 8 : 11,
+              right: isSmallScreen ? 8 : 11,
               child: Container(
-                width: 10,
-                height: 10,
+                width: isSmallScreen ? 8 : 10,
+                height: isSmallScreen ? 8 : 10,
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
                   color: AppPalette.accent,
@@ -1112,8 +1286,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Widget _buildPrayerList(String? currentPrayerName) {
     final times = _currentPrayerTimes;
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppPalette.textSecondary),
+      return Center(
+        child: CircularProgressIndicator(color: AppPalette.of(context).textSecondary),
       );
     }
     if (times == null) {
@@ -1126,8 +1300,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               Text(
                 _locationStatus,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: AppPalette.textSecondary,
+                style: TextStyle(
+                  color: AppPalette.of(context).textSecondary,
                   fontSize: 13,
                 ),
               ),
@@ -1175,6 +1349,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Widget _buildPrayerRow(String name, DateTime time, {bool isActive = false}) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final isSmallScreen = screenHeight < 700;
+
     final offsetLabel = _masjidOffsetLabel(name);
     final offsetMinutes = _iqamahOffsetForPrayer(name);
     final timeLabel = _formatTime(time);
@@ -1183,7 +1360,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ? '$name at $timeLabel'
           : '$name at $timeLabel with iqamah offset plus $offsetMinutes minutes',
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+        padding: EdgeInsets.symmetric(
+          horizontal: 24,
+          vertical: isSmallScreen ? 12 : 18,
+        ),
         child: Row(
           children: [
             Expanded(
@@ -1191,7 +1371,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 name,
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 18,
+                  fontSize: isSmallScreen ? 16 : 18,
                   fontWeight: isActive ? FontWeight.w500 : FontWeight.w300,
                 ),
               ),
@@ -1203,9 +1383,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   Text(
                     timeLabel,
                     textAlign: TextAlign.right,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white,
-                      fontSize: 18,
+                      fontSize: isSmallScreen ? 16 : 18,
                       fontWeight: FontWeight.w300,
                     ),
                   ),
@@ -1257,12 +1437,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 }
 
 extension on NotificationService {
-  void refreshBatchIfNeeded() {}
+  Future<void> refreshBatchIfNeeded() =>
+      NotificationService.instance.refreshBatchIfNeeded();
 
   Future<void> scheduleRollingPrayerNotifications({
     required double latitude,
     required double longitude,
-  }) async {}
+  }) =>
+      NotificationService.instance.scheduleRollingPrayerNotifications(
+        latitude: latitude,
+        longitude: longitude,
+      );
 
-  Future<void> triggerSelectedSpeakerNow({required String prayerName}) async {}
+  Future<void> triggerSelectedSpeakerNow({required String prayerName}) =>
+      NotificationService.instance.triggerSelectedSpeakerNow(
+        prayerName: prayerName,
+      );
 }
