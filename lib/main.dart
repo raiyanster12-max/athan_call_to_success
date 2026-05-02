@@ -75,29 +75,50 @@ class AthanApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Dark palette colors — must mirror AppPalette._dark (#262943 base)
+    const Color darkBg = Color(0xFF262943);
+    const Color darkSurface = Color(0xFF2E3252);
+    const Color darkSurfaceRaised = Color(0xFF353960);
+    const Color darkPanel = Color(0xFF202340);
+    const Color darkOutline = Color(0xFF4A4F7A);
+    const Color darkTextPrimary = Color(0xFFE8E6FF);
+    const Color darkTextSecondary = Color(0xFFB0ADDB);
+    const Color darkTextMuted = Color(0xFF7B79A8);
+
+    // Light palette colors
+    const Color lightBg = Color(0xFFF8F8F8);
+    const Color lightSurface = Color(0xFFFFFFFF);
+    const Color lightSurfaceRaised = Color(0xFFF2F2F2);
+    const Color lightPanel = Color(0xFFF5F5F5);
+    const Color lightOutline = Color(0xFFD0D0D8);
+    const Color lightTextPrimary = Color(0xFF0D0D0D);
+    const Color lightTextSecondary = Color(0xFF4A4A52);
+    const Color lightTextMuted = Color(0xFF8A8A92);
+
     return MaterialApp(
       title: 'Athan - Call to Success',
+      themeMode: ThemeMode.system,
       theme: ThemeData(
         useMaterial3: true,
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: AppPalette.backgroundTop,
-        colorScheme: const ColorScheme.dark(
+        brightness: Brightness.light,
+        scaffoldBackgroundColor: lightBg,
+        colorScheme: const ColorScheme.light(
           primary: AppPalette.accent,
           onPrimary: Colors.white,
           secondary: AppPalette.accentSoft,
           onSecondary: Colors.white,
-          surface: AppPalette.surface,
-          onSurface: Colors.white,
-          outline: AppPalette.outline,
+          surface: lightSurface,
+          onSurface: lightTextPrimary,
+          outline: lightOutline,
         ),
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.transparent,
-          foregroundColor: Colors.white,
+          foregroundColor: lightTextPrimary,
           elevation: 0,
           scrolledUnderElevation: 0,
         ),
         cardTheme: CardThemeData(
-          color: AppPalette.surface,
+          color: lightSurface,
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -105,15 +126,15 @@ class AthanApp extends StatelessWidget {
           margin: EdgeInsets.zero,
         ),
         bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: AppPalette.panel,
+          backgroundColor: lightPanel,
           selectedItemColor: AppPalette.accent,
-          unselectedItemColor: AppPalette.textMuted,
+          unselectedItemColor: lightTextMuted,
           type: BottomNavigationBarType.fixed,
           elevation: 0,
         ),
         listTileTheme: const ListTileThemeData(
           iconColor: AppPalette.accent,
-          subtitleTextStyle: TextStyle(color: AppPalette.textSecondary),
+          subtitleTextStyle: TextStyle(color: lightTextSecondary),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
@@ -127,7 +148,7 @@ class AthanApp extends StatelessWidget {
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
             foregroundColor: AppPalette.accent,
-            side: const BorderSide(color: AppPalette.outline),
+            side: const BorderSide(color: lightOutline),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
@@ -135,28 +156,120 @@ class AthanApp extends StatelessWidget {
         ),
         inputDecorationTheme: const InputDecorationTheme(
           filled: true,
-          fillColor: AppPalette.surfaceRaised,
+          fillColor: lightSurfaceRaised,
           border: OutlineInputBorder(
-            borderSide: BorderSide(color: AppPalette.outline),
+            borderSide: BorderSide(color: lightOutline),
           ),
           enabledBorder: OutlineInputBorder(
-            borderSide: BorderSide(color: AppPalette.outline),
+            borderSide: BorderSide(color: lightOutline),
           ),
           focusedBorder: OutlineInputBorder(
             borderSide: BorderSide(color: AppPalette.accent, width: 2),
           ),
-          labelStyle: TextStyle(color: AppPalette.textSecondary),
-          hintStyle: TextStyle(color: AppPalette.textMuted),
+          labelStyle: TextStyle(color: lightTextSecondary),
+          hintStyle: TextStyle(color: lightTextMuted),
         ),
         chipTheme: const ChipThemeData(
-          backgroundColor: AppPalette.surface,
-          labelStyle: TextStyle(color: Colors.white),
-          side: BorderSide(color: AppPalette.outline),
+          backgroundColor: lightSurface,
+          labelStyle: TextStyle(color: lightTextPrimary),
+          side: BorderSide(color: lightOutline),
         ),
-        dividerTheme: const DividerThemeData(color: AppPalette.outline),
+        dividerTheme: const DividerThemeData(color: lightOutline),
         tabBarTheme: const TabBarThemeData(
           labelColor: AppPalette.accent,
-          unselectedLabelColor: AppPalette.textMuted,
+          unselectedLabelColor: lightTextMuted,
+          indicatorColor: AppPalette.accent,
+        ),
+        checkboxTheme: CheckboxThemeData(
+          fillColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? AppPalette.accent
+                : null,
+          ),
+          checkColor: WidgetStateProperty.all(Colors.white),
+        ),
+      ),
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: darkBg,
+        colorScheme: const ColorScheme.dark(
+          primary: AppPalette.accent,
+          onPrimary: Colors.white,
+          secondary: AppPalette.accentSoft,
+          onSecondary: Colors.white,
+          surface: darkSurface,
+          onSurface: darkTextPrimary,
+          outline: darkOutline,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.transparent,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+        ),
+        cardTheme: CardThemeData(
+          color: darkSurface,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          margin: EdgeInsets.zero,
+        ),
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+          backgroundColor: darkPanel,
+          selectedItemColor: AppPalette.accent,
+          unselectedItemColor: darkTextMuted,
+          type: BottomNavigationBarType.fixed,
+          elevation: 0,
+        ),
+        listTileTheme: ListTileThemeData(
+          iconColor: AppPalette.accent,
+          titleTextStyle: TextStyle(color: darkTextPrimary, fontSize: 16),
+          subtitleTextStyle: TextStyle(color: darkTextSecondary),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppPalette.accent,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppPalette.accent,
+            side: const BorderSide(color: darkOutline),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        inputDecorationTheme: const InputDecorationTheme(
+          filled: true,
+          fillColor: darkSurfaceRaised,
+          border: OutlineInputBorder(
+            borderSide: BorderSide(color: darkOutline),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: darkOutline),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: AppPalette.accent, width: 2),
+          ),
+          labelStyle: TextStyle(color: darkTextSecondary),
+          hintStyle: TextStyle(color: darkTextMuted),
+        ),
+        chipTheme: const ChipThemeData(
+          backgroundColor: darkSurface,
+          labelStyle: TextStyle(color: Colors.white),
+          side: BorderSide(color: darkOutline),
+        ),
+        dividerTheme: const DividerThemeData(color: darkOutline),
+        tabBarTheme: const TabBarThemeData(
+          labelColor: AppPalette.accent,
+          unselectedLabelColor: darkTextMuted,
           indicatorColor: AppPalette.accent,
         ),
         checkboxTheme: CheckboxThemeData(
@@ -221,6 +334,45 @@ class _MainNavigationState extends State<MainNavigation> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _HeroBackground extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    const imagePath = 'assets/images/hero_bg.png';
+    // Check if asset exists at runtime; fall back to gradient if not yet added.
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image(
+          image: const AssetImage(imagePath),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            decoration: BoxDecoration(
+              gradient: AppPalette.of(context).heroGradient,
+            ),
+          ),
+        ),
+        // Semi-transparent overlay for text legibility
+        // Bottom stop blends into #262943 so the hero image flows
+        // seamlessly into the prayer timetable section below.
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: [0.0, 0.45, 1.0],
+              colors: [
+                Color(0x44000020), // very light tint at top
+                Color(0x99000030), // moderate at mid
+                Color(0xFF262943), // solid #262943 at bottom — matches prayer list bg
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -814,15 +966,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final timetableTopGap = (screenHeight * 0.018).clamp(isSmallScreen ? 4.0 : 8.0, 20.0);
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppPalette.pageBackground,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: AppPalette.backgroundGradient,
-            ),
-          ),
+          _HeroBackground(),
           SafeArea(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
@@ -831,8 +979,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 children: [
                   _buildTopBar(),
                   _buildHeroSection(current, heroHeight: heroHeight),
-                  SizedBox(height: timetableTopGap),
-                  _buildPrayerList(current?.name),
+                  // Prayer list section — sits on solid #262943 for WCAG contrast.
+                  Container(
+                    color: AppPalette.pageBackground,
+                    padding: EdgeInsets.only(bottom: timetableTopGap),
+                    child: _buildPrayerList(current?.name),
+                  ),
                 ],
               ),
             ),
@@ -857,7 +1009,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               Text(
                 _hijriShortLabel,
                 style: TextStyle(
-                  color: AppPalette.textSecondary,
+                  color: Colors.white.withValues(alpha: 0.9),
                   fontSize: isSmallScreen ? 18 : 20,
                   fontWeight: FontWeight.w500,
                 ),
@@ -866,7 +1018,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               Text(
                 _todayDateLabel,
                 style: TextStyle(
-                  color: AppPalette.textMuted,
+                  color: Colors.white.withValues(alpha: 0.6),
                   fontSize: isSmallScreen ? 14 : 16,
                   fontWeight: FontWeight.w400,
                 ),
@@ -968,7 +1120,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         Text(
                           locationLabel,
                           style: TextStyle(
-                            color: AppPalette.textMuted,
+                            color: Colors.white.withValues(alpha: 0.6),
                             fontSize: isSmallScreen ? 13 : 15,
                           ),
                         ),
@@ -1142,8 +1294,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Widget _buildPrayerList(String? currentPrayerName) {
     final times = _currentPrayerTimes;
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppPalette.textSecondary),
+      return Center(
+        child: CircularProgressIndicator(color: AppPalette.of(context).textSecondary),
       );
     }
     if (times == null) {
@@ -1156,8 +1308,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               Text(
                 _locationStatus,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: AppPalette.textSecondary,
+                style: TextStyle(
+                  color: AppPalette.of(context).textSecondary,
                   fontSize: 13,
                 ),
               ),

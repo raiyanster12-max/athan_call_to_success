@@ -150,16 +150,16 @@ class _QiblaPageState extends State<QiblaPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.explore_off,
-                color: AppPalette.textMuted,
+                color: AppPalette.of(context).textMuted,
                 size: 56,
               ),
               const SizedBox(height: 20),
               Text(
                 _error!,
-                style: const TextStyle(
-                  color: AppPalette.textSecondary,
+                style: TextStyle(
+                  color: AppPalette.of(context).textSecondary,
                   fontSize: 16,
                 ),
                 textAlign: TextAlign.center,
@@ -208,8 +208,8 @@ class _QiblaPageState extends State<QiblaPage> {
                 : kIsWeb
                 ? 'Direction shown · device compass not available in browser'
                 : 'Tap to Continue',
-            style: const TextStyle(
-              color: AppPalette.textSecondary,
+            style: TextStyle(
+              color: AppPalette.of(context).textSecondary,
               fontSize: 14,
             ),
             textAlign: TextAlign.center,
@@ -261,7 +261,10 @@ class _QiblaPageState extends State<QiblaPage> {
               top: badgeSize + stalkHeight,
               child: CustomPaint(
                 size: const Size(compassDiameter, compassDiameter),
-                painter: _CompassPainter(),
+                painter: _CompassPainter(
+                  discColor: AppPalette.of(context).surface,
+                  needleLowerColor: AppPalette.of(context).surfaceHighlight,
+                ),
               ),
             ),
             if (_calibrating)
@@ -314,6 +317,14 @@ class _KaabaBadge extends StatelessWidget {
 // ── Compass disc painter ───────────────────────────────────────────────────
 
 class _CompassPainter extends CustomPainter {
+  const _CompassPainter({
+    required this.discColor,
+    required this.needleLowerColor,
+  });
+
+  final Color discColor;
+  final Color needleLowerColor;
+
   @override
   void paint(Canvas canvas, Size size) {
     final c = Offset(size.width / 2, size.height / 2);
@@ -333,7 +344,7 @@ class _CompassPainter extends CustomPainter {
       c,
       r - 4,
       Paint()
-        ..color = AppPalette.surface
+        ..color = discColor
         ..style = PaintingStyle.fill,
     );
 
@@ -443,7 +454,7 @@ class _CompassPainter extends CustomPainter {
     canvas.drawPath(
       lower,
       Paint()
-        ..color = AppPalette.surfaceHighlight
+        ..color = needleLowerColor
         ..style = PaintingStyle.fill,
     );
     canvas.drawPath(
@@ -482,7 +493,9 @@ class _CompassPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _CompassPainter oldDelegate) =>
+      oldDelegate.discColor != discColor ||
+      oldDelegate.needleLowerColor != needleLowerColor;
 }
 
 // ── Background ─────────────────────────────────────────────────────────────
@@ -493,7 +506,7 @@ class _GradientBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(gradient: AppPalette.backgroundGradient),
+      decoration: BoxDecoration(gradient: AppPalette.of(context).backgroundGradient),
     );
   }
 }

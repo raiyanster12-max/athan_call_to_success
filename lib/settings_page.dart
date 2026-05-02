@@ -49,14 +49,15 @@ class _SettingsPageState extends State<SettingsPage> {
   static const String _showHijriDateKey = 'settings_show_hijri_date';
   static const String _autoTestPrayerValue = '__auto_next__';
 
-  static const Color _pageBackground = AppPalette.backgroundTop;
-  static const Color _surfaceBackground = AppPalette.surface;
-  static const Color _surfaceHighlight = AppPalette.surfaceRaised;
-  static const Color _dividerColor = AppPalette.outline;
-  static const Color _primaryText = AppPalette.textPrimary;
-  static const Color _secondaryText = AppPalette.textSecondary;
+  Color get _pageBackground => AppPalette.of(context).backgroundTop;
+  Color get _surfaceBackground => AppPalette.of(context).surface;
+  Color get _surfaceHighlight => AppPalette.of(context).surfaceRaised;
+  Color get _dividerColor => AppPalette.of(context).outline;
+  Color get _primaryText => AppPalette.of(context).textPrimary;
+  Color get _secondaryText => AppPalette.of(context).textSecondary;
+  Color get _textMuted => AppPalette.of(context).textMuted;
   static const Color _sectionAccent = AppPalette.accent;
-  static const Color _iconBackground = AppPalette.panel;
+  Color get _iconBackground => AppPalette.of(context).panel;
 
   static const List<String> _speakerRouteOptions = [
     NotificationService.speakerPhoneSpeaker,
@@ -856,7 +857,7 @@ class _SettingsPageState extends State<SettingsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Select where Athan notifications should play and test the route directly.',
                 style: TextStyle(color: _secondaryText),
               ),
@@ -869,7 +870,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   }
                 },
                 child: Column(
-                  children: const [
+                  children: [
                     RadioListTile<String>(
                       activeColor: _sectionAccent,
                       contentPadding: EdgeInsets.zero,
@@ -926,7 +927,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: ipController,
-                  style: const TextStyle(color: _primaryText),
+                  style: TextStyle(color: _primaryText),
                   decoration: _sheetInputDecoration(
                     'Speaker IP Address',
                     hint: 'e.g. 192.168.1.100',
@@ -947,20 +948,20 @@ class _SettingsPageState extends State<SettingsPage> {
                             _castConnected
                                 ? 'Cast connected.'
                                 : 'Cast not connected.',
-                            style: const TextStyle(color: _primaryText),
+                            style: TextStyle(color: _primaryText),
                           ),
                           if (_preferredCastSpeakerName.isNotEmpty &&
                               draftSpeakerRoute == NotificationService.speakerGoogleCast)
                             Text(
                               'Speaker: $_preferredCastSpeakerName',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: _secondaryText,
                                 fontSize: 12,
                               ),
                             ),
                           Text(
                             'State: $_lastCastState',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: _secondaryText,
                               fontSize: 12,
                             ),
@@ -980,10 +981,10 @@ class _SettingsPageState extends State<SettingsPage> {
               DropdownButtonFormField<String>(
                 initialValue: draftTestPrayerSelection,
                 dropdownColor: _surfaceBackground,
-                style: const TextStyle(color: _primaryText),
+                style: TextStyle(color: _primaryText),
                 decoration: _sheetInputDecoration('Test prayer'),
                 items: [
-                  const DropdownMenuItem<String>(
+                  DropdownMenuItem<String>(
                     value: _autoTestPrayerValue,
                     child: Text(
                       'Auto (next prayer)',
@@ -995,7 +996,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       value: prayer,
                       child: Text(
                         prayer,
-                        style: const TextStyle(color: _primaryText),
+                        style: TextStyle(color: _primaryText),
                       ),
                     ),
                   ),
@@ -1102,9 +1103,9 @@ class _SettingsPageState extends State<SettingsPage> {
       minChildSize: 0.55,
       maxChildSize: 0.95,
       builder: (context, scrollController) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: _surfaceBackground,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: ListView(
           controller: scrollController,
@@ -1123,7 +1124,7 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 16),
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 color: _primaryText,
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
@@ -1141,12 +1142,12 @@ class _SettingsPageState extends State<SettingsPage> {
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      labelStyle: const TextStyle(color: _secondaryText),
-      hintStyle: const TextStyle(color: _secondaryText),
+      labelStyle: TextStyle(color: _secondaryText),
+      hintStyle: TextStyle(color: _secondaryText),
       filled: true,
-      fillColor: AppPalette.panel,
+      fillColor: _iconBackground,
       enabledBorder: OutlineInputBorder(
-        borderSide: const BorderSide(color: _dividerColor),
+        borderSide: BorderSide(color: _dividerColor),
         borderRadius: BorderRadius.circular(12),
       ),
       focusedBorder: OutlineInputBorder(
@@ -1160,7 +1161,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppPalette.panel,
+        color: _iconBackground,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: _dividerColor),
       ),
@@ -1169,7 +1170,7 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           Text(
             prayer,
-            style: const TextStyle(
+            style: TextStyle(
               color: _primaryText,
               fontSize: 15,
               fontWeight: FontWeight.w600,
@@ -1179,7 +1180,7 @@ class _SettingsPageState extends State<SettingsPage> {
           DropdownButtonFormField<String>(
             initialValue: _tonePreferences[prayer],
             dropdownColor: _surfaceBackground,
-            style: const TextStyle(color: _primaryText),
+            style: TextStyle(color: _primaryText),
             decoration: _sheetInputDecoration('Tone'),
             items: _allToneOptions
                 .map(
@@ -1187,7 +1188,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     value: tone,
                     child: Text(
                       tone,
-                      style: const TextStyle(color: _primaryText),
+                      style: TextStyle(color: _primaryText),
                     ),
                   ),
                 )
@@ -1207,7 +1208,7 @@ class _SettingsPageState extends State<SettingsPage> {
               _customToneFileNames[prayer]!.isEmpty
                   ? 'No custom file selected'
                   : 'Selected: ${_customToneFileNames[prayer]}',
-              style: const TextStyle(color: _secondaryText, fontSize: 12),
+              style: TextStyle(color: _secondaryText, fontSize: 12),
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -1248,7 +1249,7 @@ class _SettingsPageState extends State<SettingsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Settings',
             style: TextStyle(
               color: _primaryText,
@@ -1258,7 +1259,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Prayer notifications, device behavior, and date preferences.',
             style: TextStyle(color: _secondaryText, fontSize: 14, height: 1.35),
           ),
@@ -1309,7 +1310,7 @@ class _SettingsPageState extends State<SettingsPage> {
           const SizedBox(width: 8),
           Text(
             '$label: $value',
-            style: const TextStyle(
+            style: TextStyle(
               color: _primaryText,
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -1362,12 +1363,12 @@ class _SettingsPageState extends State<SettingsPage> {
     VoidCallback? onTap,
     bool enabled = true,
   }) {
-    final titleColor = enabled ? _primaryText : Colors.white38;
-    final subtitleColor = enabled ? _secondaryText : AppPalette.textMuted;
+    final titleColor = enabled ? _primaryText : _primaryText.withValues(alpha: 0.35);
+    final subtitleColor = enabled ? _secondaryText : _textMuted;
     final resolvedTrailing =
         trailing ??
         ((enabled && onTap != null)
-            ? const Icon(
+            ? Icon(
                 Icons.chevron_right_rounded,
                 color: _secondaryText,
                 size: 24,
@@ -1386,7 +1387,7 @@ class _SettingsPageState extends State<SettingsPage> {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: enabled ? _iconBackground : AppPalette.surfaceHighlight,
+                color: enabled ? _iconBackground : _surfaceHighlight,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(
@@ -1436,15 +1437,16 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildRowDivider() {
-    return const Divider(height: 1, color: _dividerColor, indent: 72);
+    return Divider(height: 1, color: _dividerColor, indent: 72);
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: _pageBackground,
-        body: Center(
+        appBar: AppBar(backgroundColor: _pageBackground),
+        body: const Center(
           child: CircularProgressIndicator(semanticsLabel: 'Loading settings'),
         ),
       );
@@ -1496,7 +1498,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     onChanged: (_) => _requestSystemAlertWindowPermission(),
                     activeColor: _sectionAccent,
                     checkColor: _pageBackground,
-                    side: const BorderSide(color: _secondaryText),
+                    side: BorderSide(color: _secondaryText),
                   ),
                 ),
               ],
@@ -1524,7 +1526,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   onChanged: (_) => _requestBatteryOptimizationPermission(),
                   activeColor: _sectionAccent,
                   checkColor: _pageBackground,
-                  side: const BorderSide(color: _secondaryText),
+                  side: BorderSide(color: _secondaryText),
                 ),
               ),
               _buildRowDivider(),

@@ -619,15 +619,15 @@ class _TrackerPageState extends State<TrackerPage> {
     final isToday = DateUtils.isSameDay(date, _today);
 
     IconData? statusIcon;
-    Color statusColor = AppPalette.textMuted;
-    Color backgroundColor = AppPalette.surface;
+    Color statusColor = AppPalette.of(context).textMuted;
+    Color backgroundColor = AppPalette.of(context).surface;
 
     // WCAG 4.1.2: determine semantic status label for screen readers
     String statusLabel;
     if (status == 'done') {
       statusIcon = Icons.check_circle;
       statusColor = AppPalette.accent;
-      backgroundColor = AppPalette.surfaceRaised;
+      backgroundColor = AppPalette.of(context).surfaceRaised;
       statusLabel = 'Fast observed';
     } else if (status == 'missed') {
       statusIcon = Icons.cancel;
@@ -657,7 +657,7 @@ class _TrackerPageState extends State<TrackerPage> {
               color: backgroundColor,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: isToday ? AppPalette.accent : AppPalette.outline,
+                color: isToday ? AppPalette.accent : AppPalette.of(context).outline,
                 width: isToday ? 1.5 : 1,
               ),
             ),
@@ -675,9 +675,9 @@ class _TrackerPageState extends State<TrackerPage> {
                 Text(
                   DateFormat('MMM d').format(date),
                   // WCAG 1.4.3: accessible contrast on dark background
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
-                    color: AppPalette.textSecondary,
+                    color: AppPalette.of(context).textSecondary,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -720,9 +720,9 @@ class _TrackerPageState extends State<TrackerPage> {
             ),
             const SizedBox(height: 4),
             // WCAG 1.4.3: accessible contrast for instruction text
-            const Text(
+            Text(
               'Tap each day to cycle: pending -> done -> missed -> pending.',
-              style: TextStyle(color: AppPalette.textSecondary),
+              style: TextStyle(color: AppPalette.of(context).textSecondary),
             ),
             const SizedBox(height: 12),
             Align(
@@ -810,9 +810,9 @@ class _TrackerPageState extends State<TrackerPage> {
               ],
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Export your Ramadan tracker as CSV (for spreadsheets) or import CSV data on this device.',
-              style: TextStyle(color: AppPalette.textSecondary),
+              style: TextStyle(color: AppPalette.of(context).textSecondary),
             ),
             const SizedBox(height: 12),
             Wrap(
@@ -840,8 +840,10 @@ class _TrackerPageState extends State<TrackerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppPalette.pageBackground,
       appBar: AppBar(
+        backgroundColor: AppPalette.pageBackground,
+        foregroundColor: const Color(0xFFE8E6FF),
         title: const Text('Tracker'),
         actions: [
           IconButton(
@@ -854,9 +856,7 @@ class _TrackerPageState extends State<TrackerPage> {
         ],
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppPalette.backgroundGradient,
-        ),
+        color: AppPalette.pageBackground,
         child: _isLoading
             ? const Center(
                 child: CircularProgressIndicator(
@@ -873,10 +873,10 @@ class _TrackerPageState extends State<TrackerPage> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.info_outline,
                             size: 48,
-                            color: AppPalette.textSecondary,
+                            color: AppPalette.of(context).textSecondary,
                           ),
                           const SizedBox(height: 16),
                           Text(
@@ -888,8 +888,8 @@ class _TrackerPageState extends State<TrackerPage> {
                           Text(
                             _databaseErrorMessage,
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: AppPalette.textSecondary,
+                            style: TextStyle(
+                              color: AppPalette.of(context).textSecondary,
                             ),
                           ),
                         ],
@@ -929,8 +929,8 @@ class _TrackerPageState extends State<TrackerPage> {
                                 const SizedBox(height: 12),
                                 Text(
                                   'Today — $_completedCount of ${_trackedPrayers.length} prayers logged',
-                                  style: const TextStyle(
-                                    color: AppPalette.textSecondary,
+                                  style: TextStyle(
+                                    color: AppPalette.of(context).textSecondary,
                                   ),
                                 ),
                                 const SizedBox(height: 8),

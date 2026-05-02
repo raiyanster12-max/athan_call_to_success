@@ -54,8 +54,8 @@ class _MorePageState extends State<MorePage> {
         title: const Text('More'),
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppPalette.backgroundGradient,
+        decoration: BoxDecoration(
+          gradient: AppPalette.of(context).backgroundGradient,
         ),
         child: Center(
           child: ConstrainedBox(
@@ -79,19 +79,19 @@ class _MorePageState extends State<MorePage> {
                     const SizedBox(height: 6),
                     Text(
                       'Selected: $_selectedGregorianLabel',
-                      style: const TextStyle(color: AppPalette.textSecondary),
+                      style: TextStyle(color: AppPalette.of(context).textSecondary),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       _selectedHijriLabel,
-                      style: const TextStyle(color: AppPalette.textMuted),
+                      style: TextStyle(color: AppPalette.of(context).textMuted),
                     ),
                     const SizedBox(height: 12),
                     Theme(
                       data: Theme.of(context).copyWith(
                         colorScheme: Theme.of(context).colorScheme.copyWith(
                           primary: AppPalette.accent,
-                          onSurface: AppPalette.textPrimary,
+                          onSurface: AppPalette.of(context).textPrimary,
                         ),
                       ),
                       child: CalendarDatePicker(
