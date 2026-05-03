@@ -104,9 +104,23 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
     public void loadMedia(AudioData audioData){
         Log.i(TAG,"LOAD MEDIA");
         Log.i(TAG,audioData.getAudioUrl());
-        if(mCastSession==null || remoteMediaClient==null){
-            broadcastMessage("NO_CAST_SESSION");
-            return;
+        if(mCastSession==null || !mCastSession.isConnected()){
+            // If session is disconnected, try to refresh it from the manager before giving up
+            mCastSession = mSessionManager.getCurrentCastSession();
+            if (mCastSession != null && mCastSession.isConnected()) {
+                startSession(mCastSession);
+            } else {
+                broadcastMessage("NO_CAST_SESSION");
+                return;
+            }
+        }
+        
+        if (remoteMediaClient == null) {
+            remoteMediaClient = mCastSession.getRemoteMediaClient();
+            if (remoteMediaClient == null) {
+                broadcastMessage("NO_REMOTE_MEDIA_CLIENT");
+                return;
+            }
         }
 
         MediaMetadata audioMetaData = new MediaMetadata(MediaMetadata.MEDIA_TYPE_MUSIC_TRACK);
@@ -143,8 +157,27 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
         });
     }
 
+    private void ensureSessionActive() {
+        if (mSessionManager == null) {
+            try {
+                mSessionManager = CastContext.getSharedInstance(context).getSessionManager();
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to get SessionManager in ensureSessionActive", e);
+                return;
+            }
+        }
+        
+        CastSession current = mSessionManager.getCurrentCastSession();
+        if (current != null && current.isConnected()) {
+            if (mCastSession != current || remoteMediaClient == null) {
+                startSession(current);
+            }
+        }
+    }
+
     public void playMedia(){
         Log.i(TAG,"PLAY MEDIA");
+        ensureSessionActive();
         if(mCastSession!=null && remoteMediaClient != null){
             if(PLAYBACKSTATE!=BUFFERING && PLAYBACKSTATE!=LOADING){
                 remoteMediaClient.play();
@@ -158,6 +191,7 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
     
     public void pauseMedia(){
         Log.i(TAG,"PAUSE MEDIA");
+        ensureSessionActive();
         if(mCastSession!=null && remoteMediaClient != null){
             if(PLAYBACKSTATE!=BUFFERING && PLAYBACKSTATE!=LOADING){
                 remoteMediaClient.pause();
@@ -171,6 +205,7 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
     }
     public void stopMedia(){
         Log.i(TAG,"STOP MEDIA");
+        ensureSessionActive();
         if(mCastSession!=null && remoteMediaClient != null){
             remoteMediaClient.stop();
         } else {
@@ -303,9 +338,11 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
 
         @Override
         public void onSessionEnded(@NonNull CastSession castSession, int i) {
-            Log.i(TAG,"SESSION ENDED");
-            mCastSession=castSession;
-            remoteMediaClient=mCastSession.getRemoteMediaClient();
+            Log.i(TAG,"SESSION ENDED with code: " + i + " (" + describeStatusCode(i) + ")");
+            if (mCastSession == castSession) {
+                mCastSession = null;
+                remoteMediaClient = null;
+            }
             broadcastMessage("SESSION_ENDED(" + i + ")");
             if(connectionEvent!=null){
                 connectionEvent.success(false);

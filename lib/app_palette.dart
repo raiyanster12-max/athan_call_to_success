@@ -55,13 +55,12 @@ class AppPalette {
     panel: const Color(0xFF202340),         // nav bar / bottom bar
     outline: const Color(0xFF4A4F7A),
     // WCAG contrast on #262943:
-    //   white (#FFF)   → 12.7 : 1  ✅ AAA
-    //   #E8E6FF        → 10.5 : 1  ✅ AAA  (primary readable text)
-    //   #B0ADDB        →  5.8 : 1  ✅ AA   (secondary text)
-    //   #7B79A8        →  3.2 : 1  ✅ AA large / decorative (muted)
-    textPrimary: const Color(0xFFE8E6FF),
-    textSecondary: const Color(0xFFB0ADDB),
-    textMuted: const Color(0xFF7B79A8),
+    //   #F5F0E1 (Ivory)  → 12.3 : 1  ✅ AAA (primary)
+    //   #E0D4C0 (Gold)   →  9.7 : 1  ✅ AAA (secondary)
+    //   #968A78 (Bronze) →  4.2 : 1  ✅ AA Large (muted)
+    textPrimary: const Color(0xFFF5F0E1),
+    textSecondary: const Color(0xFFE0D4C0),
+    textMuted: const Color(0xFF968A78),
     backgroundGradient: const LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,

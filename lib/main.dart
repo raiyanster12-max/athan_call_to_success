@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:adhan/adhan.dart';
 import 'package:flutter/foundation.dart';
@@ -81,9 +82,9 @@ class AthanApp extends StatelessWidget {
     const Color darkSurfaceRaised = Color(0xFF353960);
     const Color darkPanel = Color(0xFF202340);
     const Color darkOutline = Color(0xFF4A4F7A);
-    const Color darkTextPrimary = Color(0xFFE8E6FF);
-    const Color darkTextSecondary = Color(0xFFB0ADDB);
-    const Color darkTextMuted = Color(0xFF7B79A8);
+    const Color darkTextPrimary = Color(0xFFF5F0E1);
+    const Color darkTextSecondary = Color(0xFFE0D4C0);
+    const Color darkTextMuted = Color(0xFF968A78);
 
     // Light palette colors
     const Color lightBg = Color(0xFFF8F8F8);
@@ -363,11 +364,11 @@ class _HeroBackground extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              stops: [0.0, 0.45, 1.0],
+              stops: [0.0, 0.6, 1.0],
               colors: [
-                Color(0x44000020), // very light tint at top
-                Color(0x99000030), // moderate at mid
-                Color(0xFF262943), // solid #262943 at bottom — matches prayer list bg
+                Color(0x22000010), // very light tint at top
+                Color(0x66000020), // moderate at mid
+                Color(0xAA1A1D38), // semi-transparent at bottom
               ],
             ),
           ),
@@ -966,7 +967,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final timetableTopGap = (screenHeight * 0.018).clamp(isSmallScreen ? 4.0 : 8.0, 20.0);
 
     return Scaffold(
-      backgroundColor: AppPalette.pageBackground,
+      backgroundColor: Colors.black, // Dark base for the background image
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -979,12 +980,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 children: [
                   _buildTopBar(),
                   _buildHeroSection(current, heroHeight: heroHeight),
-                  // Prayer list section — sits on solid #262943 for WCAG contrast.
-                  Container(
-                    color: AppPalette.pageBackground,
-                    padding: EdgeInsets.only(bottom: timetableTopGap),
-                    child: _buildPrayerList(current?.name),
+                  // Prayer list section
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      padding: EdgeInsets.only(
+                        top: 8,
+                        bottom: timetableTopGap + 8,
+                      ),
+                      child: _buildPrayerList(current?.name),
+                    ),
                   ),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
@@ -1061,7 +1072,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // Current prayer text + qibla button
           Padding(
             padding: EdgeInsets.fromLTRB(
               20,
