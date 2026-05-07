@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:googlecast/CastController.dart';
 import 'package:googlecast/googlecast.dart';
@@ -13,7 +13,6 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 import 'db_helper.dart';
-import 'mosque_service.dart';
 import 'prayer_service.dart';
 
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
@@ -85,6 +84,8 @@ class NotificationService {
   AudioPlayer? _testAudioPlayer;
   bool _initialized = false;
   Future<void>? _initializationFuture;
+  HttpServer? _assetServer;
+  static const int _assetServerPort = 8765;
 
   static const int _notificationIdStart = 1000;
   static const int _alarmIdStart = 2000;
@@ -258,10 +259,22 @@ class NotificationService {
       }
 
       final resolvedName = await _resolvePrayerNameForTrigger(prayerName);
-      final mediaUrl = await _resolveCastUrlForPrayer(resolvedName);
 
-      if (mediaUrl == null || mediaUrl.isEmpty) {
-        debugPrint('[ATHAN_BG_SERVICE] No media URL found for $resolvedName. Falling back.');
+      // Resolve Cast URL: prayer-specific → local asset server → global URL (last resort)
+      String? castUrl = await _resolvePrayerSpecificCastUrl(resolvedName);
+      if (castUrl == null || castUrl.isEmpty) {
+        final tone = await _loadTonePreference(prayerName);
+        final assetPath = _mapToneToAsset(tone);
+        castUrl = await _buildLocalAssetUrl(assetPath);
+        debugPrint('[ATHAN_BG_SERVICE] Using local asset server URL: $castUrl');
+      }
+      if (castUrl == null || castUrl.isEmpty) {
+        castUrl = await DBHelper.getSetting(googleCastMediaUrlKey);
+        debugPrint('[ATHAN_BG_SERVICE] Falling back to global Cast URL: $castUrl');
+      }
+
+      if (castUrl == null || castUrl.isEmpty) {
+        debugPrint('[ATHAN_BG_SERVICE] No Cast URL available for $resolvedName. Falling back.');
         if (isBackground) {
           await _showFallbackNotification(
             prayerName,
@@ -277,7 +290,7 @@ class NotificationService {
 
       final castController = CastController();
       await castController.setMedia(
-        url: mediaUrl.trim(),
+        url: castUrl.trim(),
         title: '$resolvedName Athan',
       );
 
@@ -341,8 +354,9 @@ class NotificationService {
       final isOverrideMute =
           (await DBHelper.getSetting(overrideMuteKey)) == 'true';
 
-      _testAudioPlayer?.stop();
-      _testAudioPlayer?.dispose();
+      // [Settings-page-fixes] Await stop/dispose so old audio fully stops before new source plays
+      await _testAudioPlayer?.stop();
+      await _testAudioPlayer?.dispose();
       _testAudioPlayer = AudioPlayer();
 
       if (isOverrideMute) {
@@ -388,11 +402,14 @@ class NotificationService {
 
   String _mapToneToAsset(String tone) {
     switch (tone) {
-      case 'Muezzin Voice 1 with Fajr Athan':
+      case 'Fajr Athan by Mishary Rashid':
+      case 'Muezzin Voice 1 with Fajr Athan': // legacy name
         return 'audio/athan_muezzin_1.mp3';
-      case 'Muezzin Voice 2 with Mishary Alafasi':
+      case 'Athan by Mishary Rashid':
+      case 'Muezzin Voice 2 with Mishary Alafasi': // legacy name
         return 'audio/athan_muezzin_2.mp3';
-      case 'Abbu_Athan':
+      case 'Athan by Wakilur R Chowdhury':
+      case 'Abbu_Athan': // legacy name
         return 'audio/athan_abbu_athan.mp3';
       case 'Beep':
       default:
@@ -406,6 +423,88 @@ class NotificationService {
       'alarm_tone_${prayerName.toLowerCase()}',
     );
     return stored ?? 'Beep';
+  }
+
+  Future<bool> reconnectCast() => _ensureCastConnected();
+
+  Future<void> _startAssetServerIfNeeded() async {
+    if (_assetServer != null) return;
+    try {
+      _assetServer = await HttpServer.bind(
+        InternetAddress.anyIPv4,
+        _assetServerPort,
+      );
+      _assetServer!.listen((req) async {
+        final filename = req.uri.path.replaceFirst('/', '');
+        try {
+          final data = await rootBundle.load('assets/audio/$filename');
+          final bytes = data.buffer.asUint8List();
+          final subtype = filename.endsWith('.wav') ? 'wav' : 'mpeg';
+          req.response.headers
+            ..contentType = ContentType('audio', subtype)
+            ..contentLength = bytes.length
+            ..set('Accept-Ranges', 'bytes');
+          req.response.add(bytes);
+          await req.response.close();
+        } catch (_) {
+          req.response.statusCode = HttpStatus.notFound;
+          await req.response.close();
+        }
+      });
+      debugPrint('[ASSET_SERVER] Started on port $_assetServerPort');
+    } catch (e) {
+      debugPrint('[ASSET_SERVER] Failed to start: $e');
+    }
+  }
+
+  Future<String?> _getLocalIp() async {
+    try {
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLinkLocal: false,
+      );
+      final allAddrs = <String>[];
+      for (final iface in interfaces) {
+        for (final addr in iface.addresses) {
+          if (!addr.isLoopback) allAddrs.add(addr.address);
+        }
+      }
+      debugPrint('[ASSET_SERVER] All discovered IPs: $allAddrs');
+      if (allAddrs.isEmpty) return null;
+
+      // Prefer IP on same /24 subnet as the saved Cast device IP
+      final castIp = await DBHelper.getSetting(preferredCastSpeakerIpKey);
+      if (castIp != null && castIp.isNotEmpty) {
+        final castPrefix = castIp.split('.').take(3).join('.');
+        for (final addr in allAddrs) {
+          if (addr.startsWith('$castPrefix.')) return addr;
+        }
+      }
+      // Prefer RFC 1918 private ranges (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+      for (final addr in allAddrs) {
+        if (addr.startsWith('192.168.') || addr.startsWith('10.') ||
+            RegExp(r'^172\.(1[6-9]|2\d|3[01])\.').hasMatch(addr)) {
+          return addr;
+        }
+      }
+      return allAddrs.first;
+    } catch (_) {}
+    return null;
+  }
+
+  Future<String?> _buildLocalAssetUrl(String assetPath) async {
+    await _startAssetServerIfNeeded();
+    final ip = await _getLocalIp();
+    debugPrint('[ASSET_SERVER] Selected phone IP: $ip');
+    if (ip == null) return null;
+    final filename = assetPath.split('/').last;
+    return 'http://$ip:$_assetServerPort/$filename';
+  }
+
+  Future<void> cancelAllNotifications() async {
+    if (kIsWeb) return;
+    await initialize();
+    await _plugin.cancelAll();
   }
 
   Future<void> stopAllPlayback() async {
@@ -450,14 +549,14 @@ class NotificationService {
     return stored ?? speakerPhoneSpeaker;
   }
 
-  Future<String?> _resolveCastUrlForPrayer(String resolvedName) async {
+  Future<String?> _resolvePrayerSpecificCastUrl(String resolvedName) async {
     final prayerUrl = await DBHelper.getSetting(
       'google_cast_media_url_${resolvedName.toLowerCase()}',
     );
     if (prayerUrl != null && prayerUrl.trim().isNotEmpty) {
       return prayerUrl.trim();
     }
-    return await DBHelper.getSetting(googleCastMediaUrlKey);
+    return null;
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -590,6 +689,7 @@ class NotificationService {
     String? prayerOverride,
   }) async {
     final prayerName = prayerOverride ?? 'Fajr';
+
     try {
       if (routeOverride == speakerGoogleCast || routeOverride == speakerGoogleCastIp) {
         await _triggerGoogleCastIfConfigured(

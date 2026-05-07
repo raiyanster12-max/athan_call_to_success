@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\r88st\\\\OneDrive\\\\Desktop\\\\athan_call_to_success\" -Recurse -File)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(flutter analyze *)",
+      "Bash(flutter devices *)",
+      "Bash(flutter clean *)",
+      "Bash(flutter run *)",
+      "Bash(grep -v \"^$\")",
+      "Bash(adb kill-server *)",
+      "Bash(adb start-server *)",
+      "Bash(adb devices *)",
+      "Bash(flutter attach *)"
+    ]
+  }
+}

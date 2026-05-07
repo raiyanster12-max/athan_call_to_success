@@ -269,7 +269,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     ),
                   ),
                   TextButton(
-                    onPressed: () => _googleSignIn.signOut().then((_) {
+                    onPressed: () => _googleSignIn.disconnect().then((_) {
                       if (mounted) setState(() => _account = null);
                     }),
                     child: const Text('Switch'),
