@@ -58,6 +58,13 @@ Future<void> main() async {
 
   final onboardingDone =
       await DBHelper.getSetting('onboarding_complete') == 'true';
+  if (!onboardingDone) {
+    // Fresh install or data wiped — revoke stale OAuth so signInSilently()
+    // won't restore a token left over from a previous install.
+    try {
+      await _googleSignIn.disconnect();
+    } catch (_) {}
+  }
   runApp(AthanApp(showOnboarding: !onboardingDone));
 }
 

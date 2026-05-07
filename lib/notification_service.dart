@@ -408,6 +408,12 @@ class NotificationService {
     return stored ?? 'Beep';
   }
 
+  Future<void> cancelAllNotifications() async {
+    if (kIsWeb) return;
+    await initialize();
+    await _plugin.cancelAll();
+  }
+
   Future<void> stopAllPlayback() async {
     try {
       _testAudioPlayer?.stop();

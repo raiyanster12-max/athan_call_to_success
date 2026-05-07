@@ -10,9 +10,12 @@ import 'package:googlecast/googlecast.dart';
 import 'package:path/path.dart' as path_lib;
 import 'package:permission_handler/permission_handler.dart';
 
+import 'package:google_sign_in/google_sign_in.dart';
+
 import 'app_palette.dart';
 import 'db_helper.dart';
 import 'notification_service.dart';
+import 'onboarding_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -1564,9 +1567,54 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
             ]),
+            _buildSectionLabel('Reset'),
+            _buildSectionCard([
+              _buildSettingRow(
+                icon: Icons.delete_forever_outlined,
+                title: 'Reset App',
+                subtitle: 'Clear all settings, prayer data, and Google sign-in',
+                onTap: _confirmResetApp,
+              ),
+            ]),
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _confirmResetApp() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reset App?'),
+        content: const Text(
+          'This will erase all settings, prayer logs, favourite masjids, and Google sign-in data. The app will restart to the setup screen.\n\nThis cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    await NotificationService.instance.cancelAllNotifications();
+    await DBHelper.deleteAllData();
+    try {
+      await GoogleSignIn(scopes: ['email']).disconnect();
+    } catch (_) {}
+
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(builder: (_) => const OnboardingPage()),
+      (_) => false,
     );
   }
 }
