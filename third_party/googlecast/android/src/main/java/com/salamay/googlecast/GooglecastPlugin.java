@@ -12,6 +12,7 @@ import android.os.Looper;
 
 import androidx.mediarouter.app.MediaRouteChooserDialog;
 import androidx.mediarouter.media.MediaRouter;
+import androidx.mediarouter.media.MediaRouteSelector;
 import androidx.annotation.NonNull;
 import com.salamay.googlecast.ChromeCastViewFactory;
 import com.salamay.googlecast.Model.AudioData;
@@ -50,6 +51,7 @@ public class GooglecastPlugin implements FlutterPlugin, MethodCallHandler,Activi
   private EventChannel messagestatechannel;
   private BroadcastReceiver br;
   private Context applicationContext;
+  private MediaRouter.Callback discoveryCallback;
 
   @Override
   public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
@@ -94,6 +96,19 @@ public class GooglecastPlugin implements FlutterPlugin, MethodCallHandler,Activi
       }
     } else if(call.method.equals("debugState")) {
       HashMap<String, Object> data = new HashMap<>();
+      if (chromeCastSession != null) {
+          // Trigger a session check before reporting state
+          new Handler(Looper.getMainLooper()).post(() -> {
+              try {
+                  CastSession s = CastContext.getSharedInstance(applicationContext)
+                          .getSessionManager().getCurrentCastSession();
+                  if (s != null && s.isConnected()) {
+                      chromeCastSession.startSession(s);
+                  }
+              } catch (Exception ignored) {}
+          });
+      }
+
       if (chromeCastSession == null) {
         data.put("initialized", false);
         data.put("connected", false);
@@ -129,7 +144,7 @@ public class GooglecastPlugin implements FlutterPlugin, MethodCallHandler,Activi
       stopMedia();
       result.success(true);
     } else if(call.method.equals("stopDiscovery")) {
-      result.success(null);
+      stopDiscovery(result);
     } else if(call.method.equals("getDiscoveredDevices")) {
       getDiscoveredDevices(result);
     } else if(call.method.equals("reconnectToDevice")) {
@@ -427,11 +442,24 @@ public class GooglecastPlugin implements FlutterPlugin, MethodCallHandler,Activi
   private void startDiscovery(@NonNull Result result) {
     new Handler(Looper.getMainLooper()).post(() -> {
       try {
-        // Accessing CastContext initializes discovery.
-        CastContext.getSharedInstance(applicationContext);
-        // chromeCastSession may be null when called from a background isolate
-        // (onAttachedToEngine runs off-main-thread and the constructor throws).
-        // Re-initialize here on the main thread so isConnected() works after discovery.
+        CastContext castContext = CastContext.getSharedInstance(applicationContext);
+        MediaRouter mediaRouter = MediaRouter.getInstance(applicationContext);
+        MediaRouteSelector selector = castContext.getMergedSelector();
+
+        if (discoveryCallback == null) {
+            discoveryCallback = new MediaRouter.Callback() {
+                @Override
+                public void onRouteAdded(MediaRouter router, MediaRouter.RouteInfo route) {
+                    super.onRouteAdded(router, route);
+                    Log.d(TAG, "Route added: " + route.getName());
+                }
+            };
+        }
+        
+        // Force active scan to ensure devices are found even in background/when idle
+        mediaRouter.removeCallback(discoveryCallback);
+        mediaRouter.addCallback(selector, discoveryCallback, MediaRouter.CALLBACK_FLAG_PERFORM_ACTIVE_SCAN);
+        
         if (chromeCastSession == null) {
           try {
             chromeCastSession = new ChromeCastSession(applicationContext);
@@ -445,6 +473,20 @@ public class GooglecastPlugin implements FlutterPlugin, MethodCallHandler,Activi
         result.error("START_DISCOVERY_FAILED", e.toString(), null);
       }
     });
+  }
+
+  private void stopDiscovery(@NonNull Result result) {
+      new Handler(Looper.getMainLooper()).post(() -> {
+          try {
+              if (discoveryCallback != null) {
+                  MediaRouter.getInstance(applicationContext).removeCallback(discoveryCallback);
+                  discoveryCallback = null;
+              }
+              result.success(true);
+          } catch (Exception e) {
+              result.error("STOP_DISCOVERY_FAILED", e.toString(), null);
+          }
+      });
   }
 
 

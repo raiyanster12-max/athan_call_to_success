@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:adhan/adhan.dart';
 import 'package:flutter/foundation.dart';
@@ -57,6 +58,13 @@ Future<void> main() async {
 
   final onboardingDone =
       await DBHelper.getSetting('onboarding_complete') == 'true';
+  if (!onboardingDone) {
+    // Fresh install or data wiped — revoke stale OAuth so signInSilently()
+    // won't restore a token left over from a previous install.
+    try {
+      await _googleSignIn.disconnect();
+    } catch (_) {}
+  }
   runApp(AthanApp(showOnboarding: !onboardingDone));
 }
 
@@ -75,29 +83,50 @@ class AthanApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Dark palette colors — must mirror AppPalette._dark (#262943 base)
+    const Color darkBg = Color(0xFF262943);
+    const Color darkSurface = Color(0xFF2E3252);
+    const Color darkSurfaceRaised = Color(0xFF353960);
+    const Color darkPanel = Color(0xFF202340);
+    const Color darkOutline = Color(0xFF4A4F7A);
+    const Color darkTextPrimary = Color(0xFFF5F0E1);
+    const Color darkTextSecondary = Color(0xFFE0D4C0);
+    const Color darkTextMuted = Color(0xFF968A78);
+
+    // Light palette colors
+    const Color lightBg = Color(0xFFF8F8F8);
+    const Color lightSurface = Color(0xFFFFFFFF);
+    const Color lightSurfaceRaised = Color(0xFFF2F2F2);
+    const Color lightPanel = Color(0xFFF5F5F5);
+    const Color lightOutline = Color(0xFFD0D0D8);
+    const Color lightTextPrimary = Color(0xFF0D0D0D);
+    const Color lightTextSecondary = Color(0xFF4A4A52);
+    const Color lightTextMuted = Color(0xFF8A8A92);
+
     return MaterialApp(
       title: 'Athan - Call to Success',
+      themeMode: ThemeMode.system,
       theme: ThemeData(
         useMaterial3: true,
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: AppPalette.backgroundTop,
-        colorScheme: const ColorScheme.dark(
+        brightness: Brightness.light,
+        scaffoldBackgroundColor: lightBg,
+        colorScheme: const ColorScheme.light(
           primary: AppPalette.accent,
           onPrimary: Colors.white,
           secondary: AppPalette.accentSoft,
           onSecondary: Colors.white,
-          surface: AppPalette.surface,
-          onSurface: Colors.white,
-          outline: AppPalette.outline,
+          surface: lightSurface,
+          onSurface: lightTextPrimary,
+          outline: lightOutline,
         ),
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.transparent,
-          foregroundColor: Colors.white,
+          foregroundColor: lightTextPrimary,
           elevation: 0,
           scrolledUnderElevation: 0,
         ),
         cardTheme: CardThemeData(
-          color: AppPalette.surface,
+          color: lightSurface,
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -105,15 +134,15 @@ class AthanApp extends StatelessWidget {
           margin: EdgeInsets.zero,
         ),
         bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: AppPalette.panel,
+          backgroundColor: lightPanel,
           selectedItemColor: AppPalette.accent,
-          unselectedItemColor: AppPalette.textMuted,
+          unselectedItemColor: lightTextMuted,
           type: BottomNavigationBarType.fixed,
           elevation: 0,
         ),
         listTileTheme: const ListTileThemeData(
           iconColor: AppPalette.accent,
-          subtitleTextStyle: TextStyle(color: AppPalette.textSecondary),
+          subtitleTextStyle: TextStyle(color: lightTextSecondary),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
@@ -127,7 +156,7 @@ class AthanApp extends StatelessWidget {
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
             foregroundColor: AppPalette.accent,
-            side: const BorderSide(color: AppPalette.outline),
+            side: const BorderSide(color: lightOutline),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
@@ -135,28 +164,120 @@ class AthanApp extends StatelessWidget {
         ),
         inputDecorationTheme: const InputDecorationTheme(
           filled: true,
-          fillColor: AppPalette.surfaceRaised,
+          fillColor: lightSurfaceRaised,
           border: OutlineInputBorder(
-            borderSide: BorderSide(color: AppPalette.outline),
+            borderSide: BorderSide(color: lightOutline),
           ),
           enabledBorder: OutlineInputBorder(
-            borderSide: BorderSide(color: AppPalette.outline),
+            borderSide: BorderSide(color: lightOutline),
           ),
           focusedBorder: OutlineInputBorder(
             borderSide: BorderSide(color: AppPalette.accent, width: 2),
           ),
-          labelStyle: TextStyle(color: AppPalette.textSecondary),
-          hintStyle: TextStyle(color: AppPalette.textMuted),
+          labelStyle: TextStyle(color: lightTextSecondary),
+          hintStyle: TextStyle(color: lightTextMuted),
         ),
         chipTheme: const ChipThemeData(
-          backgroundColor: AppPalette.surface,
-          labelStyle: TextStyle(color: Colors.white),
-          side: BorderSide(color: AppPalette.outline),
+          backgroundColor: lightSurface,
+          labelStyle: TextStyle(color: lightTextPrimary),
+          side: BorderSide(color: lightOutline),
         ),
-        dividerTheme: const DividerThemeData(color: AppPalette.outline),
+        dividerTheme: const DividerThemeData(color: lightOutline),
         tabBarTheme: const TabBarThemeData(
           labelColor: AppPalette.accent,
-          unselectedLabelColor: AppPalette.textMuted,
+          unselectedLabelColor: lightTextMuted,
+          indicatorColor: AppPalette.accent,
+        ),
+        checkboxTheme: CheckboxThemeData(
+          fillColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? AppPalette.accent
+                : null,
+          ),
+          checkColor: WidgetStateProperty.all(Colors.white),
+        ),
+      ),
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: darkBg,
+        colorScheme: const ColorScheme.dark(
+          primary: AppPalette.accent,
+          onPrimary: Colors.white,
+          secondary: AppPalette.accentSoft,
+          onSecondary: Colors.white,
+          surface: darkSurface,
+          onSurface: darkTextPrimary,
+          outline: darkOutline,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.transparent,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+        ),
+        cardTheme: CardThemeData(
+          color: darkSurface,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          margin: EdgeInsets.zero,
+        ),
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+          backgroundColor: darkPanel,
+          selectedItemColor: AppPalette.accent,
+          unselectedItemColor: darkTextMuted,
+          type: BottomNavigationBarType.fixed,
+          elevation: 0,
+        ),
+        listTileTheme: ListTileThemeData(
+          iconColor: AppPalette.accent,
+          titleTextStyle: TextStyle(color: darkTextPrimary, fontSize: 16),
+          subtitleTextStyle: TextStyle(color: darkTextSecondary),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppPalette.accent,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppPalette.accent,
+            side: const BorderSide(color: darkOutline),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        inputDecorationTheme: const InputDecorationTheme(
+          filled: true,
+          fillColor: darkSurfaceRaised,
+          border: OutlineInputBorder(
+            borderSide: BorderSide(color: darkOutline),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: darkOutline),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: AppPalette.accent, width: 2),
+          ),
+          labelStyle: TextStyle(color: darkTextSecondary),
+          hintStyle: TextStyle(color: darkTextMuted),
+        ),
+        chipTheme: const ChipThemeData(
+          backgroundColor: darkSurface,
+          labelStyle: TextStyle(color: Colors.white),
+          side: BorderSide(color: darkOutline),
+        ),
+        dividerTheme: const DividerThemeData(color: darkOutline),
+        tabBarTheme: const TabBarThemeData(
+          labelColor: AppPalette.accent,
+          unselectedLabelColor: darkTextMuted,
           indicatorColor: AppPalette.accent,
         ),
         checkboxTheme: CheckboxThemeData(
@@ -221,6 +342,45 @@ class _MainNavigationState extends State<MainNavigation> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _HeroBackground extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    const imagePath = 'assets/images/hero_bg.png';
+    // Check if asset exists at runtime; fall back to gradient if not yet added.
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image(
+          image: const AssetImage(imagePath),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            decoration: BoxDecoration(
+              gradient: AppPalette.of(context).heroGradient,
+            ),
+          ),
+        ),
+        // Semi-transparent overlay for text legibility
+        // Bottom stop blends into #262943 so the hero image flows
+        // seamlessly into the prayer timetable section below.
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: [0.0, 0.6, 1.0],
+              colors: [
+                Color(0x22000010), // very light tint at top
+                Color(0x66000020), // moderate at mid
+                Color(0xAA1A1D38), // semi-transparent at bottom
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -814,15 +974,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final timetableTopGap = (screenHeight * 0.018).clamp(isSmallScreen ? 4.0 : 8.0, 20.0);
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.black, // Dark base for the background image
       body: Stack(
         fit: StackFit.expand,
         children: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: AppPalette.backgroundGradient,
-            ),
-          ),
+          _HeroBackground(),
           SafeArea(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
@@ -831,8 +987,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 children: [
                   _buildTopBar(),
                   _buildHeroSection(current, heroHeight: heroHeight),
-                  SizedBox(height: timetableTopGap),
-                  _buildPrayerList(current?.name),
+                  // Prayer list section
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      padding: EdgeInsets.only(
+                        top: 8,
+                        bottom: timetableTopGap + 8,
+                      ),
+                      child: _buildPrayerList(current?.name),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
@@ -857,7 +1027,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               Text(
                 _hijriShortLabel,
                 style: TextStyle(
-                  color: AppPalette.textSecondary,
+                  color: Colors.white.withValues(alpha: 0.9),
                   fontSize: isSmallScreen ? 18 : 20,
                   fontWeight: FontWeight.w500,
                 ),
@@ -866,7 +1036,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               Text(
                 _todayDateLabel,
                 style: TextStyle(
-                  color: AppPalette.textMuted,
+                  color: Colors.white.withValues(alpha: 0.6),
                   fontSize: isSmallScreen ? 14 : 16,
                   fontWeight: FontWeight.w400,
                 ),
@@ -903,21 +1073,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final textBottomPadding = isSmallScreen
         ? 8.0
         : (heroHeight * 0.12).clamp(20.0, 36.0);
-    final cloudTop = (heroHeight * 0.48).clamp(108.0, 150.0);
 
     return Container(
       constraints: BoxConstraints(minHeight: heroHeight),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // Keep decoration below the top bar so the settings/menu icon remains visible.
-          Positioned(
-            top: isSmallScreen ? -10 : 8,
-            right: isSmallScreen ? -20 : -8,
-            child: _buildMoonDecoration(isSmallScreen: isSmallScreen),
-          ),
-          Positioned(top: cloudTop, right: 34, child: _buildCloudWisps()),
-          // Current prayer text + qibla button
           Padding(
             padding: EdgeInsets.fromLTRB(
               20,
@@ -968,7 +1129,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         Text(
                           locationLabel,
                           style: TextStyle(
-                            color: AppPalette.textMuted,
+                            color: Colors.white.withValues(alpha: 0.6),
                             fontSize: isSmallScreen ? 13 : 15,
                           ),
                         ),
@@ -1142,8 +1303,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Widget _buildPrayerList(String? currentPrayerName) {
     final times = _currentPrayerTimes;
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppPalette.textSecondary),
+      return Center(
+        child: CircularProgressIndicator(color: AppPalette.of(context).textSecondary),
       );
     }
     if (times == null) {
@@ -1156,8 +1317,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               Text(
                 _locationStatus,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: AppPalette.textSecondary,
+                style: TextStyle(
+                  color: AppPalette.of(context).textSecondary,
                   fontSize: 13,
                 ),
               ),

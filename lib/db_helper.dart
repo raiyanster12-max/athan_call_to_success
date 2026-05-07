@@ -319,6 +319,13 @@ class DBHelper {
     };
   }
 
+  static Future<void> deleteAllData() async {
+    final db = await database();
+    await db.delete('app_settings');
+    await db.delete('prayer_logs');
+    await db.delete('favorite_masjids');
+  }
+
   static Future<void> setIqamahSettings(Map<String, dynamic> s) async {
     final db = await database();
     await db.transaction((txn) async {

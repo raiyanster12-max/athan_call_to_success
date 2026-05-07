@@ -24,3 +24,15 @@
 -dontwarn com.google.android.play.core.tasks.OnFailureListener
 -dontwarn com.google.android.play.core.tasks.OnSuccessListener
 -dontwarn com.google.android.play.core.tasks.Task
+
+# Google Cast SDK
+-keep class com.google.android.gms.cast.** { *; }
+-keep class com.google.android.gms.internal.cast.** { *; }
+-keep class com.google.android.libraries.cast.companionlibrary.** { *; }
+
+# MediaRouter
+-keep class androidx.mediarouter.** { *; }
+
+# Your CastOptionsProvider (referenced by name in Manifest)
+-keep class com.example.athan_call_to_success.CastOptionsProvider { *; }
+-keep class com.salamay.googlecast.** { *; }

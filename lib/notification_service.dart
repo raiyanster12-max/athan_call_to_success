@@ -149,6 +149,8 @@ class NotificationService {
       // 1. Initial check: Is the SDK already reporting a connected session?
       if (await GoogleChromeCast.isConnected()) {
         debugPrint('[ATHAN_BG_SERVICE] Already connected to Cast.');
+        // Ensure remote client is ready in native side
+        await GoogleChromeCast.debugState();
         return true;
       }
 
@@ -404,6 +406,12 @@ class NotificationService {
       'alarm_tone_${prayerName.toLowerCase()}',
     );
     return stored ?? 'Beep';
+  }
+
+  Future<void> cancelAllNotifications() async {
+    if (kIsWeb) return;
+    await initialize();
+    await _plugin.cancelAll();
   }
 
   Future<void> stopAllPlayback() async {

@@ -165,8 +165,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppPalette.backgroundGradient,
+        decoration: BoxDecoration(
+          gradient: AppPalette.of(context).backgroundGradient,
         ),
         child: SafeArea(
           child: switch (_step) {
@@ -198,11 +198,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
             ),
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Sign in with your Google account to find and configure your Google Home or Chromecast speaker for automatic athan playback.',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: AppPalette.textSecondary,
+              color: AppPalette.of(context).textSecondary,
               fontSize: 15,
               height: 1.5,
             ),
@@ -227,9 +227,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: AppPalette.surface,
+                color: AppPalette.of(context).surface,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppPalette.outline),
+                border: Border.all(color: AppPalette.of(context).outline),
               ),
               child: Row(
                 children: [
@@ -260,8 +260,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
                           ),
                         Text(
                           _account!.email,
-                          style: const TextStyle(
-                            color: AppPalette.textSecondary,
+                          style: TextStyle(
+                            color: AppPalette.of(context).textSecondary,
                             fontSize: 13,
                           ),
                         ),
@@ -269,7 +269,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     ),
                   ),
                   TextButton(
-                    onPressed: () => _googleSignIn.signOut().then((_) {
+                    onPressed: () => _googleSignIn.disconnect().then((_) {
                       if (mounted) setState(() => _account = null);
                     }),
                     child: const Text('Switch'),
@@ -328,9 +328,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
           const SizedBox(height: 12),
           TextButton(
             onPressed: _signingIn ? null : _startSpeakerDiscovery,
-            child: const Text(
+            child: Text(
               'Skip — discover speakers without signing in',
-              style: TextStyle(color: AppPalette.textMuted, fontSize: 13),
+              style: TextStyle(color: AppPalette.of(context).textMuted, fontSize: 13),
               textAlign: TextAlign.center,
             ),
           ),
@@ -362,8 +362,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
           const SizedBox(height: 6),
           Text(
             accountLabel,
-            style: const TextStyle(
-              color: AppPalette.textSecondary,
+            style: TextStyle(
+              color: AppPalette.of(context).textSecondary,
               fontSize: 13,
             ),
           ),
@@ -380,10 +380,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                const Text(
+                Text(
                   'Scanning for speakers…',
                   style: TextStyle(
-                    color: AppPalette.textSecondary,
+                    color: AppPalette.of(context).textSecondary,
                     fontSize: 14,
                   ),
                 ),
@@ -396,25 +396,25 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 ? Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.speaker_outlined,
                         size: 48,
-                        color: AppPalette.textMuted,
+                        color: AppPalette.of(context).textMuted,
                       ),
                       const SizedBox(height: 16),
-                      const Text(
+                      Text(
                         'No speakers found',
                         style: TextStyle(
-                          color: AppPalette.textSecondary,
+                          color: AppPalette.of(context).textSecondary,
                           fontSize: 16,
                         ),
                       ),
                       const SizedBox(height: 8),
-                      const Text(
+                      Text(
                         'Make sure your phone and Google speaker\nare on the same Wi-Fi network.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: AppPalette.textMuted,
+                          color: AppPalette.of(context).textMuted,
                           fontSize: 13,
                           height: 1.5,
                         ),
@@ -430,7 +430,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 : ListView.separated(
                     itemCount: _devices.length,
                     separatorBuilder: (_, _) =>
-                        const Divider(height: 1, color: AppPalette.outline),
+                        Divider(height: 1, color: AppPalette.of(context).outline),
                     itemBuilder: (context, i) {
                       final name = _devices[i];
                       return ListTile(
@@ -442,7 +442,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: AppPalette.surfaceRaised,
+                            color: AppPalette.of(context).surfaceRaised,
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Icon(
@@ -452,21 +452,21 @@ class _OnboardingPageState extends State<OnboardingPage> {
                         ),
                         title: Text(
                           name,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: AppPalette.of(context).textPrimary,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        subtitle: const Text(
+                        subtitle: Text(
                           'Google / Chromecast speaker',
                           style: TextStyle(
-                            color: AppPalette.textMuted,
+                            color: AppPalette.of(context).textMuted,
                             fontSize: 12,
                           ),
                         ),
-                        trailing: const Icon(
+                        trailing: Icon(
                           Icons.chevron_right,
-                          color: AppPalette.textMuted,
+                          color: AppPalette.of(context).textMuted,
                         ),
                         onTap: () => _selectDevice(name),
                       );
@@ -484,9 +484,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
             ),
           TextButton(
             onPressed: _finishOnboarding,
-            child: const Text(
+            child: Text(
               'Skip speaker setup',
-              style: TextStyle(color: AppPalette.textMuted, fontSize: 13),
+              style: TextStyle(color: AppPalette.of(context).textMuted, fontSize: 13),
             ),
           ),
           const SizedBox(height: 8),
