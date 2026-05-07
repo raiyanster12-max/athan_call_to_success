@@ -357,7 +357,7 @@ class _HeroBackground extends StatelessWidget {
         Image(
           image: const AssetImage(imagePath),
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(
+          errorBuilder: (_, _, _) => Container(
             decoration: BoxDecoration(
               gradient: AppPalette.of(context).heroGradient,
             ),
