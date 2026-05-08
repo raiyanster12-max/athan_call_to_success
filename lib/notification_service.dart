@@ -1,11 +1,9 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:googlecast/CastController.dart';
 import 'package:googlecast/googlecast.dart';
@@ -13,7 +11,6 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 import 'db_helper.dart';
-import 'mosque_service.dart';
 import 'prayer_service.dart';
 
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
