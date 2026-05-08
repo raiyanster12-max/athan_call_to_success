@@ -66,6 +66,23 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>GIDClientID</key>
+	<string>896243268657-eoiqbejcc7qa6ataoqhdvhru92s7pr9f.apps.googleusercontent.com</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.896243268657-eoiqbejcc7qa6ataoqhdvhru92s7pr9f</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Athan needs local network access to discover Google Home and Chromecast speakers on your Wi-Fi network.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_googlecast._tcp</string>
+	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Athan - Call to Success needs your location to provide accurate prayer times.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
