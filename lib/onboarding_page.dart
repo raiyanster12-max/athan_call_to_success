@@ -19,7 +19,11 @@ class OnboardingPage extends StatefulWidget {
 class _OnboardingPageState extends State<OnboardingPage> {
   static const String _onboardingKey = 'onboarding_complete';
 
-  final _googleSignIn = GoogleSignIn(scopes: ['email']);
+  final _googleSignIn = GoogleSignIn(
+    clientId:
+        '896243268657-eoiqbejcc7qa6ataoqhdvhru92s7pr9f.apps.googleusercontent.com',
+    scopes: ['email'],
+  );
 
   int _step = 0; // 0 = welcome, 1 = discovery, 2 = done
   GoogleSignInAccount? _account;
@@ -329,7 +333,16 @@ class _OnboardingPageState extends State<OnboardingPage> {
           TextButton(
             onPressed: _signingIn ? null : _startSpeakerDiscovery,
             child: Text(
-              'Skip — discover speakers without signing in',
+              'Discover speakers without signing in',
+              style: TextStyle(color: AppPalette.of(context).textMuted, fontSize: 13),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 4),
+          TextButton(
+            onPressed: _signingIn ? null : _finishOnboarding,
+            child: Text(
+              'Skip setup',
               style: TextStyle(color: AppPalette.of(context).textMuted, fontSize: 13),
               textAlign: TextAlign.center,
             ),
