@@ -2,7 +2,7 @@ name: athan_call_to_success
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ^3.11.4
@@ -71,7 +71,7 @@ flutter:
   assets:
     - assets/icon/athan_app_icon.png
     - assets/audio/athan_beep.wav
-    - assets/audio/athan_muezzin_1.mp3
-    - assets/audio/athan_muezzin_2.mp3
-    - assets/audio/athan_abbu_athan.mp3
+    - assets/audio/Fajr Athan by Mishary Rashid.mp3
+    - assets/audio/Athan by Mishary Rashid.mp3
+    - assets/audio/Athan by Wakilur R Chowdhury.mp3
     - assets/images/

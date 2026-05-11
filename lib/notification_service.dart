@@ -385,12 +385,15 @@ class NotificationService {
 
   String _mapToneToAsset(String tone) {
     switch (tone) {
+      case 'Fajr Athan by Mishary Rashid':
       case 'Muezzin Voice 1 with Fajr Athan':
-        return 'audio/athan_muezzin_1.mp3';
+        return 'audio/Fajr Athan by Mishary Rashid.mp3';
+      case 'Athan by Mishary Rashid':
       case 'Muezzin Voice 2 with Mishary Alafasi':
-        return 'audio/athan_muezzin_2.mp3';
+        return 'audio/Athan by Mishary Rashid.mp3';
+      case 'Athan by Wakilur R Chowdhury':
       case 'Abbu_Athan':
-        return 'audio/athan_abbu_athan.mp3';
+        return 'audio/Athan by Wakilur R Chowdhury.mp3';
       case 'Beep':
       default:
         return 'audio/athan_beep.wav';
