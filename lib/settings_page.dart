@@ -36,9 +36,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   static const List<String> _toneOptions = [
     'Beep',
-    'Muezzin Voice 1 with Fajr Athan',
-    'Muezzin Voice 2 with Mishary Alafasi',
-    'Abbu_Athan',
+    'Fajr Athan by Mishary Rashid',
+    'Athan by Mishary Rashid',
+    'Athan by Wakilur R Chowdhury',
   ];
 
   static final String _customFileTone = NotificationService.toneCustomFile ?? '';
