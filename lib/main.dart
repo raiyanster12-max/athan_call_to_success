@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:adhan/adhan.dart';
 import 'package:flutter/foundation.dart';
@@ -23,6 +22,7 @@ import 'prayer_service.dart';
 import 'quran_page.dart';
 import 'settings_page.dart';
 import 'tracker_page.dart';
+import 'gallery_theme.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 // Use the Type 3 ID from your JSON: 896243268657-eoiqbejcc7qa...
@@ -65,6 +65,7 @@ Future<void> main() async {
       await _googleSignIn.disconnect();
     } catch (_) {}
   }
+  await GalleryThemeService.instance.loadFromDb();
   runApp(AthanApp(showOnboarding: !onboardingDone));
 }
 
@@ -83,17 +84,7 @@ class AthanApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Dark palette colors — must mirror AppPalette._dark (#262943 base)
-    const Color darkBg = Color(0xFF262943);
-    const Color darkSurface = Color(0xFF2E3252);
-    const Color darkSurfaceRaised = Color(0xFF353960);
-    const Color darkPanel = Color(0xFF202340);
-    const Color darkOutline = Color(0xFF4A4F7A);
-    const Color darkTextPrimary = Color(0xFFF5F0E1);
-    const Color darkTextSecondary = Color(0xFFE0D4C0);
-    const Color darkTextMuted = Color(0xFF968A78);
-
-    // Light palette colors
+    // Light palette — const, never changes
     const Color lightBg = Color(0xFFF8F8F8);
     const Color lightSurface = Color(0xFFFFFFFF);
     const Color lightSurfaceRaised = Color(0xFFF2F2F2);
@@ -103,7 +94,20 @@ class AthanApp extends StatelessWidget {
     const Color lightTextSecondary = Color(0xFF4A4A52);
     const Color lightTextMuted = Color(0xFF8A8A92);
 
-    return MaterialApp(
+    return ListenableBuilder(
+      listenable: GalleryThemeService.instance,
+      builder: (_, __) {
+        // Dark palette — read INSIDE builder so every gallery change gets fresh values
+        final dp = AppPalette.dark;
+        final Color darkBg = dp.backgroundTop;
+        final Color darkSurface = dp.surface;
+        final Color darkSurfaceRaised = dp.surfaceRaised;
+        final Color darkPanel = dp.panel;
+        final Color darkOutline = dp.outline;
+        final Color darkTextPrimary = dp.textPrimary;
+        final Color darkTextSecondary = dp.textSecondary;
+        final Color darkTextMuted = dp.textMuted;
+        return MaterialApp(
       title: 'Athan - Call to Success',
       themeMode: ThemeMode.system,
       theme: ThemeData(
@@ -201,7 +205,7 @@ class AthanApp extends StatelessWidget {
         useMaterial3: true,
         brightness: Brightness.dark,
         scaffoldBackgroundColor: darkBg,
-        colorScheme: const ColorScheme.dark(
+        colorScheme: ColorScheme.dark(
           primary: AppPalette.accent,
           onPrimary: Colors.white,
           secondary: AppPalette.accentSoft,
@@ -224,7 +228,7 @@ class AthanApp extends StatelessWidget {
           ),
           margin: EdgeInsets.zero,
         ),
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        bottomNavigationBarTheme: BottomNavigationBarThemeData(
           backgroundColor: darkPanel,
           selectedItemColor: AppPalette.accent,
           unselectedItemColor: darkTextMuted,
@@ -248,13 +252,13 @@ class AthanApp extends StatelessWidget {
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
             foregroundColor: AppPalette.accent,
-            side: const BorderSide(color: darkOutline),
+            side: BorderSide(color: darkOutline),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
           ),
         ),
-        inputDecorationTheme: const InputDecorationTheme(
+        inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: darkSurfaceRaised,
           border: OutlineInputBorder(
@@ -269,13 +273,13 @@ class AthanApp extends StatelessWidget {
           labelStyle: TextStyle(color: darkTextSecondary),
           hintStyle: TextStyle(color: darkTextMuted),
         ),
-        chipTheme: const ChipThemeData(
+        chipTheme: ChipThemeData(
           backgroundColor: darkSurface,
           labelStyle: TextStyle(color: Colors.white),
           side: BorderSide(color: darkOutline),
         ),
-        dividerTheme: const DividerThemeData(color: darkOutline),
-        tabBarTheme: const TabBarThemeData(
+        dividerTheme: DividerThemeData(color: darkOutline),
+        tabBarTheme: TabBarThemeData(
           labelColor: AppPalette.accent,
           unselectedLabelColor: darkTextMuted,
           indicatorColor: AppPalette.accent,
@@ -291,6 +295,8 @@ class AthanApp extends StatelessWidget {
       ),
       home: showOnboarding ? const OnboardingPage() : const MainNavigation(),
       routes: {'/home': (_) => const MainNavigation()},
+        );
+      },
     );
   }
 }
@@ -349,38 +355,39 @@ class _MainNavigationState extends State<MainNavigation> {
 class _HeroBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    const imagePath = 'assets/images/hero_bg.png';
-    // Check if asset exists at runtime; fall back to gradient if not yet added.
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Image(
-          image: const AssetImage(imagePath),
-          fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => Container(
-            decoration: BoxDecoration(
-              gradient: AppPalette.of(context).heroGradient,
+    return ListenableBuilder(
+      listenable: GalleryThemeService.instance,
+      builder: (context, _) {
+        final imagePath = GalleryThemeService.instance.current.assetPath;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Image(
+              image: AssetImage(imagePath),
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                decoration: BoxDecoration(
+                  gradient: AppPalette.of(context).heroGradient,
+                ),
+              ),
             ),
-          ),
-        ),
-        // Semi-transparent overlay for text legibility
-        // Bottom stop blends into #262943 so the hero image flows
-        // seamlessly into the prayer timetable section below.
-        Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              stops: [0.0, 0.6, 1.0],
-              colors: [
-                Color(0x22000010), // very light tint at top
-                Color(0x66000020), // moderate at mid
-                Color(0xAA1A1D38), // semi-transparent at bottom
-              ],
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: [0.0, 0.6, 1.0],
+                  colors: [
+                    Color(0x22000010),
+                    Color(0x66000020),
+                    Color(0xAA1A1D38),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 }
@@ -971,7 +978,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final screenHeight = MediaQuery.sizeOf(context).height;
     final isSmallScreen = screenHeight < 700;
     final heroHeight = (screenHeight * 0.34).clamp(isSmallScreen ? 200.0 : 250.0, 360.0);
-    final timetableTopGap = (screenHeight * 0.018).clamp(isSmallScreen ? 4.0 : 8.0, 20.0);
 
     return Scaffold(
       backgroundColor: Colors.black, // Dark base for the background image
@@ -988,21 +994,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   _buildTopBar(),
                   _buildHeroSection(current, heroHeight: heroHeight),
                   // Prayer list section
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      padding: EdgeInsets.only(
-                        top: 8,
-                        bottom: timetableTopGap + 8,
-                      ),
-                      child: _buildPrayerList(current?.name),
-                    ),
+                  Container(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    child: _buildPrayerList(current?.name),
                   ),
-                  const SizedBox(height: 24),
                 ],
               ),
             ),

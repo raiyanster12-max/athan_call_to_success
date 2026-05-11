@@ -14,6 +14,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import 'app_palette.dart';
 import 'db_helper.dart';
+import 'gallery_theme.dart';
 import 'notification_service.dart';
 import 'onboarding_page.dart';
 
@@ -106,10 +107,12 @@ class _SettingsPageState extends State<SettingsPage> {
     _loadSettings();
     _refreshCastConnectionState();
     _startCastReconnectIfNeeded();
+    GalleryThemeService.instance.addListener(_onGalleryThemeChange);
   }
 
   @override
   void dispose() {
+    GalleryThemeService.instance.removeListener(_onGalleryThemeChange);
     _audioPlayer?.stop();
     _audioPlayer?.dispose();
     _castConnectionSub?.cancel();
@@ -117,6 +120,8 @@ class _SettingsPageState extends State<SettingsPage> {
     _googleCastMediaUrlController.dispose();
     super.dispose();
   }
+
+  void _onGalleryThemeChange() => setState(() {});
 
   void _initializeCastConnectionListener() {
     if (defaultTargetPlatform != TargetPlatform.android) {
@@ -1567,6 +1572,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
             ]),
+            _buildSectionLabel('Appearance'),
+            _buildAppearanceDropdown(),
             _buildSectionLabel('Reset'),
             _buildSectionCard([
               _buildSettingRow(
@@ -1578,6 +1585,146 @@ class _SettingsPageState extends State<SettingsPage> {
             ]),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildAppearanceDropdown() {
+    final current = GalleryThemeService.instance.current;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: _surfaceBackground,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _dividerColor),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 18,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+            leading: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: _iconBackground,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.palette_outlined, color: _sectionAccent, size: 20),
+            ),
+            title: Text(
+              'Gallery Theme',
+              style: TextStyle(color: _primaryText, fontSize: 15, fontWeight: FontWeight.w500),
+            ),
+            subtitle: Text(
+              current.label,
+              style: TextStyle(color: _textMuted, fontSize: 13),
+            ),
+            iconColor: _textMuted,
+            collapsedIconColor: _textMuted,
+            children: [
+              Divider(height: 1, color: _dividerColor),
+              _buildGalleryGrid(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGalleryGrid() {
+    final currentIndex = GalleryThemeService.instance.index;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 8,
+          childAspectRatio: 0.78,
+        ),
+        itemCount: galleryItems.length,
+        itemBuilder: (context, i) {
+          final item = galleryItems[i];
+          final selected = i == currentIndex;
+          return GestureDetector(
+            onTap: () => GalleryThemeService.instance.setIndex(i),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: selected ? _sectionAccent : _dividerColor,
+                  width: selected ? 2.5 : 1,
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(11),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.asset(
+                      item.assetPath,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: item.darkPalette.backgroundTop,
+                        child: Icon(Icons.image_outlined, color: _textMuted),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 5,
+                          horizontal: 4,
+                        ),
+                        color: Colors.black54,
+                        child: Text(
+                          item.label,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (selected)
+                      Positioned(
+                        top: 6,
+                        right: 6,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: const BoxDecoration(
+                            color: AppPalette.accent,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.check,
+                            color: Colors.white,
+                            size: 12,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
