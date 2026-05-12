@@ -1083,19 +1083,66 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _openMoreSettingsSheet() {
+    // Local copy of preferences — edited in sheet, committed on Save
+    final localPrefs = Map<String, String>.from(_tonePreferences);
+    bool saving = false;
+
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _buildBottomSheetScaffold(
-        title: 'More Prayer Settings',
-        child: Column(
-          children: [
-            for (final prayer in _prayerNames) ...[
-              _buildToneEditor(prayer),
-              const SizedBox(height: 12),
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setSheetState) => _buildBottomSheetScaffold(
+          title: 'More Prayer Settings',
+          child: Column(
+            children: [
+              for (final prayer in _prayerNames) ...[
+                _buildToneEditorLocal(
+                  prayer,
+                  localPrefs,
+                  (val) => setSheetState(() => localPrefs[prayer] = val),
+                ),
+                const SizedBox(height: 12),
+              ],
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          setSheetState(() => saving = true);
+                          for (final entry in localPrefs.entries) {
+                            await DBHelper.setSetting(
+                              _toneKey(entry.key),
+                              entry.value,
+                            );
+                          }
+                          await NotificationService.instance
+                              .rescheduleUsingStoredLocation()
+                              .catchError((_) {});
+                          if (mounted) {
+                            setState(() => _tonePreferences.addAll(localPrefs));
+                          }
+                          if (ctx.mounted) Navigator.of(ctx).pop();
+                        },
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: saving
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Save'),
+                ),
+              ),
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -1161,6 +1208,55 @@ class _SettingsPageState extends State<SettingsPage> {
       focusedBorder: OutlineInputBorder(
         borderSide: const BorderSide(color: _sectionAccent),
         borderRadius: BorderRadius.circular(12),
+      ),
+    );
+  }
+
+  Widget _buildToneEditorLocal(
+    String prayer,
+    Map<String, String> localPrefs,
+    void Function(String) onChanged,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _iconBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _dividerColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            prayer,
+            style: TextStyle(
+              color: _primaryText,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            initialValue: localPrefs[prayer],
+            dropdownColor: _surfaceBackground,
+            style: TextStyle(color: _primaryText),
+            decoration: _sheetInputDecoration('Tone'),
+            items: _toneOptions
+                .map(
+                  (tone) => DropdownMenuItem<String>(
+                    value: tone,
+                    child: Text(
+                      tone,
+                      style: TextStyle(color: _primaryText),
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value != null) onChanged(value);
+            },
+          ),
+        ],
       ),
     );
   }
