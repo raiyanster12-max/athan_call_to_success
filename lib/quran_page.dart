@@ -9,6 +9,7 @@ import 'package:quran/quran.dart' as quran;
 
 import 'app_palette.dart';
 import 'db_helper.dart';
+import 'gallery_theme.dart';
 
 enum _QuranBrowseMode { chapters, parts, bookmarks }
 
@@ -18,11 +19,11 @@ enum _QuranBrowseMode { chapters, parts, bookmarks }
 //   #E8E6FF    → 10.5 : 1  ✅ AAA  (primary text)
 //   #B0ADDB    →  5.8 : 1  ✅ AA   (secondary text / muted)
 //   #7B79A8    →  3.2 : 1  ✅ AA large-text / decorative only
-const Color _quranPageBackground = Color(0xFF262943);
-const Color _quranPanelColor = Color(0xFF2E3252);
-const Color _quranPanelRaised = Color(0xFF353960);
-const Color _quranPanelSoft = Color(0xFF3D4270);
-const Color _quranDividerColor = Color(0xFF4A4F7A);
+Color get _quranPageBackground => AppPalette.dark.backgroundTop;
+Color get _quranPanelColor => AppPalette.dark.surface;
+Color get _quranPanelRaised => AppPalette.dark.surfaceRaised;
+Color get _quranPanelSoft => AppPalette.dark.surfaceHighlight;
+Color get _quranDividerColor => AppPalette.dark.outline;
 const Color _quranMutedText = Color(0xFFB0ADDB);   // 5.8 : 1 ✅ AA
 const Color _quranSoftText = Color(0xFF7B79A8);    // 3.2 : 1 decorative
 const Color _quranHighlight = Color(0xFF56D39A);
@@ -175,6 +176,7 @@ class _QuranPageState extends State<QuranPage> {
   @override
   void initState() {
     super.initState();
+    GalleryThemeService.instance.addListener(_onGalleryChange);
     _loadQuranSettings();
     _searchController.addListener(() {
       if (!mounted) return;
@@ -186,10 +188,13 @@ class _QuranPageState extends State<QuranPage> {
 
   @override
   void dispose() {
+    GalleryThemeService.instance.removeListener(_onGalleryChange);
     _recentReadsScrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
+
+  void _onGalleryChange() => setState(() {});
 
   Future<void> _loadQuranSettings() async {
     final currentLastReadSurah = _lastReadSurah ?? _sessionLastReadSurah;
@@ -530,11 +535,11 @@ class _QuranPageState extends State<QuranPage> {
               ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: _quranDividerColor),
+          borderSide: BorderSide(color: _quranDividerColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: _quranDividerColor),
+          borderSide: BorderSide(color: _quranDividerColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -866,9 +871,9 @@ class _QuranPageState extends State<QuranPage> {
               ),
               Container(
                 height: 4,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: _quranPanelSoft,
-                  borderRadius: BorderRadius.vertical(
+                  borderRadius: const BorderRadius.vertical(
                     bottom: Radius.circular(18),
                   ),
                 ),
@@ -1354,6 +1359,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
   @override
   void initState() {
     super.initState();
+    GalleryThemeService.instance.addListener(_onGalleryChange);
     _verseCount = quran.getVerseCount(widget.surah.number);
     _verseKeys = List<GlobalKey>.generate(_verseCount, (_) => GlobalKey());
     _loadReaderState();
@@ -1371,11 +1377,14 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
     _sessionLastReadAyahBySurah[widget.surah.number] = visibleAyah;
     unawaited(DBHelper.setSetting(_lastReadAyahKey, visibleAyah.toString()));
 
+    GalleryThemeService.instance.removeListener(_onGalleryChange);
     _readingTimer?.cancel();
     _scrollController.dispose();
     _reciterPlayer.dispose();
     super.dispose();
   }
+
+  void _onGalleryChange() => setState(() {});
 
   Future<void> _loadReaderState() async {
     int parsedLastRead =
@@ -1758,9 +1767,9 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: _quranPageBackground,
-        body: Center(child: CircularProgressIndicator()),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 

@@ -35,8 +35,6 @@ class AppPalette {
   static const Color secondary = Color(0xFF8FAFA0);
   static const Color danger = Color(0xFFE37D8F);
 
-  /// The canonical #262943 dark page background used on all non-home pages.
-  static const Color pageBackground = Color(0xFF262943);
 
   static const LinearGradient accentGradient = LinearGradient(
     begin: Alignment.centerLeft,
@@ -44,7 +42,7 @@ class AppPalette {
     colors: [accent, accentSoft],
   );
 
-  static final AppPaletteData _dark = AppPaletteData(
+  static final AppPaletteData _baseDark = AppPaletteData(
     // All non-home page backgrounds use #262943 exactly.
     backgroundTop: const Color(0xFF262943),
     backgroundMid: const Color(0xFF2E3252),
@@ -103,10 +101,18 @@ class AppPalette {
     heroTextColor: Colors.white,
   );
 
-  static AppPaletteData get dark => _dark;
+  static AppPaletteData _currentDark = _baseDark;
+
+  static AppPaletteData get dark => _currentDark;
+
+  static Color get pageBackground => _currentDark.backgroundTop;
+
+  static void applyGalleryTheme(AppPaletteData palette) {
+    _currentDark = palette;
+  }
 
   static AppPaletteData of(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.dark ? _dark : _light;
+    return Theme.of(context).brightness == Brightness.dark ? _currentDark : _light;
   }
 
   /// Convenience method — same as AppPalette.of(context).backgroundGradient
