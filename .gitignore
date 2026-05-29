@@ -33,6 +33,19 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# macOS related
+macos/DerivedData/
+macos/Flutter/ephemeral/
+macos/Pods/
+
+# iOS related
+ios/DerivedData/
+ios/Pods/
+ios/.derived-data-log*
+
+# Claude
+.claude/
+
 # Symbolication related
 app.*.symbols
 
