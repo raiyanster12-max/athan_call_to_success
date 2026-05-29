@@ -16,5 +16,5 @@
         <item name="android:windowBackground">?android:colorBackground</item>
     </style>
 
-    <style name="CarAppTheme" parent="@style/Theme.CarApp" />
+    <style name="CarAppTheme" parent="@android:style/Theme.NoTitleBar" />
 </resources>
