@@ -5,7 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:googlecast/CastController.dart';
+// [Settings-page-fixes] CastController unused after Stop fix — import removed
+// import 'package:googlecast/CastController.dart';
 import 'package:googlecast/googlecast.dart';
 import 'package:path/path.dart' as path_lib;
 import 'package:permission_handler/permission_handler.dart';
@@ -83,10 +84,14 @@ class _SettingsPageState extends State<SettingsPage> {
   final Map<String, String> _customToneFileNames = {
     for (final prayer in _prayerNames) prayer: '',
   };
+  final Map<String, TextEditingController> _castUrlControllers = {
+    for (final prayer in _prayerNames) prayer: TextEditingController(),
+  };
 
   AudioPlayer? _audioPlayer;
   String? _playingPrayer;
-  final CastController _castController = CastController();
+  // [Settings-page-fixes] _castController unused — Stop now routes through NotificationService.stopAllPlayback
+  // final CastController _castController = CastController();
   StreamSubscription<bool>? _castConnectionSub;
   StreamSubscription<String?>? _castMessageSub;
   bool _castConnected = false;
@@ -118,6 +123,9 @@ class _SettingsPageState extends State<SettingsPage> {
     _castConnectionSub?.cancel();
     _castMessageSub?.cancel();
     _googleCastMediaUrlController.dispose();
+    for (final c in _castUrlControllers.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -290,7 +298,9 @@ class _SettingsPageState extends State<SettingsPage> {
     _showHijriDate = await _loadBoolSetting(_showHijriDateKey, fallback: true);
 
     for (final prayer in _prayerNames) {
-      final storedTone = await DBHelper.getSetting(_toneKey(prayer));
+      var storedTone = await DBHelper.getSetting(_toneKey(prayer));
+      // [Settings-page-fixes] Migrate legacy tone names to new display names
+      storedTone = _migrateToneName(storedTone);
       if (storedTone != null &&
           (_toneOptions.contains(storedTone) ||
               storedTone == _customFileTone)) {
@@ -300,6 +310,11 @@ class _SettingsPageState extends State<SettingsPage> {
       final customPath = await DBHelper.getSetting(_customTonePathKey(prayer));
       if (customPath != null && customPath.trim().isNotEmpty) {
         _customToneFileNames[prayer] = path_lib.basename(customPath);
+      }
+
+      final castUrl = await DBHelper.getSetting(_castUrlKey(prayer));
+      if (castUrl != null && castUrl.trim().isNotEmpty) {
+        _castUrlControllers[prayer]?.text = castUrl.trim();
       }
 
       if (_tonePreferences[prayer] == _customFileTone &&
@@ -321,8 +336,18 @@ class _SettingsPageState extends State<SettingsPage> {
 
   String _toneKey(String prayer) => 'alarm_tone_${prayer.toLowerCase()}';
 
+  String? _migrateToneName(String? tone) {
+    const legacy = {
+      'Muezzin Voice 1 with Fajr Athan': 'Fajr Athan by Mishary Rashid',
+      'Muezzin Voice 2 with Mishary Alafasi': 'Athan by Mishary Rashid',
+      'Abbu_Athan': 'Athan by Wakilur R Chowdhury',
+    };
+    return legacy[tone] ?? tone;
+  }
   String _customTonePathKey(String prayer) =>
       'alarm_tone_custom_path_${prayer.toLowerCase()}';
+  String _castUrlKey(String prayer) =>
+      'google_cast_media_url_${prayer.toLowerCase()}';
 
   List<String> get _allToneOptions {
     if (kIsWeb) {
@@ -446,85 +471,82 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Future<void> _playCastUrl(
-    String mediaUrl, {
-    required String title,
-    required String subtitle,
-    bool saveUrl = false,
-  }) async {
-    await _refreshCastConnectionState();
+  // [Settings-page-fixes] _playCastUrl unused — only called by commented-out _testGoogleCastPlayback
+  // Future<void> _playCastUrl(
+  //   String mediaUrl, {
+  //   required String title,
+  //   required String subtitle,
+  //   bool saveUrl = false,
+  // }) async {
+  //   await _refreshCastConnectionState();
+  //   if (mediaUrl.trim().isEmpty) {
+  //     if (!mounted) return;
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       const SnackBar(content: Text('Enter a Cast media URL first.')),
+  //     );
+  //     return;
+  //   }
+  //   if (saveUrl) {
+  //     await _saveGoogleCastMediaUrl();
+  //   }
+  //   try {
+  //     if (!_castConnected) {
+  //       if (!mounted) return;
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         const SnackBar(
+  //           content: Text(
+  //             'Cast is not connected. Tap the Cast icon and select your speaker first.',
+  //           ),
+  //         ),
+  //       );
+  //       return;
+  //     }
+  //     await _castController
+  //         .setMedia(url: mediaUrl.trim(), title: title, subtitle: subtitle)
+  //         .timeout(const Duration(seconds: 5));
+  //     await _castController.loadAudio().timeout(const Duration(seconds: 10));
+  //     await _castController.play().timeout(const Duration(seconds: 10));
+  //     await Future.delayed(const Duration(milliseconds: 1200));
+  //     await _refreshCastConnectionState();
+  //     if (!mounted) return;
+  //     if (_lastCastState == 'ERROR' || _lastCastState == 'IDLE') {
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         SnackBar(
+  //           content: Text(
+  //             'Cast command sent, but device state is $_lastCastState. '
+  //             'If cast audio still does not play, the Cast session/plugin path is the problem.',
+  //           ),
+  //         ),
+  //       );
+  //       return;
+  //     }
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       SnackBar(content: Text('Cast playback started. State: $_lastCastState')),
+  //     );
+  //   } catch (e) {
+  //     if (!mounted) return;
+  //     ScaffoldMessenger.of(context)
+  //         .showSnackBar(SnackBar(content: Text('Could not play on Cast: $e')));
+  //   }
+  // }
 
-    if (mediaUrl.trim().isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a Cast media URL first.')),
-      );
-      return;
-    }
-
-    if (saveUrl) {
-      await _saveGoogleCastMediaUrl();
-    }
-
-    try {
-      if (!_castConnected) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Cast is not connected. Tap the Cast icon and select your speaker first.',
-            ),
-          ),
-        );
-        return;
-      }
-
-      await _castController
-          .setMedia(url: mediaUrl.trim(), title: title, subtitle: subtitle)
-          .timeout(const Duration(seconds: 5));
-      await _castController.loadAudio().timeout(const Duration(seconds: 10));
-      await _castController.play().timeout(const Duration(seconds: 10));
-      await Future.delayed(const Duration(milliseconds: 1200));
-      await _refreshCastConnectionState();
-      if (!mounted) return;
-      if (_lastCastState == 'ERROR' || _lastCastState == 'IDLE') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Cast command sent, but device state is $_lastCastState. '
-              'If cast audio still does not play, the Cast session/plugin path is the problem.',
-            ),
-          ),
-        );
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Cast playback started. State: $_lastCastState'),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not play on Cast: $e')));
-    }
-  }
-
-  Future<void> _testGoogleCastPlayback() async {
-    final mediaUrl = _googleCastMediaUrlController.text.trim();
-    await _playCastUrl(
-      mediaUrl,
-      title: 'Athan Test',
-      subtitle: 'Call to Success',
-      saveUrl: true,
-    );
-  }
+  // [Settings-page-fixes] _testGoogleCastPlayback unused — Test Audio button commented out
+  // Future<void> _testGoogleCastPlayback() async {
+  //   final mediaUrl = _googleCastMediaUrlController.text.trim();
+  //   await _playCastUrl(
+  //     mediaUrl,
+  //     title: 'Athan Test',
+  //     subtitle: 'Call to Success',
+  //     saveUrl: true,
+  //   );
+  // }
 
   Future<void> _testPrayerTriggerNow({
     String? routeOverride,
     String? prayerSelectionOverride,
   }) async {
+    // [Settings-page-fixes] Stop any in-progress preview before triggering test
+    await _stopPlayback();
     await _saveGoogleCastMediaUrl();
     final activeRoute = routeOverride ?? _speakerRoute;
     final selectedPrayer = prayerSelectionOverride ?? _testPrayerSelection;
@@ -532,8 +554,9 @@ class _SettingsPageState extends State<SettingsPage> {
     await DBHelper.setSetting(_speakerRouteKey, activeRoute);
     await _refreshCastConnectionState();
 
-    if (activeRoute == NotificationService.speakerGoogleCast &&
-        !_castConnected) {
+    // [Settings-page-fixes] Only block speakerGoogleCast (needs prior discovery session).
+    // speakerGoogleCastIp connects itself inside _triggerGoogleCastIfConfigured via IP.
+    if (activeRoute == NotificationService.speakerGoogleCast && !_castConnected) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -853,6 +876,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _refreshCastConnectionState();
     var draftSpeakerRoute = _speakerRoute;
     var draftTestPrayerSelection = _testPrayerSelection;
+    var draftReconnecting = false;
     final ipController = TextEditingController(text: _preferredCastSpeakerIp);
 
     showModalBottomSheet<void>(
@@ -978,9 +1002,25 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                     ),
                     ElevatedButton.icon(
-                      onPressed: _testGoogleCastPlayback,
-                      icon: const Icon(Icons.play_arrow),
-                      label: const Text('Test Audio'),
+                      onPressed: draftReconnecting
+                          ? null
+                          : () async {
+                              setSheetState(() => draftReconnecting = true);
+                              await NotificationService.instance.reconnectCast();
+                              await _refreshCastConnectionState();
+                              setSheetState(() => draftReconnecting = false);
+                            },
+                      icon: draftReconnecting
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.refresh),
+                      label: const Text('Refresh'),
                     ),
                   ],
                 ),
@@ -1028,8 +1068,11 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                   const SizedBox(width: 8),
+                  // [Settings-page-fixes] Use stopAllPlayback so both Cast and
+                  // phone speaker audio (from NotificationService) are stopped
                   OutlinedButton.icon(
-                    onPressed: () => _castController.stop(),
+                    onPressed: () =>
+                        NotificationService.instance.stopAllPlayback(),
                     icon: const Icon(Icons.stop),
                     label: const Text('Stop'),
                   ),
@@ -1305,6 +1348,16 @@ class _SettingsPageState extends State<SettingsPage> {
               }
               await _updateTone(prayer, value);
             },
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _castUrlControllers[prayer],
+            style: TextStyle(color: _primaryText, fontSize: 13),
+            decoration: _sheetInputDecoration(
+              'Cast Audio URL ($prayer)',
+              hint: 'https://… (leave blank to use global URL)',
+            ),
+            keyboardType: TextInputType.url,
           ),
           if (_tonePreferences[prayer] == _customFileTone && !kIsWeb) ...[
             const SizedBox(height: 10),

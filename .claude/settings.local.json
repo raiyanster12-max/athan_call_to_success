@@ -6,7 +6,12 @@
       "Bash(flutter analyze *)",
       "Bash(flutter devices *)",
       "Bash(flutter clean *)",
-      "Bash(flutter run *)"
+      "Bash(flutter run *)",
+      "Bash(grep -v \"^$\")",
+      "Bash(adb kill-server *)",
+      "Bash(adb start-server *)",
+      "Bash(adb devices *)",
+      "Bash(flutter attach *)"
     ]
   }
 }
