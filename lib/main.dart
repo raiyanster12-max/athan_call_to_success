@@ -96,7 +96,7 @@ class AthanApp extends StatelessWidget {
 
     return ListenableBuilder(
       listenable: GalleryThemeService.instance,
-      builder: (_, __) {
+      builder: (_, _) {
         // Dark palette — read INSIDE builder so every gallery change gets fresh values
         final dp = AppPalette.dark;
         final Color darkBg = dp.backgroundTop;
@@ -365,7 +365,7 @@ class _HeroBackground extends StatelessWidget {
             Image(
               image: AssetImage(imagePath),
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
+              errorBuilder: (_, _, _) => Container(
                 decoration: BoxDecoration(
                   gradient: AppPalette.of(context).heroGradient,
                 ),

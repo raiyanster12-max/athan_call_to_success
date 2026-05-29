@@ -1772,7 +1772,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     Image.asset(
                       item.assetPath,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
+                      errorBuilder: (_, _, _) => Container(
                         color: item.darkPalette.backgroundTop,
                         child: Icon(Icons.image_outlined, color: _textMuted),
                       ),
