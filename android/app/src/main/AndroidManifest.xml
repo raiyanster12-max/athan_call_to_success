@@ -136,6 +136,68 @@
             android:name="org.apache.http.legacy"
             android:required="false" />
 
+        <!-- ── Home Screen Widgets ─────────────────────────────────────── -->
+        <receiver
+            android:name=".NextPrayerWidgetProvider"
+            android:label="Next Prayer"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info_next_prayer" />
+        </receiver>
+
+        <receiver
+            android:name=".PrayerTimesWidgetProvider"
+            android:label="Prayer Times"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info_prayer_times" />
+        </receiver>
+
+        <receiver
+            android:name=".PrayerTrackerWidgetProvider"
+            android:label="Prayer Tracker"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info_prayer_tracker" />
+        </receiver>
+
+        <receiver
+            android:name=".QuranWidgetProvider"
+            android:label="Verse of the Day"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info_quran" />
+        </receiver>
+
+        <receiver
+            android:name=".QiblaWidgetProvider"
+            android:label="Qibla Direction"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info_qibla" />
+        </receiver>
+        <!-- ──────────────────────────────────────────────────────────── -->
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

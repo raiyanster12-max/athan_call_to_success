@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_background"
+    android:padding="14dp"
+    android:gravity="center_vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="TODAY'S PRAYERS"
+            android:textSize="9sp"
+            android:textColor="#9999CC"
+            android:letterSpacing="0.12" />
+
+        <TextView
+            android:id="@+id/tv_tracker_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0/5"
+            android:textSize="13sp"
+            android:textColor="#26C6A6"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Prayer dots row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginTop="10dp">
+
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+            <TextView android:id="@+id/dot_fajr"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="○" android:textSize="22sp" android:textColor="#80FFFFFF" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="F" android:textSize="9sp" android:textColor="#80FFFFFF"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+            <TextView android:id="@+id/dot_dhuhr"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="○" android:textSize="22sp" android:textColor="#80FFFFFF" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="D" android:textSize="9sp" android:textColor="#80FFFFFF"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+            <TextView android:id="@+id/dot_asr"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="○" android:textSize="22sp" android:textColor="#80FFFFFF" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="A" android:textSize="9sp" android:textColor="#80FFFFFF"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+            <TextView android:id="@+id/dot_maghrib"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="○" android:textSize="22sp" android:textColor="#80FFFFFF" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="M" android:textSize="9sp" android:textColor="#80FFFFFF"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+            <TextView android:id="@+id/dot_isha"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="○" android:textSize="22sp" android:textColor="#80FFFFFF" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="I" android:textSize="9sp" android:textColor="#80FFFFFF"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
+
+    </LinearLayout>
+</LinearLayout>

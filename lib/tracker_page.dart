@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -9,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_palette.dart';
 import 'db_helper.dart';
+import 'widget_service.dart';
 
 class TrackerPage extends StatefulWidget {
   const TrackerPage({super.key});
@@ -486,6 +488,7 @@ class _TrackerPageState extends State<TrackerPage> {
       setState(() {
         _prayerStatuses[prayer] = value;
       });
+      unawaited(WidgetService.updateTrackerOnly(Map<String, bool>.from(_prayerStatuses)));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
