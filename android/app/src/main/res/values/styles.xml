@@ -17,4 +17,5 @@
     </style>
 
     <style name="CarAppTheme" parent="@android:style/Theme.NoTitleBar" />
+    <style name="CarAppTheme" parent="@style/Theme.CarApp" />
 </resources>
