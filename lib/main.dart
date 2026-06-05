@@ -19,10 +19,12 @@ import 'onboarding_page.dart';
 import 'mosque_service.dart';
 import 'qibla_page.dart';
 import 'prayer_service.dart';
+import 'widget_service.dart';
 import 'quran_page.dart';
 import 'settings_page.dart';
 import 'tracker_page.dart';
 import 'gallery_theme.dart';
+import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 // Use the Type 3 ID from your JSON: 896243268657-eoiqbejcc7qa...
@@ -309,7 +311,35 @@ class MainNavigation extends StatefulWidget {
 }
 
 class _MainNavigationState extends State<MainNavigation> {
+  static final _deeplinkChannel = const MethodChannel('com.example.athan/deeplink');
   int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _deeplinkChannel.setMethodCallHandler(_handleDeeplinkCall);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _checkInitialDeeplink();
+    });
+  }
+
+  Future<void> _checkInitialDeeplink() async {
+    try {
+      final tab = await _deeplinkChannel.invokeMethod<int>('getInitialTab');
+      if (tab != null && tab >= 0 && mounted) {
+        setState(() => _selectedIndex = tab);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _handleDeeplinkCall(MethodCall call) async {
+    if (call.method == 'navigateToTab') {
+      final tab = call.arguments as int?;
+      if (tab != null && tab >= 0 && mounted) {
+        setState(() => _selectedIndex = tab);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -481,6 +511,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _now = DateTime.now();
       });
     });
+    unawaited(WidgetService.updateFromCache());
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _determinePosition();
       if (!mounted) return;
@@ -505,6 +536,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       unawaited(_loadIqamahSettingsForHome());
       _refreshPrayerTimesFromBestSource();
       unawaited(_scheduleNotificationsForBestSource());
+      unawaited(WidgetService.updateFromCache());
 
       final position = _currentPosition;
       if (_pinnedMasjid == null && position != null) {
@@ -882,6 +914,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       // Schedule notifications independently so a sound/channel error never
       // surfaces as a "Could not get location" message.
       unawaited(_scheduleNotificationsForBestSource());
+      unawaited(WidgetService.cacheLocation(position.latitude, position.longitude, city: _cityName));
+      unawaited(WidgetService.updateAll(lat: position.latitude, lng: position.longitude, city: _cityName));
     } catch (e) {
       if (!mounted) return;
       setState(() {
