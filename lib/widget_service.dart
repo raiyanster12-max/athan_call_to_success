@@ -170,6 +170,7 @@ class WidgetService {
   }
 
   static Future<void> _updateQuranOnly() async {
+    if (!_supported) return;
     final verse = _todayVerse;
     await HomeWidget.saveWidgetData('widget_quran_arabic', verse['arabic']);
     await HomeWidget.saveWidgetData('widget_quran_translation', verse['translation']);
