@@ -190,22 +190,20 @@ class _TrackerPageState extends State<TrackerPage> {
               ],
             ),
             const SizedBox(height: 12),
-            // Dhikr selector
-            SizedBox(
-              height: 38,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: _dhikrOptions.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 6),
-                itemBuilder: (context, i) {
-                  final opt = _dhikrOptions[i];
-                  final selected = opt.key == _selectedDhikrKey;
-                  return ChoiceChip(
-                    label: Text(opt.transliteration, style: const TextStyle(fontSize: 12)),
-                    selected: selected,
-                    onSelected: (_) => _selectDhikr(opt),
-                  );
-                },
+            // Dhikr selector — SingleChildScrollView+Row renders all chips eagerly
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (int i = 0; i < _dhikrOptions.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 6),
+                    ChoiceChip(
+                      label: Text(_dhikrOptions[i].transliteration, style: const TextStyle(fontSize: 12)),
+                      selected: _dhikrOptions[i].key == _selectedDhikrKey,
+                      onSelected: (_) => _selectDhikr(_dhikrOptions[i]),
+                    ),
+                  ],
+                ],
               ),
             ),
             const SizedBox(height: 16),
@@ -978,53 +976,6 @@ class _TrackerPageState extends State<TrackerPage> {
                     ),
                 ],
               ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBackupRestoreCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.import_export, color: AppPalette.accent),
-                const SizedBox(width: 8),
-                Text(
-                  'Export & Import Ramadan Tracker',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Export your Ramadan tracker as CSV (for spreadsheets) or import CSV data on this device.',
-              style: TextStyle(color: AppPalette.of(context).textSecondary),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: _isBackupBusy ? null : _pasteAndImportCsv,
-                  icon: const Icon(Icons.file_download_outlined),
-                  label: const Text('Import CSV'),
-                ),
-                ElevatedButton.icon(
-                  onPressed: _isBackupBusy ? null : _exportTrackerAsCsv,
-                  icon: const Icon(Icons.file_upload_outlined),
-                  label: const Text('Export as CSV'),
-                ),
-              ],
-            ),
           ],
         ),
       ),
