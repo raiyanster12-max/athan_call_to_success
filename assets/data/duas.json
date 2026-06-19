@@ -1,0 +1,499 @@
+{
+  "categories": [
+    {
+      "id": "morning",
+      "name": "Morning Adhkar",
+      "icon": "wb_sunny",
+      "duas": [
+        {
+          "id": 1,
+          "arabic": "أَصْبَحْنَا وَأَصْبَحَ الْمُلْكُ لِلَّهِ وَالْحَمْدُ لِلَّهِ، لَا إِلَٰهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ",
+          "translation": "We have reached the morning and at this very time the whole kingdom belongs to Allah. All praise is due to Allah. None has the right to be worshipped except Allah, alone, without partner. To Him belongs all sovereignty and praise, and He is over all things omnipotent.",
+          "transliteration": "Asbahna wa asbahal mulku lillah, walhamdu lillah, la ilaha illallahu wahdahu la shareeka lah, lahul mulku wa lahul hamdu wa huwa 'ala kulli shay'in qadeer.",
+          "source": "Muslim 4/2088",
+          "repeat": 1
+        },
+        {
+          "id": 2,
+          "arabic": "اللَّهُمَّ بِكَ أَصْبَحْنَا، وَبِكَ أَمْسَيْنَا، وَبِكَ نَحْيَا، وَبِكَ نَمُوتُ، وَإِلَيْكَ النُّشُورُ",
+          "translation": "O Allah, by Your leave we have reached the morning and by Your leave we have reached the evening, by Your leave we live and die and unto You is our resurrection.",
+          "transliteration": "Allahumma bika asbahna, wa bika amsayna, wa bika nahya, wa bika namootu, wa ilaykan-nushoor.",
+          "source": "At-Tirmidhi 5/466",
+          "repeat": 1
+        },
+        {
+          "id": 3,
+          "arabic": "اللَّهُمَّ أَنْتَ رَبِّي لَا إِلَٰهَ إِلَّا أَنْتَ، خَلَقْتَنِي وَأَنَا عَبْدُكَ، وَأَنَا عَلَىٰ عَهْدِكَ وَوَعْدِكَ مَا اسْتَطَعْتُ، أَعُوذُ بِكَ مِنْ شَرِّ مَا صَنَعْتُ، أَبُوءُ لَكَ بِنِعْمَتِكَ عَلَيَّ وَأَبُوءُ لَكَ بِذَنْبِي فَاغْفِرْ لِي فَإِنَّهُ لَا يَغْفِرُ الذُّنُوبَ إِلَّا أَنْتَ",
+          "translation": "O Allah, You are my Lord, none has the right to be worshipped except You, You created me and I am Your servant and I abide to Your covenant and promise as best I can, I take refuge in You from the evil of which I have committed. I acknowledge Your favour upon me and I acknowledge my sin, so forgive me, for verily none can forgive sins except You.",
+          "transliteration": "Allahumma anta Rabbi la ilaha illa anta, khalaqtani wa ana 'abduka, wa ana 'ala 'ahdika wa wa'dika mastata'tu, a'udhu bika min sharri ma sana'tu, abu'u laka bini'matika 'alayya, wa abu'u laka bidhanbi faghfir lee fa innahu la yaghfirudh-dhunuba illa anta.",
+          "source": "Al-Bukhari 7/150",
+          "repeat": 1
+        },
+        {
+          "id": 4,
+          "arabic": "اللَّهُمَّ إِنِّي أَصْبَحْتُ أُشْهِدُكَ، وَأُشْهِدُ حَمَلَةَ عَرْشِكَ، وَمَلَائِكَتَكَ، وَجَمِيعَ خَلْقِكَ، أَنَّكَ أَنْتَ اللَّهُ لَا إِلَٰهَ إِلَّا أَنْتَ وَحْدَكَ لَا شَرِيكَ لَكَ، وَأَنَّ مُحَمَّدًا عَبْدُكَ وَرَسُولُكَ",
+          "translation": "O Allah, verily I have reached the morning and call on You, the bearers of Your throne, Your angels, and all of Your creation to witness that You are Allah, none has the right to be worshipped except You, alone, without partner and that Muhammad is Your servant and messenger.",
+          "transliteration": "Allahumma inni asbahtu ush-hiduka, wa ush-hidu hamalata 'arshika, wa mala'ikataka, wa jamee'a khalqika, annaka antallahu la ilaha illa anta wahdaka la shareeka laka, wa anna Muhammadan 'abduka wa rasooluka.",
+          "source": "Abu Dawud 4/317",
+          "repeat": 4
+        },
+        {
+          "id": 5,
+          "arabic": "اللَّهُمَّ مَا أَصْبَحَ بِي مِنْ نِعْمَةٍ أَوْ بِأَحَدٍ مِنْ خَلْقِكَ فَمِنْكَ وَحْدَكَ لَا شَرِيكَ لَكَ، فَلَكَ الْحَمْدُ وَلَكَ الشُّكْرُ",
+          "translation": "O Allah, what blessing I or any of Your creation have risen upon is from You alone, without partner, so for You is all praise and unto You all thanks.",
+          "transliteration": "Allahumma ma asbaha bee min ni'matin aw bi-ahadin min khalqika faminka wahdaka la shareeka laka, falakal-hamdu wa lakash-shukru.",
+          "source": "Abu Dawud 4/318",
+          "repeat": 1
+        },
+        {
+          "id": 6,
+          "arabic": "حَسْبِيَ اللَّهُ لَا إِلَٰهَ إِلَّا هُوَ عَلَيْهِ تَوَكَّلْتُ وَهُوَ رَبُّ الْعَرْشِ الْعَظِيمِ",
+          "translation": "Allah is Sufficient for me, none has the right to be worshipped except Him, upon Him I rely and He is Lord of the exalted throne.",
+          "transliteration": "Hasbiyallahu la ilaha illa huwa 'alayhi tawakkaltu wa huwa Rabbul-'Arshil-'Adheem.",
+          "source": "Abu Dawud 4/321",
+          "repeat": 7
+        },
+        {
+          "id": 7,
+          "arabic": "بِسْمِ اللَّهِ الَّذِي لَا يَضُرُّ مَعَ اسْمِهِ شَيْءٌ فِي الْأَرْضِ وَلَا فِي السَّمَاءِ وَهُوَ السَّمِيعُ الْعَلِيمُ",
+          "translation": "In the name of Allah with Whose name nothing is harmed on earth nor in the heavens and He is the All-Hearing, the All-Knowing.",
+          "transliteration": "Bismillahil-ladhi la yadurru ma'asmihi shay'un fil-ardi wa la fis-sama'i wa Huwas-Samee'ul-'Aleem.",
+          "source": "Abu Dawud 4/323, At-Tirmidhi 5/465",
+          "repeat": 3
+        },
+        {
+          "id": 8,
+          "arabic": "أَعُوذُ بِكَلِمَاتِ اللَّهِ التَّامَّاتِ مِنْ شَرِّ مَا خَلَقَ",
+          "translation": "I take refuge in the perfect words of Allah from the evil of what He has created.",
+          "transliteration": "A'udhu bikalimatil-lahit-tammati min sharri ma khalaq.",
+          "source": "Muslim 4/2081",
+          "repeat": 3
+        },
+        {
+          "id": 9,
+          "arabic": "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ",
+          "translation": "How perfect Allah is and I praise Him.",
+          "transliteration": "SubhanAllahi wa bihamdihi.",
+          "source": "Muslim 4/2071",
+          "repeat": 100
+        },
+        {
+          "id": 10,
+          "arabic": "لَا إِلَٰهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ",
+          "translation": "None has the right to be worshipped except Allah, alone, without partner. To Him belongs all sovereignty and praise and He is over all things omnipotent.",
+          "transliteration": "La ilaha illallahu wahdahu la shareeka lah, lahul-mulku wa lahul-hamdu wa Huwa 'ala kulli shay'in Qadeer.",
+          "source": "Al-Bukhari 4/95, Muslim 4/2071",
+          "repeat": 10
+        }
+      ]
+    },
+    {
+      "id": "evening",
+      "name": "Evening Adhkar",
+      "icon": "nightlight_round",
+      "duas": [
+        {
+          "id": 11,
+          "arabic": "أَمْسَيْنَا وَأَمْسَى الْمُلْكُ لِلَّهِ وَالْحَمْدُ لِلَّهِ، لَا إِلَٰهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ",
+          "translation": "We have reached the evening and at this very time the whole kingdom belongs to Allah. All praise is due to Allah. None has the right to be worshipped except Allah, alone, without partner. To Him belongs all sovereignty and praise, and He is over all things omnipotent.",
+          "transliteration": "Amsayna wa amsal mulku lillah, walhamdu lillah, la ilaha illallahu wahdahu la shareeka lah, lahul mulku wa lahul hamdu wa huwa 'ala kulli shay'in qadeer.",
+          "source": "Muslim 4/2088",
+          "repeat": 1
+        },
+        {
+          "id": 12,
+          "arabic": "اللَّهُمَّ بِكَ أَمْسَيْنَا، وَبِكَ أَصْبَحْنَا، وَبِكَ نَحْيَا، وَبِكَ نَمُوتُ، وَإِلَيْكَ الْمَصِيرُ",
+          "translation": "O Allah, by Your leave we have reached the evening and by Your leave we have reached the morning, by Your leave we live and die and unto You is our return.",
+          "transliteration": "Allahumma bika amsayna, wa bika asbahna, wa bika nahya, wa bika namootu, wa ilaykal-maseer.",
+          "source": "At-Tirmidhi 5/466",
+          "repeat": 1
+        },
+        {
+          "id": 13,
+          "arabic": "اللَّهُمَّ إِنِّي أَمْسَيْتُ أُشْهِدُكَ، وَأُشْهِدُ حَمَلَةَ عَرْشِكَ، وَمَلَائِكَتَكَ، وَجَمِيعَ خَلْقِكَ، أَنَّكَ أَنْتَ اللَّهُ لَا إِلَٰهَ إِلَّا أَنْتَ وَحْدَكَ لَا شَرِيكَ لَكَ، وَأَنَّ مُحَمَّدًا عَبْدُكَ وَرَسُولُكَ",
+          "translation": "O Allah, verily I have reached the evening and call on You, the bearers of Your throne, Your angels, and all of Your creation to witness that You are Allah, none has the right to be worshipped except You, alone, without partner and that Muhammad is Your servant and messenger.",
+          "transliteration": "Allahumma inni amsaytu ush-hiduka, wa ush-hidu hamalata 'arshika, wa mala'ikataka, wa jamee'a khalqika, annaka antallahu la ilaha illa anta wahdaka la shareeka laka, wa anna Muhammadan 'abduka wa rasooluka.",
+          "source": "Abu Dawud 4/317",
+          "repeat": 4
+        },
+        {
+          "id": 14,
+          "arabic": "اللَّهُمَّ مَا أَمْسَى بِي مِنْ نِعْمَةٍ أَوْ بِأَحَدٍ مِنْ خَلْقِكَ فَمِنْكَ وَحْدَكَ لَا شَرِيكَ لَكَ، فَلَكَ الْحَمْدُ وَلَكَ الشُّكْرُ",
+          "translation": "O Allah, what blessing I or any of Your creation have come upon this evening is from You alone, without partner, so for You is all praise and unto You all thanks.",
+          "transliteration": "Allahumma ma amsa bee min ni'matin aw bi-ahadin min khalqika faminka wahdaka la shareeka laka, falakal-hamdu wa lakash-shukru.",
+          "source": "Abu Dawud 4/318",
+          "repeat": 1
+        },
+        {
+          "id": 15,
+          "arabic": "اللَّهُمَّ عَالِمَ الْغَيْبِ وَالشَّهَادَةِ فَاطِرَ السَّمَاوَاتِ وَالْأَرْضِ، رَبَّ كُلِّ شَيْءٍ وَمَلِيكَهُ، أَشْهَدُ أَنْ لَا إِلَٰهَ إِلَّا أَنْتَ، أَعُوذُ بِكَ مِنْ شَرِّ نَفْسِي، وَمِنْ شَرِّ الشَّيْطَانِ وَشِرْكِهِ",
+          "translation": "O Allah, Knower of the unseen and the seen, Creator of the heavens and the earth, Lord and Sovereign of all things, I bear witness that none has the right to be worshipped except You. I take refuge in You from the evil of my soul and from the evil of Satan and his traps.",
+          "transliteration": "Allahumma 'Alimal-ghaybi wash-shahadati fatiras-samawati wal-ardi, Rabba kulli shay'in wa maleekahu, ash-hadu an la ilaha illa anta, a'udhu bika min sharri nafsee, wa min sharrish-shaytani wa shirkihi.",
+          "source": "Abu Dawud 4/317",
+          "repeat": 1
+        },
+        {
+          "id": 16,
+          "arabic": "أَعُوذُ بِكَلِمَاتِ اللَّهِ التَّامَّاتِ مِنْ شَرِّ مَا خَلَقَ",
+          "translation": "I take refuge in the perfect words of Allah from the evil of what He has created.",
+          "transliteration": "A'udhu bikalimatil-lahit-tammati min sharri ma khalaq.",
+          "source": "Muslim 4/2081",
+          "repeat": 3
+        }
+      ]
+    },
+    {
+      "id": "after_prayer",
+      "name": "After Prayer",
+      "icon": "mosque",
+      "duas": [
+        {
+          "id": 17,
+          "arabic": "أَسْتَغْفِرُ اللَّهَ، أَسْتَغْفِرُ اللَّهَ، أَسْتَغْفِرُ اللَّهَ",
+          "translation": "I ask Allah for forgiveness. (Three times)",
+          "transliteration": "Astaghfirullah, Astaghfirullah, Astaghfirullah.",
+          "source": "Muslim 1/414",
+          "repeat": 3
+        },
+        {
+          "id": 18,
+          "arabic": "اللَّهُمَّ أَنْتَ السَّلَامُ وَمِنْكَ السَّلَامُ، تَبَارَكْتَ يَا ذَا الْجَلَالِ وَالْإِكْرَامِ",
+          "translation": "O Allah, You are As-Salam (Peace) and from You is all peace, blessed are You, O Possessor of Majesty and Honour.",
+          "transliteration": "Allahumma antas-Salamu wa minkas-salamu, tabarakta ya Dhal-Jalali wal-Ikram.",
+          "source": "Muslim 1/414",
+          "repeat": 1
+        },
+        {
+          "id": 19,
+          "arabic": "لَا إِلَٰهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ، اللَّهُمَّ لَا مَانِعَ لِمَا أَعْطَيْتَ وَلَا مُعْطِيَ لِمَا مَنَعْتَ وَلَا يَنْفَعُ ذَا الْجَدِّ مِنْكَ الْجَدُّ",
+          "translation": "None has the right to be worshipped except Allah, alone, without partner. To Him belongs all sovereignty and praise and He is over all things omnipotent. O Allah, none can prevent what You have willed to bestow and none can bestow what You have willed to prevent, and no wealth or majesty can benefit anyone, as from You is all wealth and majesty.",
+          "transliteration": "La ilaha illallahu wahdahu la shareeka lah, lahul-mulku wa lahul-hamdu wa Huwa 'ala kulli shay'in Qadeer. Allahumma la mani'a lima a'tayta wa la mu'tiya lima mana'ta wa la yanfa'u dhal-jaddi minkal-jadd.",
+          "source": "Al-Bukhari 1/255, Muslim 1/414",
+          "repeat": 1
+        },
+        {
+          "id": 20,
+          "arabic": "سُبْحَانَ اللَّهِ",
+          "translation": "How perfect Allah is.",
+          "transliteration": "SubhanAllah.",
+          "source": "Muslim 1/418",
+          "repeat": 33
+        },
+        {
+          "id": 21,
+          "arabic": "الْحَمْدُ لِلَّهِ",
+          "translation": "All praise is for Allah.",
+          "transliteration": "Alhamdulillah.",
+          "source": "Muslim 1/418",
+          "repeat": 33
+        },
+        {
+          "id": 22,
+          "arabic": "اللَّهُ أَكْبَرُ",
+          "translation": "Allah is the greatest.",
+          "transliteration": "Allahu Akbar.",
+          "source": "Muslim 1/418",
+          "repeat": 33
+        },
+        {
+          "id": 23,
+          "arabic": "لَا إِلَٰهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ",
+          "translation": "None has the right to be worshipped except Allah, alone, without partner. To Him belongs all sovereignty and praise and He is over all things omnipotent.",
+          "transliteration": "La ilaha illallahu wahdahu la shareeka lah, lahul-mulku wa lahul-hamdu wa Huwa 'ala kulli shay'in Qadeer.",
+          "source": "Muslim 1/418",
+          "repeat": 1
+        },
+        {
+          "id": 24,
+          "arabic": "آيَةُ الْكُرْسِيِّ: اللَّهُ لَا إِلَٰهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ",
+          "translation": "Ayatul Kursi: Allah! There is no deity except Him, the Ever-Living, the Sustainer of existence.",
+          "transliteration": "Allahu la ilaha illa Huwal-Hayyul-Qayyum...",
+          "source": "An-Nasa'i, Al-Hakim",
+          "repeat": 1
+        }
+      ]
+    },
+    {
+      "id": "food_drink",
+      "name": "Food & Drink",
+      "icon": "restaurant",
+      "duas": [
+        {
+          "id": 25,
+          "arabic": "بِسْمِ اللَّهِ",
+          "translation": "In the name of Allah.",
+          "transliteration": "Bismillah.",
+          "source": "Abu Dawud 3/347, At-Tirmidhi 4/288",
+          "repeat": 1
+        },
+        {
+          "id": 26,
+          "arabic": "الْحَمْدُ لِلَّهِ الَّذِي أَطْعَمَنِي هَٰذَا، وَرَزَقَنِيهِ مِنْ غَيْرِ حَوْلٍ مِنِّي وَلَا قُوَّةٍ",
+          "translation": "All praise is for Allah who fed me this and provided it for me without any might or power from myself.",
+          "transliteration": "Alhamdu lillahil-ladhi at'amani hadha, wa razaqaneehi min ghayri hawlin minnee wa la quwwah.",
+          "source": "At-Tirmidhi, Abu Dawud, Ibn Majah",
+          "repeat": 1
+        },
+        {
+          "id": 27,
+          "arabic": "اللَّهُمَّ بَارِكْ لَنَا فِيهِ وَأَطْعِمْنَا خَيْرًا مِنْهُ",
+          "translation": "O Allah, bless it for us and feed us better than it.",
+          "transliteration": "Allahumma barik lana feehi wa at'imna khayran minhu.",
+          "source": "At-Tirmidhi 5/506",
+          "repeat": 1
+        },
+        {
+          "id": 28,
+          "arabic": "الْحَمْدُ لِلَّهِ حَمْدًا كَثِيرًا طَيِّبًا مُبَارَكًا فِيهِ، غَيْرَ مَكْفِيٍّ وَلَا مُوَدَّعٍ وَلَا مُسْتَغْنًى عَنْهُ رَبَّنَا",
+          "translation": "All praise is for Allah, an abundant beautiful blessed praise. He is the One Who is sufficient, Who feeds and is never fed, The One Who is longed for, along with that which is with Him, and The One Who is needed, our Lord.",
+          "transliteration": "Alhamdu lillahi hamdan katheeran tayyiban mubarakan feehi, ghayra makfiyyin wa la muwadda'in, wa la mustaghnan 'anhu Rabbana.",
+          "source": "Al-Bukhari 6/214",
+          "repeat": 1
+        },
+        {
+          "id": 29,
+          "arabic": "اللَّهُمَّ بَارِكْ لَنَا فِيهِ وَزِدْنَا مِنْهُ",
+          "translation": "O Allah, bless it for us and give us more of it.",
+          "transliteration": "Allahumma barik lana feehi wa zidna minhu.",
+          "source": "At-Tirmidhi 5/506",
+          "repeat": 1
+        }
+      ]
+    },
+    {
+      "id": "home_family",
+      "name": "Home & Family",
+      "icon": "home",
+      "duas": [
+        {
+          "id": 30,
+          "arabic": "بِسْمِ اللَّهِ وَلَجْنَا، وَبِسْمِ اللَّهِ خَرَجْنَا، وَعَلَىٰ اللَّهِ رَبِّنَا تَوَكَّلْنَا",
+          "translation": "In the name of Allah we enter and in the name of Allah we leave, and upon our Lord we place our trust.",
+          "transliteration": "Bismillahi walajna, wa bismillahi kharajna, wa 'alallahi Rabbina tawakkalna.",
+          "source": "Abu Dawud 4/325",
+          "repeat": 1
+        },
+        {
+          "id": 31,
+          "arabic": "بِسْمِ اللَّهِ تَوَكَّلْتُ عَلَى اللَّهِ وَلَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ",
+          "translation": "In the name of Allah, I place my trust in Allah, and there is no might nor power except with Allah.",
+          "transliteration": "Bismillahi tawakkaltu 'alallahi wa la hawla wa la quwwata illa billah.",
+          "source": "Abu Dawud 4/325, At-Tirmidhi 5/490",
+          "repeat": 1
+        },
+        {
+          "id": 32,
+          "arabic": "رَبَّنَا هَبْ لَنَا مِنْ أَزْوَاجِنَا وَذُرِّيَّاتِنَا قُرَّةَ أَعْيُنٍ وَاجْعَلْنَا لِلْمُتَّقِينَ إِمَامًا",
+          "translation": "Our Lord, grant us from among our wives and offspring comfort to our eyes and make us an example for the righteous.",
+          "transliteration": "Rabbana hab lana min azwajina wa dhurriyyatina qurrata a'yunin waj'alna lil-muttaqeena imama.",
+          "source": "Quran 25:74",
+          "repeat": 1
+        },
+        {
+          "id": 33,
+          "arabic": "رَبِّ اجْعَلْنِي مُقِيمَ الصَّلَاةِ وَمِنْ ذُرِّيَّتِي ۚ رَبَّنَا وَتَقَبَّلْ دُعَاءِ",
+          "translation": "My Lord, make me an establisher of prayer, and from my descendants. Our Lord, and accept my supplication.",
+          "transliteration": "Rabbij'alnee muqeemas-salati wa min dhurriyyatee, Rabbana wa taqabbal du'a.",
+          "source": "Quran 14:40",
+          "repeat": 1
+        },
+        {
+          "id": 34,
+          "arabic": "رَبِّ ارْحَمْهُمَا كَمَا رَبَّيَانِي صَغِيرًا",
+          "translation": "My Lord, have mercy upon them as they brought me up when I was small.",
+          "transliteration": "Rabbir-hamhuma kama rabbayani sagheera.",
+          "source": "Quran 17:24",
+          "repeat": 1
+        }
+      ]
+    },
+    {
+      "id": "protection",
+      "name": "Protection & Healing",
+      "icon": "shield",
+      "duas": [
+        {
+          "id": 35,
+          "arabic": "أَعُوذُ بِكَلِمَاتِ اللَّهِ التَّامَّةِ مِنْ كُلِّ شَيْطَانٍ وَهَامَّةٍ، وَمِنْ كُلِّ عَيْنٍ لَامَّةٍ",
+          "translation": "I seek refuge in the perfect words of Allah from every devil and poisonous creature and from every envious evil eye.",
+          "transliteration": "A'udhu bikalimatil-lahit-tammati min kulli shaytanin wa hammatin, wa min kulli 'aynin lammah.",
+          "source": "Al-Bukhari 4/119",
+          "repeat": 1
+        },
+        {
+          "id": 36,
+          "arabic": "بِسْمِ اللَّهِ أَرْقِيكَ، مِنْ كُلِّ شَيْءٍ يُؤْذِيكَ، مِنْ شَرِّ كُلِّ نَفْسٍ أَوْ عَيْنِ حَاسِدٍ، اللَّهُ يَشْفِيكَ، بِسْمِ اللَّهِ أَرْقِيكَ",
+          "translation": "With the Name of Allah I perform ruqyah for you, from everything that is harming you, from the evil of every soul or envious eye. May Allah heal you, with the Name of Allah I perform ruqyah for you.",
+          "transliteration": "Bismillahi arqeeka, min kulli shay'in yu'dheeka, min sharri kulli nafsin aw 'ayni hasidin, Allahu yashfeeka, bismillahi arqeeka.",
+          "source": "Muslim 4/1718",
+          "repeat": 1
+        },
+        {
+          "id": 37,
+          "arabic": "اللَّهُمَّ رَبَّ النَّاسِ أَذْهِبِ الْبَأْسَ، اشْفِهِ وَأَنْتَ الشَّافِي، لَا شِفَاءَ إِلَّا شِفَاؤُكَ، شِفَاءً لَا يُغَادِرُ سَقَمًا",
+          "translation": "O Allah, Lord of mankind, remove the illness. Cure the disease, You are the One Who cures. There is no cure except Your cure, a cure that leaves no illness.",
+          "transliteration": "Allahumma Rabban-nasi, adhhibil-ba'sa, ishfihi wa antash-shafi, la shifa'a illa shifa'uka, shifa'an la yughadiru saqama.",
+          "source": "Al-Bukhari 7/131, Muslim 4/1721",
+          "repeat": 1
+        },
+        {
+          "id": 38,
+          "arabic": "أَعُوذُ بِاللَّهِ وَقُدْرَتِهِ مِنْ شَرِّ مَا أَجِدُ وَأُحَاذِرُ",
+          "translation": "I take refuge with Allah and with His Power from the evil that I find and that I fear.",
+          "transliteration": "A'udhu billahi wa qudratihi min sharri ma ajidu wa uhadhiru.",
+          "source": "Muslim 4/1728",
+          "repeat": 7
+        },
+        {
+          "id": 39,
+          "arabic": "اللَّهُمَّ عَافِنِي فِي بَدَنِي، اللَّهُمَّ عَافِنِي فِي سَمْعِي، اللَّهُمَّ عَافِنِي فِي بَصَرِي، لَا إِلَٰهَ إِلَّا أَنْتَ",
+          "translation": "O Allah, grant my body health. O Allah, grant my hearing health. O Allah, grant my sight health. None has the right to be worshipped except You.",
+          "transliteration": "Allahumma 'afini fee badani, Allahumma 'afini fee sam'i, Allahumma 'afini fee basari, la ilaha illa anta.",
+          "source": "Abu Dawud 4/324",
+          "repeat": 3
+        }
+      ]
+    },
+    {
+      "id": "travel",
+      "name": "Travel",
+      "icon": "flight",
+      "duas": [
+        {
+          "id": 40,
+          "arabic": "اللَّهُ أَكْبَرُ، اللَّهُ أَكْبَرُ، اللَّهُ أَكْبَرُ، سُبْحَانَ الَّذِي سَخَّرَ لَنَا هَٰذَا وَمَا كُنَّا لَهُ مُقْرِنِينَ وَإِنَّا إِلَىٰ رَبِّنَا لَمُنْقَلِبُونَ",
+          "translation": "Allah is the greatest, Allah is the greatest, Allah is the greatest. How perfect He is, The One Who has placed this (transport) at our service and we ourselves would not have been capable of that, and to our Lord is our final destiny.",
+          "transliteration": "Allahu Akbar, Allahu Akbar, Allahu Akbar. Subhanal-ladhi sakhkhara lana hadha wa ma kunna lahu muqrineen. Wa inna ila Rabbina lamunqaliboon.",
+          "source": "Muslim 2/978",
+          "repeat": 1
+        },
+        {
+          "id": 41,
+          "arabic": "اللَّهُمَّ إِنَّا نَسْأَلُكَ فِي سَفَرِنَا هَٰذَا الْبِرَّ وَالتَّقْوَىٰ، وَمِنَ الْعَمَلِ مَا تَرْضَىٰ",
+          "translation": "O Allah, we ask You for righteousness and piety in this journey of ours, and we ask You for deeds which please You.",
+          "transliteration": "Allahumma inna nas'aluka fee safarina hadhal-birra wat-taqwa, wa minal-'amali ma tarda.",
+          "source": "Muslim 2/978",
+          "repeat": 1
+        },
+        {
+          "id": 42,
+          "arabic": "اللَّهُمَّ هَوِّنْ عَلَيْنَا سَفَرَنَا هَٰذَا وَاطْوِ عَنَّا بُعْدَهُ",
+          "translation": "O Allah, lighten this journey for us and make its distance easy for us.",
+          "transliteration": "Allahumma hawwin 'alayna safarana hadha watwi 'anna bu'dahu.",
+          "source": "Muslim 2/978",
+          "repeat": 1
+        },
+        {
+          "id": 43,
+          "arabic": "اللَّهُمَّ أَنْتَ الصَّاحِبُ فِي السَّفَرِ وَالْخَلِيفَةُ فِي الْأَهْلِ",
+          "translation": "O Allah, You are our Companion on the road and the One in Whose care we leave our family.",
+          "transliteration": "Allahumma antas-sahibu fis-safari wal-khaleefatu fil-ahli.",
+          "source": "Muslim 2/978",
+          "repeat": 1
+        },
+        {
+          "id": 44,
+          "arabic": "آيِبُونَ، تَائِبُونَ، عَابِدُونَ، لِرَبِّنَا حَامِدُونَ",
+          "translation": "We return, repent, worship and praise our Lord.",
+          "transliteration": "Ayibuna, ta'ibuna, 'abiduna, li Rabbina hamidun.",
+          "source": "Muslim 2/980",
+          "repeat": 1
+        }
+      ]
+    },
+    {
+      "id": "distress",
+      "name": "Distress & Anxiety",
+      "icon": "favorite",
+      "duas": [
+        {
+          "id": 45,
+          "arabic": "لَا إِلَٰهَ إِلَّا اللَّهُ الْعَظِيمُ الْحَلِيمُ، لَا إِلَٰهَ إِلَّا اللَّهُ رَبُّ الْعَرْشِ الْعَظِيمِ، لَا إِلَٰهَ إِلَّا اللَّهُ رَبُّ السَّمَاوَاتِ وَرَبُّ الْأَرْضِ وَرَبُّ الْعَرْشِ الْكَرِيمِ",
+          "translation": "None has the right to be worshipped except Allah, the Mighty, the Forbearing. None has the right to be worshipped except Allah, Lord of the magnificent throne. None has the right to be worshipped except Allah, Lord of the heavens, Lord of the earth and Lord of the noble throne.",
+          "transliteration": "La ilaha illallahul-'Adheemul-Haleem, la ilaha illallahu Rabbul-'Arshil-'Adheem, la ilaha illallahu Rabbus-samawati wa Rabbul-ardi wa Rabbul-'Arshil-Kareem.",
+          "source": "Al-Bukhari 7/154, Muslim 4/2092",
+          "repeat": 1
+        },
+        {
+          "id": 46,
+          "arabic": "اللَّهُمَّ رَحْمَتَكَ أَرْجُو فَلَا تَكِلْنِي إِلَىٰ نَفْسِي طَرْفَةَ عَيْنٍ وَأَصْلِحْ لِي شَأْنِي كُلَّهُ لَا إِلَٰهَ إِلَّا أَنْتَ",
+          "translation": "O Allah, it is Your mercy that I hope for, so do not leave me in charge of my affairs even for a blink of an eye and rectify for me all of my affairs. None has the right to be worshipped except You.",
+          "transliteration": "Allahumma rahmataka arju fala takilni ila nafsi tarfata 'aynin wa aslih li sha'ni kullahu la ilaha illa anta.",
+          "source": "Abu Dawud 4/324",
+          "repeat": 1
+        },
+        {
+          "id": 47,
+          "arabic": "لَا إِلَٰهَ إِلَّا أَنْتَ سُبْحَانَكَ إِنِّي كُنْتُ مِنَ الظَّالِمِينَ",
+          "translation": "None has the right to be worshipped except You. How perfect You are. Verily I was among the wrong-doers.",
+          "transliteration": "La ilaha illa anta subhanaka inni kuntu minadh-dhalimeen.",
+          "source": "At-Tirmidhi 5/529 (Dua of Yunus)",
+          "repeat": 1
+        },
+        {
+          "id": 48,
+          "arabic": "اللَّهُمَّ إِنِّي أَعُوذُ بِكَ مِنَ الْهَمِّ وَالْحَزَنِ، وَالْعَجْزِ وَالْكَسَلِ، وَالْبُخْلِ وَالْجُبْنِ، وَضَلَعِ الدَّيْنِ وَغَلَبَةِ الرِّجَالِ",
+          "translation": "O Allah, I take refuge in You from anxiety and sorrow, weakness and laziness, miserliness and cowardice, the burden of debts and from being overpowered by men.",
+          "transliteration": "Allahumma inni a'udhu bika minal-hammi wal-hazani, wal-'ajzi wal-kasali, wal-bukhli wal-jubni, wa dala'id-dayni wa ghalabatir-rijal.",
+          "source": "Al-Bukhari 7/158",
+          "repeat": 1
+        },
+        {
+          "id": 49,
+          "arabic": "اللَّهُمَّ إِنِّي عَبْدُكَ، ابْنُ عَبْدِكَ، ابْنُ أَمَتِكَ، نَاصِيَتِي بِيَدِكَ، مَاضٍ فِيَّ حُكْمُكَ، عَدْلٌ فِيَّ قَضَاؤُكَ، أَسْأَلُكَ بِكُلِّ اسْمٍ هُوَ لَكَ، سَمَّيْتَ بِهِ نَفْسَكَ، أَوْ أَنْزَلْتَهُ فِي كِتَابِكَ، أَوْ عَلَّمْتَهُ أَحَدًا مِنْ خَلْقِكَ، أَوِ اسْتَأْثَرْتَ بِهِ فِي عِلْمِ الْغَيْبِ عِنْدَكَ، أَنْ تَجْعَلَ الْقُرْآنَ رَبِيعَ قَلْبِي، وَنُورَ صَدْرِي، وَجَلَاءَ حُزْنِي، وَذَهَابَ هَمِّي",
+          "translation": "O Allah, I am Your servant, son of Your servant, son of Your maidservant. My forelock is in Your hand, Your command over me is forever executed and Your decree over me is just. I ask You by every name belonging to You which You have named Yourself with, or revealed in Your Book, or You taught to any of Your creation, or You have preserved in the knowledge of the Unseen with You, that You make the Quran the life of my heart and the light of my breast, and a departure for my sorrow and a release for my anxiety.",
+          "transliteration": "Allahumma inni 'abduka, ibnu 'abdika, ibnu amatika, nasiyati biyadika, madin fiyya hukmuka, 'adlun fiyya qada'uka, as'aluka bikulli ismin huwa laka, sammayta bihi nafsaka, aw anzaltahu fi kitabika, aw 'allamtahu ahadan min khalqika, awista'tharta bihi fi 'ilmil-ghaybi 'indaka, an taj'alal-Qur'ana rabee'a qalbi, wa nura sadri, wa jala'a huzni, wa dhahaba hammi.",
+          "source": "Ahmad 1/391",
+          "repeat": 1
+        }
+      ]
+    },
+    {
+      "id": "sleep",
+      "name": "Before Sleep",
+      "icon": "bedtime",
+      "duas": [
+        {
+          "id": 50,
+          "arabic": "بِاسْمِكَ اللَّهُمَّ أَمُوتُ وَأَحْيَا",
+          "translation": "In Your name O Allah, I live and die.",
+          "transliteration": "Bismika Allahumma amootu wa ahya.",
+          "source": "Al-Bukhari 7/150",
+          "repeat": 1
+        },
+        {
+          "id": 51,
+          "arabic": "اللَّهُمَّ قِنِي عَذَابَكَ يَوْمَ تَبْعَثُ عِبَادَكَ",
+          "translation": "O Allah, protect me from Your punishment on the day You resurrect Your servants.",
+          "transliteration": "Allahumma qinee 'adhabaka yawma tab'athu 'ibadaka.",
+          "source": "Abu Dawud 4/311",
+          "repeat": 3
+        },
+        {
+          "id": 52,
+          "arabic": "بِاسْمِكَ رَبِّي وَضَعْتُ جَنْبِي، وَبِكَ أَرْفَعُهُ، فَإِنْ أَمْسَكْتَ نَفْسِي فَارْحَمْهَا، وَإِنْ أَرْسَلْتَهَا فَاحْفَظْهَا بِمَا تَحْفَظُ بِهِ عِبَادَكَ الصَّالِحِينَ",
+          "translation": "In Your name my Lord, I lie down and in Your name I rise, so if You should take my soul then have mercy upon it, and if You should return my soul then protect it in the manner You do so with Your righteous servants.",
+          "transliteration": "Bismika Rabbi wada'tu janbi, wa bika arfa'uhu, fa in amsakta nafsi farhamha, wa in arsaltaha fahfadhha bima tahfadhu bihi 'ibadakas-saliheen.",
+          "source": "Al-Bukhari 7/150, Muslim 4/2084",
+          "repeat": 1
+        },
+        {
+          "id": 53,
+          "arabic": "اللَّهُمَّ إِنَّكَ خَلَقْتَ نَفْسِي وَأَنْتَ تَوَفَّاهَا، لَكَ مَمَاتُهَا وَمَحْيَاهَا، إِنْ أَحْيَيْتَهَا فَاحْفَظْهَا، وَإِنْ أَمَتَّهَا فَاغْفِرْ لَهَا، اللَّهُمَّ إِنِّي أَسْأَلُكَ الْعَافِيَةَ",
+          "translation": "O Allah, verily You have created my soul and You shall take its life, to You belongs its life and death. If You should keep my soul alive then protect it, and if You should take its life then forgive it. O Allah, I ask You to grant me good health.",
+          "transliteration": "Allahumma innaka khalaqta nafsi wa anta tawaffaha, laka mamatuha wa mahyaha, in ahyaytaha fahfadhha, wa in amattaha faghfir laha, Allahumma inni as'alukal-'afiyah.",
+          "source": "Muslim 4/2083",
+          "repeat": 1
+        },
+        {
+          "id": 54,
+          "arabic": "اللَّهُمَّ أَسْلَمْتُ نَفْسِي إِلَيْكَ، وَفَوَّضْتُ أَمْرِي إِلَيْكَ، وَوَجَّهْتُ وَجْهِي إِلَيْكَ، وَأَلْجَأْتُ ظَهْرِي إِلَيْكَ، رَغْبَةً وَرَهْبَةً إِلَيْكَ، لَا مَلْجَأَ وَلَا مَنْجَا مِنْكَ إِلَّا إِلَيْكَ، آمَنْتُ بِكِتَابِكَ الَّذِي أَنْزَلْتَ وَبِنَبِيِّكَ الَّذِي أَرْسَلْتَ",
+          "translation": "O Allah, I submit my soul unto You, and I entrust my affair unto You, and I turn my face towards You, and I totally rely on You, in hope and fear of You. Verily there is no refuge nor safe haven from You except with You. I believe in Your Book which You have revealed and in Your Prophet whom You have sent.",
+          "transliteration": "Allahumma aslamtu nafsee ilayka, wa fawwadtu amree ilayka, wa wajjahtu wajhee ilayka, wa alja'tu dhahree ilayka, raghbatan wa rahbatan ilayka, la malja'a wa la manja minka illa ilayka, amantu bikitabikal-ladhee anzalta wa binabiyyikal-ladhee arsalt.",
+          "source": "Al-Bukhari 7/150, Muslim 4/2081",
+          "repeat": 1
+        }
+      ]
+    }
+  ]
+}
