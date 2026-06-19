@@ -42,7 +42,7 @@ class PrayerTrackerWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.tv_tracker_count, count)
 
             val intent = Intent(context, MainActivity::class.java).apply {
-                putExtra("deeplink_tab", 2)
+                putExtra("deeplink_tab", 3)
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
             val pi = PendingIntent.getActivity(context, 2, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
