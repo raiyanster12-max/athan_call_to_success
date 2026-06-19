@@ -67,7 +67,7 @@
                     android:text="Fajr"
                     android:textColor="#CCFFFFFF"
                     android:textSize="8sp" />
-                <View
+                <TextView
                     android:id="@+id/indicator_fajr"
                     android:layout_width="16dp"
                     android:layout_height="2dp"
@@ -97,7 +97,7 @@
                     android:text="Dhuhr"
                     android:textColor="#CCFFFFFF"
                     android:textSize="8sp" />
-                <View
+                <TextView
                     android:id="@+id/indicator_dhuhr"
                     android:layout_width="16dp"
                     android:layout_height="2dp"
@@ -127,7 +127,7 @@
                     android:text="Asr"
                     android:textColor="#CCFFFFFF"
                     android:textSize="8sp" />
-                <View
+                <TextView
                     android:id="@+id/indicator_asr"
                     android:layout_width="16dp"
                     android:layout_height="2dp"
@@ -157,7 +157,7 @@
                     android:text="Maghrib"
                     android:textColor="#CCFFFFFF"
                     android:textSize="8sp" />
-                <View
+                <TextView
                     android:id="@+id/indicator_maghrib"
                     android:layout_width="16dp"
                     android:layout_height="2dp"
@@ -187,7 +187,7 @@
                     android:text="Isha"
                     android:textColor="#CCFFFFFF"
                     android:textSize="8sp" />
-                <View
+                <TextView
                     android:id="@+id/indicator_isha"
                     android:layout_width="16dp"
                     android:layout_height="2dp"

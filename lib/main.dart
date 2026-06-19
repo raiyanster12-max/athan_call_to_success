@@ -20,6 +20,7 @@ import 'mosque_service.dart';
 import 'qibla_page.dart';
 import 'prayer_service.dart';
 import 'widget_service.dart';
+import 'dua_page.dart';
 import 'quran_page.dart';
 import 'settings_page.dart';
 import 'tracker_page.dart';
@@ -346,6 +347,7 @@ class _MainNavigationState extends State<MainNavigation> {
     final List<Widget> pages = [
       const HomePage(),
       const QuranPage(),
+      const DuaPage(),
       const TrackerPage(),
       const MorePage(),
     ];
@@ -365,6 +367,11 @@ class _MainNavigationState extends State<MainNavigation> {
             icon: Icon(Icons.menu_book_outlined),
             activeIcon: Icon(Icons.menu_book),
             label: 'Quran',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.auto_stories_outlined),
+            activeIcon: Icon(Icons.auto_stories),
+            label: 'Duas',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.checklist_outlined),

@@ -36,3 +36,10 @@
 # Your CastOptionsProvider (referenced by name in Manifest)
 -keep class com.example.athan_call_to_success.CastOptionsProvider { *; }
 -keep class com.salamay.googlecast.** { *; }
+
+# Home screen widget providers (referenced by name in AndroidManifest)
+-keep class com.example.athan_call_to_success.NextPrayerWidgetProvider { *; }
+-keep class com.example.athan_call_to_success.PrayerTimesWidgetProvider { *; }
+-keep class com.example.athan_call_to_success.PrayerTrackerWidgetProvider { *; }
+-keep class com.example.athan_call_to_success.QiblaWidgetProvider { *; }
+-keep class com.example.athan_call_to_success.QuranWidgetProvider { *; }

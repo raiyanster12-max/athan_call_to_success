@@ -42,6 +42,23 @@ class _TrackerPageState extends State<TrackerPage> {
   List<DateTime> _ramadanDates = <DateTime>[];
   Map<String, String> _ramadanStatuses = <String, String>{};
 
+  int _tasbeehCount = 0;
+  int _tasbeehTarget = 33;
+  String _selectedDhikrKey = 'subhanallah';
+  static const List<int> _tasbeehTargets = [33, 66, 99, 100];
+  static const List<_DhikrOption> _dhikrOptions = [
+    _DhikrOption(key: 'subhanallah',   arabic: 'سُبْحَانَ اللَّهِ',           transliteration: 'SubhanAllah',        defaultTarget: 33),
+    _DhikrOption(key: 'alhamdulillah', arabic: 'الْحَمْدُ لِلَّهِ',           transliteration: 'Alhamdulillah',      defaultTarget: 33),
+    _DhikrOption(key: 'allahu_akbar',  arabic: 'اللَّهُ أَكْبَرُ',            transliteration: 'Allahu Akbar',       defaultTarget: 33),
+    _DhikrOption(key: 'la_ilaha',      arabic: 'لَا إِلَٰهَ إِلَّا اللَّهُ', transliteration: 'La ilaha illa Allah', defaultTarget: 100),
+    _DhikrOption(key: 'astaghfirullah',arabic: 'أَسْتَغْفِرُ اللَّهَ',       transliteration: 'Astaghfirullah',     defaultTarget: 100),
+    _DhikrOption(key: 'salawat',       arabic: 'اللَّهُمَّ صَلِّ عَلَى مُحَمَّدٍ', transliteration: 'Salawat',      defaultTarget: 100),
+  ];
+  String get _tasbeehCountKey => 'tasbeeh_${_selectedDhikrKey}_$_todayKey';
+  String _dhikrTargetKey(String dhikrKey) => 'tasbeeh_target_$dhikrKey';
+  _DhikrOption get _activeDhikr =>
+      _dhikrOptions.firstWhere((d) => d.key == _selectedDhikrKey, orElse: () => _dhikrOptions.first);
+
   String get _todayKey => DateFormat('yyyy-MM-dd').format(DateTime.now());
 
   int get _completedCount =>
@@ -51,6 +68,7 @@ class _TrackerPageState extends State<TrackerPage> {
   void initState() {
     super.initState();
     _loadTrackerData();
+    _loadTasbeehData();
   }
 
   Future<void> _loadTrackerData() async {
@@ -98,6 +116,177 @@ class _TrackerPageState extends State<TrackerPage> {
         _isLoading = false;
       });
     }
+  }
+
+  Future<void> _loadTasbeehData() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    final savedKey = prefs.getString('tasbeeh_selected_dhikr') ?? 'subhanallah';
+    final dhikr = _dhikrOptions.firstWhere((d) => d.key == savedKey, orElse: () => _dhikrOptions.first);
+    setState(() {
+      _selectedDhikrKey = dhikr.key;
+      _tasbeehCount = prefs.getInt('tasbeeh_${dhikr.key}_$_todayKey') ?? 0;
+      _tasbeehTarget = prefs.getInt(_dhikrTargetKey(dhikr.key)) ?? dhikr.defaultTarget;
+    });
+  }
+
+  Future<void> _selectDhikr(_DhikrOption dhikr) async {
+    final prefs = await SharedPreferences.getInstance();
+    final count = prefs.getInt('tasbeeh_${dhikr.key}_$_todayKey') ?? 0;
+    final target = prefs.getInt(_dhikrTargetKey(dhikr.key)) ?? dhikr.defaultTarget;
+    await prefs.setString('tasbeeh_selected_dhikr', dhikr.key);
+    if (!mounted) return;
+    setState(() {
+      _selectedDhikrKey = dhikr.key;
+      _tasbeehCount = count;
+      _tasbeehTarget = target;
+    });
+  }
+
+  Future<void> _incrementTasbeeh() async {
+    HapticFeedback.lightImpact();
+    final newCount = _tasbeehCount + 1;
+    setState(() => _tasbeehCount = newCount);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_tasbeehCountKey, newCount);
+    if (newCount == _tasbeehTarget) {
+      HapticFeedback.heavyImpact();
+    }
+  }
+
+  Future<void> _resetTasbeeh() async {
+    setState(() => _tasbeehCount = 0);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_tasbeehCountKey, 0);
+  }
+
+  Future<void> _setTasbeehTarget(int target) async {
+    setState(() => _tasbeehTarget = target);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_dhikrTargetKey(_selectedDhikrKey), target);
+  }
+
+  Widget _buildTasbeehCard() {
+    final progress = (_tasbeehTarget > 0 ? _tasbeehCount / _tasbeehTarget : 0.0).clamp(0.0, 1.0);
+    final done = _tasbeehCount >= _tasbeehTarget;
+    final dhikr = _activeDhikr;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.radio_button_checked, color: AppPalette.accent),
+                const SizedBox(width: 8),
+                Text(
+                  'Tasbeeh Counter',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                TextButton(onPressed: _resetTasbeeh, child: const Text('Reset')),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Dhikr selector — SingleChildScrollView+Row renders all chips eagerly
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (int i = 0; i < _dhikrOptions.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 6),
+                    ChoiceChip(
+                      label: Text(_dhikrOptions[i].transliteration, style: const TextStyle(fontSize: 12)),
+                      selected: _dhikrOptions[i].key == _selectedDhikrKey,
+                      onSelected: (_) => _selectDhikr(_dhikrOptions[i]),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Arabic text of selected dhikr
+            Center(
+              child: Text(
+                dhikr.arabic,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                  color: AppPalette.of(context).textPrimary,
+                  height: 1.6,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Counter button
+            Center(
+              child: GestureDetector(
+                onTap: _incrementTasbeeh,
+                child: Container(
+                  width: 130,
+                  height: 130,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: done ? AppPalette.accentGradient : null,
+                    color: done ? null : AppPalette.of(context).surfaceRaised,
+                    border: Border.all(color: AppPalette.accent, width: 2),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '$_tasbeehCount',
+                        style: TextStyle(
+                          fontSize: 40,
+                          fontWeight: FontWeight.bold,
+                          color: done ? Colors.white : AppPalette.of(context).textPrimary,
+                        ),
+                      ),
+                      Text(
+                        'of $_tasbeehTarget',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: done ? Colors.white70 : AppPalette.of(context).textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 6,
+                backgroundColor: AppPalette.of(context).outline,
+                valueColor: const AlwaysStoppedAnimation<Color>(AppPalette.accent),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('Target: ', style: TextStyle(color: AppPalette.of(context).textSecondary)),
+                const SizedBox(width: 8),
+                for (final target in _tasbeehTargets) ...[
+                  ChoiceChip(
+                    label: Text('$target'),
+                    selected: _tasbeehTarget == target,
+                    onSelected: (_) => _setTasbeehTarget(target),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   List<DateTime> _buildRamadanDatesForYear(int year) {
@@ -793,53 +982,6 @@ class _TrackerPageState extends State<TrackerPage> {
     );
   }
 
-  Widget _buildBackupRestoreCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.import_export, color: AppPalette.accent),
-                const SizedBox(width: 8),
-                Text(
-                  'Export & Import Ramadan Tracker',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Export your Ramadan tracker as CSV (for spreadsheets) or import CSV data on this device.',
-              style: TextStyle(color: AppPalette.of(context).textSecondary),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: _isBackupBusy ? null : _pasteAndImportCsv,
-                  icon: const Icon(Icons.file_download_outlined),
-                  label: const Text('Import CSV'),
-                ),
-                ElevatedButton.icon(
-                  onPressed: _isBackupBusy ? null : _exportTrackerAsCsv,
-                  icon: const Icon(Icons.file_upload_outlined),
-                  label: const Text('Export as CSV'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -954,6 +1096,8 @@ class _TrackerPageState extends State<TrackerPage> {
                           ),
                         ),
                         const SizedBox(height: 12),
+                        _buildTasbeehCard(),
+                        const SizedBox(height: 12),
                         _buildRamadanTrackerCard(),
                       ],
                     ),
@@ -963,4 +1107,17 @@ class _TrackerPageState extends State<TrackerPage> {
       ),
     );
   }
+}
+
+class _DhikrOption {
+  final String key;
+  final String arabic;
+  final String transliteration;
+  final int defaultTarget;
+  const _DhikrOption({
+    required this.key,
+    required this.arabic,
+    required this.transliteration,
+    required this.defaultTarget,
+  });
 }

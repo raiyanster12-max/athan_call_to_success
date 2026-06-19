@@ -13,20 +13,7 @@ import 'gallery_theme.dart';
 
 enum _QuranBrowseMode { chapters, parts, bookmarks }
 
-// #262943 = page background; surfaces are slightly lighter for depth.
-// WCAG contrast on #262943:
-//   white      → 12.7 : 1  ✅ AAA
-//   #E8E6FF    → 10.5 : 1  ✅ AAA  (primary text)
-//   #B0ADDB    →  5.8 : 1  ✅ AA   (secondary text / muted)
-//   #7B79A8    →  3.2 : 1  ✅ AA large-text / decorative only
-Color get _quranPageBackground => AppPalette.dark.backgroundTop;
-Color get _quranPanelColor => AppPalette.dark.surface;
-Color get _quranPanelRaised => AppPalette.dark.surfaceRaised;
-Color get _quranPanelSoft => AppPalette.dark.surfaceHighlight;
-Color get _quranDividerColor => AppPalette.dark.outline;
-const Color _quranMutedText = Color(0xFFB0ADDB);   // 5.8 : 1 ✅ AA
-const Color _quranSoftText = Color(0xFF7B79A8);    // 3.2 : 1 decorative
-const Color _quranHighlight = Color(0xFF56D39A);
+AppPaletteData _qp(BuildContext context) => AppPalette.of(context);
 
 class QuranPage extends StatefulWidget {
   const QuranPage({super.key});
@@ -463,13 +450,13 @@ class _QuranPageState extends State<QuranPage> {
       return Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: _quranPanelRaised,
+          color: _qp(context).surfaceRaised,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _quranDividerColor),
+          border: Border.all(color: _qp(context).outline),
         ),
-        child: const Text(
+        child: Text(
           'No recent reading saved yet. Open any surah to start building your reading history.',
-          style: TextStyle(color: Colors.white, fontSize: 16),
+          style: TextStyle(color: _qp(context).textPrimary, fontSize: 16),
         ),
       );
     }
@@ -477,9 +464,9 @@ class _QuranPageState extends State<QuranPage> {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
       decoration: BoxDecoration(
-        color: _quranPanelRaised,
+        color: _qp(context).surfaceRaised,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _quranDividerColor),
+        border: Border.all(color: _qp(context).outline),
       ),
       child: Row(
         children: [
@@ -491,8 +478,8 @@ class _QuranPageState extends State<QuranPage> {
                   lastRead.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: _qp(context).textPrimary,
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
                   ),
@@ -500,7 +487,7 @@ class _QuranPageState extends State<QuranPage> {
                 const SizedBox(height: 4),
                 Text(
                   'Page ${lastRead.pageNumber} | Juz ${lastRead.juzNumber} | ${lastRead.revelationLabel}',
-                  style: const TextStyle(color: _quranMutedText, fontSize: 14),
+                  style: TextStyle(color: _qp(context).textMuted, fontSize: 14),
                 ),
               ],
             ),
@@ -508,7 +495,7 @@ class _QuranPageState extends State<QuranPage> {
           IconButton(
             onPressed: () => _openSurahDetails(lastRead),
             icon: const Icon(Icons.bookmark_border_rounded),
-            color: _quranMutedText,
+            color: _qp(context).textMuted,
             tooltip: 'Open last read surah',
           ),
         ],
@@ -519,31 +506,31 @@ class _QuranPageState extends State<QuranPage> {
   Widget _buildSearchField() {
     return TextField(
       controller: _searchController,
-      style: const TextStyle(color: Colors.white),
+      style: TextStyle(color: _qp(context).textPrimary),
       decoration: InputDecoration(
         hintText: 'Search by surah name, Arabic, page, or number',
-        hintStyle: const TextStyle(color: _quranMutedText),
+        hintStyle: TextStyle(color: _qp(context).textMuted),
         filled: true,
-        fillColor: _quranPanelRaised,
-        prefixIcon: const Icon(Icons.search, color: _quranMutedText),
+        fillColor: _qp(context).surfaceRaised,
+        prefixIcon: Icon(Icons.search, color: _qp(context).textMuted),
         suffixIcon: _searchQuery.isEmpty
             ? null
             : IconButton(
                 tooltip: 'Clear search',
-                icon: const Icon(Icons.clear, color: _quranMutedText),
+                icon: Icon(Icons.clear, color: _qp(context).textMuted),
                 onPressed: () => _searchController.clear(),
               ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: _quranDividerColor),
+          borderSide: BorderSide(color: _qp(context).outline),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: _quranDividerColor),
+          borderSide: BorderSide(color: _qp(context).outline),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: _quranHighlight),
+          borderSide: const BorderSide(color: AppPalette.accent),
         ),
       ),
     );
@@ -557,13 +544,13 @@ class _QuranPageState extends State<QuranPage> {
         width: double.infinity,
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: _quranPanelRaised,
+          color: _qp(context).surfaceRaised,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _quranDividerColor),
+          border: Border.all(color: _qp(context).outline),
         ),
-        child: const Text(
+        child: Text(
           'Recently Read will appear here after you open a surah.',
-          style: TextStyle(color: _quranMutedText, fontSize: 14),
+          style: TextStyle(color: _qp(context).textMuted, fontSize: 14),
         ),
       );
     }
@@ -571,10 +558,10 @@ class _QuranPageState extends State<QuranPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Recently Read',
           style: TextStyle(
-            color: Colors.white,
+            color: _qp(context).textPrimary,
             fontSize: 18,
             fontWeight: FontWeight.w700,
           ),
@@ -623,10 +610,10 @@ class _QuranPageState extends State<QuranPage> {
         child: Ink(
           width: 240,
           decoration: BoxDecoration(
-            color: _quranPanelRaised,
+            color: _qp(context).surfaceRaised,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isActive ? _quranHighlight : _quranDividerColor,
+              color: isActive ? AppPalette.accent : _qp(context).outline,
             ),
           ),
           child: Padding(
@@ -641,13 +628,13 @@ class _QuranPageState extends State<QuranPage> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: isActive ? _quranHighlight : _quranMutedText,
+                      color: isActive ? AppPalette.accent : _qp(context).textMuted,
                     ),
                   ),
                   child: Text(
                     '${surah.number}:${surah.verseCount}',
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: _qp(context).textPrimary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -662,8 +649,8 @@ class _QuranPageState extends State<QuranPage> {
                         surah.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: _qp(context).textPrimary,
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
                         ),
@@ -671,8 +658,8 @@ class _QuranPageState extends State<QuranPage> {
                       const SizedBox(height: 4),
                       Text(
                         'PG. ${surah.pageNumber} • Juz ${surah.juzNumber}',
-                        style: const TextStyle(
-                          color: _quranMutedText,
+                        style: TextStyle(
+                          color: _qp(context).textMuted,
                           fontSize: 13,
                         ),
                       ),
@@ -681,7 +668,7 @@ class _QuranPageState extends State<QuranPage> {
                 ),
                 Icon(
                   Icons.chevron_right,
-                  color: isActive ? _quranHighlight : _quranSoftText,
+                  color: isActive ? AppPalette.accent : _qp(context).textMuted,
                 ),
               ],
             ),
@@ -732,7 +719,7 @@ class _QuranPageState extends State<QuranPage> {
       child: Container(
         height: 52,
         decoration: BoxDecoration(
-          color: selected ? Colors.transparent : _quranPanelColor,
+          color: selected ? Colors.transparent : _qp(context).surface,
           borderRadius: BorderRadius.circular(26),
           border: Border.all(
             color: selected ? Colors.white54 : Colors.transparent,
@@ -745,13 +732,13 @@ class _QuranPageState extends State<QuranPage> {
             Icon(
               icon,
               size: 18,
-              color: selected ? Colors.white : _quranMutedText,
+              color: selected ? Colors.white : _qp(context).textMuted,
             ),
             const SizedBox(width: 8),
             Text(
               label,
               style: TextStyle(
-                color: selected ? Colors.white : _quranMutedText,
+                color: selected ? Colors.white : _qp(context).textMuted,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -766,14 +753,14 @@ class _QuranPageState extends State<QuranPage> {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: _quranPanelRaised,
+        color: _qp(context).surfaceRaised,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _quranDividerColor),
+        border: Border.all(color: _qp(context).outline),
       ),
       child: Text(
         message,
         textAlign: TextAlign.center,
-        style: const TextStyle(color: _quranMutedText, fontSize: 15),
+        style: TextStyle(color: _qp(context).textMuted, fontSize: 15),
       ),
     );
   }
@@ -783,13 +770,13 @@ class _QuranPageState extends State<QuranPage> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: _quranPanelColor,
+        color: _qp(context).surface,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: _qp(context).textPrimary,
           fontSize: 16,
           fontWeight: FontWeight.w700,
         ),
@@ -804,10 +791,10 @@ class _QuranPageState extends State<QuranPage> {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: _quranPanelRaised,
+        color: _qp(context).surfaceRaised,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isLastRead ? _quranHighlight : _quranDividerColor,
+          color: isLastRead ? AppPalette.accent : _qp(context).outline,
         ),
       ),
       child: Material(
@@ -825,8 +812,8 @@ class _QuranPageState extends State<QuranPage> {
                       width: 24,
                       child: Text(
                         surah.number.toString(),
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: _qp(context).textPrimary,
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
@@ -839,8 +826,8 @@ class _QuranPageState extends State<QuranPage> {
                         children: [
                           Text(
                             surah.name,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: _qp(context).textPrimary,
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
                             ),
@@ -848,8 +835,8 @@ class _QuranPageState extends State<QuranPage> {
                           const SizedBox(height: 3),
                           Text(
                             '${surah.verseCount} Verses • ${surah.revelationLabel}',
-                            style: const TextStyle(
-                              color: _quranMutedText,
+                            style: TextStyle(
+                              color: _qp(context).textMuted,
                               fontSize: 12,
                             ),
                           ),
@@ -861,7 +848,7 @@ class _QuranPageState extends State<QuranPage> {
                       surah.arabicName,
                       textDirection: TextDirection.rtl,
                       style: GoogleFonts.scheherazadeNew(
-                        color: Colors.white,
+                        color: _qp(context).textPrimary,
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
                       ),
@@ -872,7 +859,7 @@ class _QuranPageState extends State<QuranPage> {
               Container(
                 height: 4,
                 decoration: BoxDecoration(
-                  color: _quranPanelSoft,
+                  color: _qp(context).surfaceHighlight,
                   borderRadius: const BorderRadius.vertical(
                     bottom: Radius.circular(18),
                   ),
@@ -882,7 +869,7 @@ class _QuranPageState extends State<QuranPage> {
                   widthFactor: progress,
                   child: Container(
                     decoration: const BoxDecoration(
-                      color: _quranHighlight,
+                      color: AppPalette.accent,
                       borderRadius: BorderRadius.vertical(
                         bottom: Radius.circular(18),
                       ),
@@ -965,17 +952,17 @@ class _QuranPageState extends State<QuranPage> {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: _quranPanelRaised,
+        color: _qp(context).surfaceRaised,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _quranDividerColor),
+        border: Border.all(color: _qp(context).outline),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        leading: const Icon(Icons.bookmark, color: _quranHighlight),
+        leading: const Icon(Icons.bookmark, color: AppPalette.accent),
         title: Text(
           '${surah.name} ${bookmark.surahNumber}:${bookmark.ayahNumber}',
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: _qp(context).textPrimary,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -985,12 +972,12 @@ class _QuranPageState extends State<QuranPage> {
           overflow: TextOverflow.ellipsis,
           textDirection: TextDirection.rtl,
           style: GoogleFonts.scheherazadeNew(
-            color: _quranMutedText,
+            color: _qp(context).textMuted,
             fontSize: 18,
             height: 1.4,
           ),
         ),
-        trailing: const Icon(Icons.chevron_right, color: _quranMutedText),
+        trailing: Icon(Icons.chevron_right, color: _qp(context).textMuted),
         onTap: () => _openSurahDetails(
           surah,
           initialAyahOverride: bookmark.ayahNumber,
@@ -1015,9 +1002,9 @@ class _QuranPageState extends State<QuranPage> {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: _quranPanelRaised,
+        color: _qp(context).surfaceRaised,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _quranDividerColor),
+        border: Border.all(color: _qp(context).outline),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(
@@ -1026,16 +1013,16 @@ class _QuranPageState extends State<QuranPage> {
         ),
         title: Text(
           'Juz $juz',
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: _qp(context).textPrimary,
             fontWeight: FontWeight.w700,
           ),
         ),
         subtitle: Text(
           '${surahs.length} surahs • ${first.name} to ${last.name}',
-          style: const TextStyle(color: _quranMutedText),
+          style: TextStyle(color: _qp(context).textMuted),
         ),
-        trailing: const Icon(Icons.chevron_right, color: _quranMutedText),
+        trailing: Icon(Icons.chevron_right, color: _qp(context).textMuted),
         onTap: () => _openSurahDetails(first),
       ),
     );
@@ -1077,7 +1064,7 @@ class _QuranPageState extends State<QuranPage> {
     };
 
     return Scaffold(
-      backgroundColor: _quranPageBackground,
+      backgroundColor: _qp(context).backgroundTop,
       body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(semanticsLabel: 'Loading Quran'),
@@ -1091,11 +1078,11 @@ class _QuranPageState extends State<QuranPage> {
                     children: [
                   Row(
                     children: [
-                      const Expanded(
+                      Expanded(
                         child: Text(
                           'Quran',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: _qp(context).textPrimary,
                             fontSize: 28,
                             fontWeight: FontWeight.w800,
                           ),
@@ -1108,10 +1095,10 @@ class _QuranPageState extends State<QuranPage> {
                   const SizedBox(height: 20),
                   _buildRecentlyReadSection(),
                   const SizedBox(height: 22),
-                  const Text(
+                  Text(
                     'Chapter and Juz Lists',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: _qp(context).textPrimary,
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
                     ),
@@ -1560,7 +1547,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
     if (!mounted) return;
     await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: AppPalette.dark.surfaceRaised,
+      backgroundColor: _qp(context).surfaceRaised,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
@@ -1587,7 +1574,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                         Text(
                           'Surah Controls',
                           style: TextStyle(
-                            color: AppPalette.dark.textPrimary,
+                            color: _qp(context).textPrimary,
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                           ),
@@ -1598,7 +1585,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                           onPressed: () => Navigator.of(sheetContext).pop(),
                           icon: Icon(
                             Icons.close,
-                            color: AppPalette.dark.textSecondary,
+                            color: _qp(context).textSecondary,
                           ),
                         ),
                       ],
@@ -1642,7 +1629,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                         Text(
                           'Tajweed',
                           style: TextStyle(
-                            color: AppPalette.dark.textSecondary,
+                            color: _qp(context).textSecondary,
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1662,7 +1649,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                         Text(
                           'Jump to',
                           style: TextStyle(
-                            color: AppPalette.dark.textSecondary,
+                            color: _qp(context).textSecondary,
                             fontSize: 12,
                           ),
                         ),
@@ -1691,7 +1678,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                         Text(
                           'Last read: ${widget.surah.number}:$_lastReadAyah',
                           style: TextStyle(
-                            color: AppPalette.dark.textSecondary,
+                            color: _qp(context).textSecondary,
                             fontSize: 12,
                           ),
                         ),
@@ -1768,16 +1755,16 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        backgroundColor: _quranPageBackground,
+        backgroundColor: _qp(context).backgroundTop,
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_loadError != null) {
       return Scaffold(
-        backgroundColor: _quranPageBackground,
+        backgroundColor: _qp(context).backgroundTop,
         appBar: AppBar(
-          backgroundColor: _quranPageBackground,
+          backgroundColor: _qp(context).backgroundTop,
           title: Text(widget.surah.displayTitle),
         ),
         body: Center(
@@ -1786,12 +1773,12 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.menu_book_rounded, size: 40, color: _quranMutedText),
+                Icon(Icons.menu_book_rounded, size: 40, color: _qp(context).textMuted),
                 const SizedBox(height: 12),
                 Text(
                   _loadError!,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: _quranMutedText),
+                  style: TextStyle(color: _qp(context).textMuted),
                 ),
                 const SizedBox(height: 12),
                 FilledButton(
@@ -1812,10 +1799,10 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
     }
 
     return Scaffold(
-      backgroundColor: _quranPageBackground,
+      backgroundColor: _qp(context).backgroundTop,
       appBar: AppBar(
-        backgroundColor: _quranPageBackground,
-        foregroundColor: const Color(0xFFE8E6FF),
+        backgroundColor: _qp(context).backgroundTop,
+        foregroundColor: _qp(context).textPrimary,
         title: Text(widget.surah.displayTitle),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
@@ -1825,8 +1812,8 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
         children: [
           FloatingActionButton.small(
             heroTag: 'quran-surah-controls',
-            backgroundColor: AppPalette.dark.surfaceRaised,
-            foregroundColor: const Color(0xFFE8E6FF),
+            backgroundColor: _qp(context).surfaceRaised,
+            foregroundColor: _qp(context).textPrimary,
             onPressed: _openSurahControlsSheet,
             tooltip: 'Surah controls',
             child: const Icon(Icons.tune_rounded),
@@ -1834,8 +1821,8 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
           const SizedBox(height: 10),
           FloatingActionButton.small(
             heroTag: 'quran-scroll-top',
-            backgroundColor: AppPalette.dark.surfaceRaised,
-            foregroundColor: const Color(0xFFE8E6FF),
+            backgroundColor: _qp(context).surfaceRaised,
+            foregroundColor: _qp(context).textPrimary,
             onPressed: _scrollToTop,
             tooltip: 'Back to top',
             child: const Icon(Icons.keyboard_arrow_up_rounded),
@@ -1843,7 +1830,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
         ],
       ),
       body: Container(
-        color: _quranPageBackground,
+        color: _qp(context).backgroundTop,
         child: NotificationListener<ScrollNotification>(
           onNotification: (notification) {
             if (notification is ScrollEndNotification ||
@@ -1862,7 +1849,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
             children: [
             Card(
               elevation: 0,
-              color: AppPalette.dark.surfaceRaised,
+              color: _qp(context).surfaceRaised,
               child: Padding(
                 padding: const EdgeInsets.all(14),
                 child: Column(
@@ -1871,7 +1858,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                     Text(
                       'Page ${widget.surah.pageNumber} | Juz ${widget.surah.juzNumber}',
                       style: TextStyle(
-                        color: AppPalette.dark.textSecondary,
+                        color: _qp(context).textSecondary,
                         fontSize: 13,
                       ),
                     ),
@@ -1879,7 +1866,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                     Text(
                       widget.surah.meaning,
                       style: TextStyle(
-                        color: AppPalette.dark.textSecondary,
+                        color: _qp(context).textSecondary,
                         fontSize: 14,
                       ),
                     ),
@@ -1944,7 +1931,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                           Text(
                             'Tajweed',
                             style: TextStyle(
-                              color: AppPalette.dark.textSecondary,
+                              color: _qp(context).textSecondary,
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                             ),
@@ -1967,7 +1954,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                           Text(
                             'Jump to',
                             style: TextStyle(
-                              color: AppPalette.dark.textSecondary,
+                              color: _qp(context).textSecondary,
                               fontSize: 12,
                             ),
                           ),
@@ -1996,7 +1983,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                           Text(
                             'Last read: ${widget.surah.number}:$_lastReadAyah',
                             style: TextStyle(
-                              color: AppPalette.dark.textSecondary,
+                              color: _qp(context).textSecondary,
                               fontSize: 12,
                             ),
                           ),
@@ -2015,9 +2002,9 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                   horizontal: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: AppPalette.dark.surface,
+                  color: _qp(context).surface,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppPalette.dark.outline),
+                  border: Border.all(color: _qp(context).outline),
                 ),
                 child: Text(
                   quran.basmala,
@@ -2037,11 +2024,11 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                 margin: const EdgeInsets.only(bottom: 10),
                 decoration: BoxDecoration(
                   color: isCurrent
-                      ? AppPalette.dark.surfaceHighlight
-                      : AppPalette.dark.panel,
+                      ? _qp(context).surfaceHighlight
+                      : _qp(context).panel,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: isCurrent ? AppPalette.accent : AppPalette.dark.outline,
+                    color: isCurrent ? AppPalette.accent : _qp(context).outline,
                   ),
                 ),
                 child: Padding(
@@ -2119,7 +2106,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                           textAlign: TextAlign.left,
                           style: TextStyle(
                             fontSize: _translationFontSize,
-                            color: AppPalette.dark.textSecondary,
+                            color: _qp(context).textSecondary,
                             height: 1.5,
                           ),
                         ),
@@ -2176,7 +2163,7 @@ class _ControlRow extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              color: AppPalette.dark.textSecondary,
+              color: _qp(context).textSecondary,
               fontSize: 13,
               fontWeight: FontWeight.w600,
             ),
@@ -2192,7 +2179,7 @@ class _ControlRow extends StatelessWidget {
           child: Text(
             '$value',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: AppPalette.dark.textSecondary),
+            style: TextStyle(fontSize: 13, color: _qp(context).textSecondary),
           ),
         ),
         IconButton(
