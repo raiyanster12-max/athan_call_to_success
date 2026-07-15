@@ -14,6 +14,7 @@ import 'package:timezone/timezone.dart' as tz;
 
 import 'db_helper.dart';
 import 'prayer_service.dart';
+import 'wear_service.dart';
 
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 
@@ -326,6 +327,11 @@ class NotificationService {
   }) async {
     final route = await _loadSpeakerRoutePreference();
     final prayerName = _prayerNameFromPayload(payload);
+
+    WearService.instance.initialize();
+    if (prayerName != null) {
+      unawaited(WearService.instance.sendAthanNotification(prayerName));
+    }
 
     if (route == speakerGoogleCast || route == speakerGoogleCastIp) {
       await _triggerGoogleCastIfConfigured(

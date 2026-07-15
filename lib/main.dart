@@ -14,6 +14,7 @@ import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'app_palette.dart';
 import 'db_helper.dart';
 import 'notification_service.dart';
+import 'wear_service.dart';
 import 'more_page.dart';
 import 'onboarding_page.dart';
 import 'mosque_service.dart';
@@ -53,6 +54,7 @@ Future<void> main() async {
   // This must happen before runApp so the background isolate can register properly.
   final notificationService = NotificationService.instance;
   await notificationService.initialize();
+  WearService.instance.initialize();
 
   // 3. Initialize Alarm Manager (Required for Android background triggers)
   if (defaultTargetPlatform == TargetPlatform.android) {
@@ -700,6 +702,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {
       _currentPrayerTimes = PrayerService.getTimes(coords.lat, coords.lng);
     });
+    unawaited(WearService.instance.syncLatestStateToWatch());
   }
 
   Future<void> _scheduleNotificationsForBestSource() async {
