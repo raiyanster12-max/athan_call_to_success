@@ -75,8 +75,10 @@ dependencies {
     implementation("androidx.car.app:app:1.4.0")
     implementation("androidx.car.app:app-projected:1.4.0")
     implementation("com.google.android.gms:play-services-cast-framework:21.0.1")
+    implementation("com.google.android.gms:play-services-wearable:20.0.1")
     implementation(platform("com.google.firebase:firebase-bom:34.12.0"))
     implementation("com.google.firebase:firebase-analytics")
+    wearApp(project(":wear"))
 }
 
 gradle.taskGraph.whenReady {
