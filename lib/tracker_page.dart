@@ -11,7 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app_palette.dart';
 import 'db_helper.dart';
 import 'widget_service.dart';
-import 'wear_service.dart';
+// import 'wear_service.dart';
 
 class TrackerPage extends StatefulWidget {
   const TrackerPage({super.key});
@@ -70,12 +70,12 @@ class _TrackerPageState extends State<TrackerPage> {
     super.initState();
     _loadTrackerData();
     _loadTasbeehData();
-    WearService.trackerChangeNotifier.addListener(_loadTrackerData);
+    // WearService.trackerChangeNotifier.addListener(_loadTrackerData);
   }
 
   @override
   void dispose() {
-    WearService.trackerChangeNotifier.removeListener(_loadTrackerData);
+    // WearService.trackerChangeNotifier.removeListener(_loadTrackerData);
     super.dispose();
   }
 
@@ -686,7 +686,7 @@ class _TrackerPageState extends State<TrackerPage> {
         _prayerStatuses[prayer] = value;
       });
       unawaited(WidgetService.updateTrackerOnly(Map<String, bool>.from(_prayerStatuses)));
-      unawaited(WearService.instance.syncLatestStateToWatch());
+      // unawaited(WearService.instance.syncLatestStateToWatch());
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

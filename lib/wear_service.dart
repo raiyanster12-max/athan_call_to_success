@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'db_helper.dart';
 import 'prayer_service.dart';
+// import 'notification_service.dart'; // Circular dependency if not careful, though it was there implicitly
 
 class WearService {
   WearService._();
@@ -18,13 +19,16 @@ class WearService {
   bool _initialized = false;
 
   void initialize() {
+    /*
     if (_initialized) return;
     _channel.setMethodCallHandler(_handleMethodCall);
     _initialized = true;
     debugPrint('[WEAR_SERVICE] Initialized Wear OS sync service');
+    */
   }
 
   Future<void> _handleMethodCall(MethodCall call) async {
+    /*
     debugPrint('[WEAR_SERVICE] Method call received: ${call.method}');
     switch (call.method) {
       case 'onTrackerUpdatedFromWatch':
@@ -36,12 +40,17 @@ class WearService {
       case 'onRequestSync':
         await syncLatestStateToWatch();
         break;
+      case 'onStopAthanFromWatch':
+        // await NotificationService.instance.stopAllPlayback();
+        break;
       default:
         debugPrint('[WEAR_SERVICE] Unhandled method call: ${call.method}');
     }
+    */
   }
 
   Future<void> _handleTrackerUpdateFromWatch(String jsonStr) async {
+    /*
     try {
       final data = jsonDecode(jsonStr) as Map<String, dynamic>;
       final prayerName = data['prayerName'] as String?;
@@ -60,10 +69,12 @@ class WearService {
     } catch (e) {
       debugPrint('[WEAR_SERVICE] Error parsing tracker update from watch: $e');
     }
+    */
   }
 
   /// Calculates prayer times and tracker status and pushes the data to the Wear OS watch.
   Future<void> syncLatestStateToWatch() async {
+    /*
     try {
       final latStr = await DBHelper.getSetting('last_known_lat');
       final lngStr = await DBHelper.getSetting('last_known_lng');
@@ -139,15 +150,30 @@ class WearService {
     } catch (e) {
       debugPrint('[WEAR_SERVICE] Error compiling sync payload: $e');
     }
+    */
   }
 
   /// Sends a real-time message trigger to the watch when the phone plays the Athan notification.
   Future<void> sendAthanNotification(String prayerName) async {
+    /*
     try {
       debugPrint('[WEAR_SERVICE] Sending Athan notification trigger to watch: $prayerName');
       await _channel.invokeMethod('sendAthanNotification', prayerName);
     } catch (e) {
       debugPrint('[WEAR_SERVICE] Error sending Athan notification message to watch: $e');
     }
+    */
+  }
+
+  /// Sends a command to the watch to stop any active Athan alerts/playback UI.
+  Future<void> sendStopAthanCommand() async {
+    /*
+    try {
+      debugPrint('[WEAR_SERVICE] Sending Stop Athan command to watch');
+      await _channel.invokeMethod('sendStopAthan');
+    } catch (e) {
+      debugPrint('[WEAR_SERVICE] Error sending stop command to watch: $e');
+    }
+    */
   }
 }

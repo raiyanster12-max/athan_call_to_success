@@ -23,6 +23,7 @@ private const val NOTIFICATION_ID = 3001
 class WearDataListenerService : WearableListenerService() {
 
     override fun onDataChanged(dataEvents: DataEventBuffer) {
+        /*
         Log.d(TAG, "onDataChanged triggered")
         for (event in dataEvents) {
             if (event.type == DataEvent.TYPE_CHANGED && event.dataItem.uri.path == "/athan_sync") {
@@ -41,9 +42,11 @@ class WearDataListenerService : WearableListenerService() {
                 }
             }
         }
+        */
     }
 
     override fun onMessageReceived(messageEvent: MessageEvent) {
+        /*
         Log.d(TAG, "onMessageReceived path: ${messageEvent.path}")
         if (messageEvent.path == "/athan_notification") {
             val prayerName = String(messageEvent.data)
@@ -55,6 +58,7 @@ class WearDataListenerService : WearableListenerService() {
             // 2. Strong vibration on watch
             vibrateWatch()
         }
+        */
     }
 
     private fun showWatchAthanNotification(prayerName: String) {
