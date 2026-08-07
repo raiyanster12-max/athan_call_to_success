@@ -52,6 +52,8 @@ class _SettingsPageState extends State<SettingsPage> {
       NotificationService.preferredCastSpeakerIpKey;
   static const String _overrideMuteKey = NotificationService.overrideMuteKey;
   static const String _showHijriDateKey = 'settings_show_hijri_date';
+  static const String _popupNotificationKey =
+      NotificationService.popupNotificationKey;
   static const String _autoTestPrayerValue = '__auto_next__';
 
   Color get _pageBackground => AppPalette.pageBackground;
@@ -68,6 +70,7 @@ class _SettingsPageState extends State<SettingsPage> {
     NotificationService.speakerPhoneSpeaker,
     NotificationService.speakerGoogleCast,
     NotificationService.speakerGoogleCastIp,
+    NotificationService.speakerPhoneAndCast,
   ];
 
   LocationPermission? _locationPermission;
@@ -99,6 +102,7 @@ class _SettingsPageState extends State<SettingsPage> {
   String _preferredCastSpeakerName = '';
   String _preferredCastSpeakerIp = '';
   bool _overrideMute = true;
+  bool _popupNotification = true;
   bool _showHijriDate = true;
   String _testPrayerSelection = _autoTestPrayerValue;
 
@@ -295,6 +299,8 @@ class _SettingsPageState extends State<SettingsPage> {
     _preferredCastSpeakerIp = (storedPreferredCastIp ?? '').trim();
 
     _overrideMute = await _loadBoolSetting(_overrideMuteKey, fallback: true);
+    _popupNotification =
+        await _loadBoolSetting(_popupNotificationKey, fallback: true);
     _showHijriDate = await _loadBoolSetting(_showHijriDateKey, fallback: true);
 
     for (final prayer in _prayerNames) {
@@ -791,6 +797,8 @@ class _SettingsPageState extends State<SettingsPage> {
         return 'Google Speaker';
       case NotificationService.speakerGoogleCastIp:
         return 'Google Cast (IP)';
+      case NotificationService.speakerPhoneAndCast:
+        return 'Phone + Google Cast';
       default:
         return 'Phone speaker';
     }
@@ -841,6 +849,17 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!mounted) return;
     setState(() => _overrideMute = value);
     // Reschedule so notifications use the correct channel (alarm vs normal stream).
+    unawaited(
+      NotificationService.instance.rescheduleUsingStoredLocation().catchError(
+        (_) {},
+      ),
+    );
+  }
+
+  Future<void> _setPopupNotification(bool value) async {
+    await _saveBoolSetting(_popupNotificationKey, value);
+    if (!mounted) return;
+    setState(() => _popupNotification = value);
     unawaited(
       NotificationService.instance.rescheduleUsingStoredLocation().catchError(
         (_) {},
@@ -929,6 +948,15 @@ class _SettingsPageState extends State<SettingsPage> {
                         style: TextStyle(color: _primaryText),
                       ),
                       value: NotificationService.speakerGoogleCastIp,
+                    ),
+                    RadioListTile<String>(
+                      activeColor: _sectionAccent,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        'Phone + Google Cast',
+                        style: TextStyle(color: _primaryText),
+                      ),
+                      value: NotificationService.speakerPhoneAndCast,
                     ),
                   ],
                 ),
@@ -1669,6 +1697,17 @@ class _SettingsPageState extends State<SettingsPage> {
                 trailing: Switch(
                   value: _overrideMute,
                   onChanged: _setOverrideMute,
+                  activeThumbColor: _sectionAccent,
+                ),
+              ),
+              _buildRowDivider(),
+              _buildSettingRow(
+                icon: Icons.notification_important_outlined,
+                title: 'Pop-up Notifications',
+                subtitle: 'Show a heads-up alert when Athan starts.',
+                trailing: Switch(
+                  value: _popupNotification,
+                  onChanged: _setPopupNotification,
                   activeThumbColor: _sectionAccent,
                 ),
               ),

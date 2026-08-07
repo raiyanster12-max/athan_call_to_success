@@ -28,8 +28,10 @@
             </intent-filter>
         </activity>
 
+        <!-- Service disabled to prevent background Wear OS sync -->
         <service
             android:name=".WearDataListenerService"
+            android:enabled="false"
             android:exported="true">
             <intent-filter>
                 <!-- Listen for data events -->

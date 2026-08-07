@@ -10,9 +10,13 @@ void main() {
 
   setUp(() async {
     // Always start each test with a clean in-memory database.
-    final dbPath = await getDatabasesPath();
-    final path = '$dbPath/athan_app.db';
-    await deleteDatabase(path);
+    databaseFactory = databaseFactoryFfi;
+    sqfliteFfiInit();
+    DBHelper.testDatabasePath = inMemoryDatabasePath;
+  });
+
+  tearDown(() {
+    DBHelper.testDatabasePath = null;
   });
 
   // ── Masjid CRUD ────────────────────────────────────────────────────────────

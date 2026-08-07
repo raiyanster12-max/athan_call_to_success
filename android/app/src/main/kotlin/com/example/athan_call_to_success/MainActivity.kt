@@ -3,18 +3,18 @@ package com.example.athan_call_to_success
 import android.content.Intent
 import android.util.Log
 import com.google.android.gms.cast.framework.CastContext
-import com.google.android.gms.wearable.DataClient
-import com.google.android.gms.wearable.MessageClient
-import com.google.android.gms.wearable.MessageEvent
-import com.google.android.gms.wearable.PutDataMapRequest
-import com.google.android.gms.wearable.Wearable
+// import com.google.android.gms.wearable.DataClient
+// import com.google.android.gms.wearable.MessageClient
+// import com.google.android.gms.wearable.MessageEvent
+// import com.google.android.gms.wearable.PutDataMapRequest
+// import com.google.android.gms.wearable.Wearable
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 private const val TAG = "MainActivity"
 
-open class MainActivity : FlutterFragmentActivity(), MessageClient.OnMessageReceivedListener {
+open class MainActivity : FlutterFragmentActivity() /*, MessageClient.OnMessageReceivedListener */ {
     private var deeplinkChannel: MethodChannel? = null
     private var wearChannel: MethodChannel? = null
 
@@ -43,6 +43,7 @@ open class MainActivity : FlutterFragmentActivity(), MessageClient.OnMessageRece
         wearChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
                 "syncData" -> {
+                    /*
                     val jsonStr = call.arguments as? String
                     if (jsonStr != null) {
                         syncDataToWatch(jsonStr)
@@ -50,8 +51,11 @@ open class MainActivity : FlutterFragmentActivity(), MessageClient.OnMessageRece
                     } else {
                         result.error("INVALID_ARGUMENTS", "Data JSON is null", null)
                     }
+                    */
+                    result.success(true)
                 }
                 "sendAthanNotification" -> {
+                    /*
                     val prayerName = call.arguments as? String
                     if (prayerName != null) {
                         sendAthanNotificationToWatch(prayerName)
@@ -59,17 +63,23 @@ open class MainActivity : FlutterFragmentActivity(), MessageClient.OnMessageRece
                     } else {
                         result.error("INVALID_ARGUMENTS", "Prayer name is null", null)
                     }
+                    */
+                    result.success(true)
+                }
+                "sendStopAthan" -> {
+                    // sendStopAthanToWatch()
+                    result.success(true)
                 }
                 else -> result.notImplemented()
             }
         }
 
         // Register Wearable Listener
-        Wearable.getMessageClient(this).addListener(this)
+        // Wearable.getMessageClient(this).addListener(this)
     }
 
     override fun onDestroy() {
-        Wearable.getMessageClient(this).removeListener(this)
+        // Wearable.getMessageClient(this).removeListener(this)
         super.onDestroy()
     }
 
@@ -82,6 +92,7 @@ open class MainActivity : FlutterFragmentActivity(), MessageClient.OnMessageRece
         }
     }
 
+    /*
     override fun onMessageReceived(messageEvent: MessageEvent) {
         Log.d(TAG, "onMessageReceived path: ${messageEvent.path}")
         when (messageEvent.path) {
@@ -94,6 +105,11 @@ open class MainActivity : FlutterFragmentActivity(), MessageClient.OnMessageRece
             "/request_sync" -> {
                 runOnUiThread {
                     wearChannel?.invokeMethod("onRequestSync", null)
+                }
+            }
+            "/stop_athan" -> {
+                runOnUiThread {
+                    wearChannel?.invokeMethod("onStopAthanFromWatch", null)
                 }
             }
         }
@@ -121,6 +137,16 @@ open class MainActivity : FlutterFragmentActivity(), MessageClient.OnMessageRece
             }
         }
     }
+
+    private fun sendStopAthanToWatch() {
+        val messageClient = Wearable.getMessageClient(this)
+        Wearable.getNodeClient(this).connectedNodes.addOnSuccessListener { nodes ->
+            for (node in nodes) {
+                messageClient.sendMessage(node.id, "/stop_athan", null)
+            }
+        }
+    }
+    */
 
     companion object {
         const val DEEPLINK_CHANNEL = "com.example.athan/deeplink"

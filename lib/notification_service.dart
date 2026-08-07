@@ -14,7 +14,7 @@ import 'package:timezone/timezone.dart' as tz;
 
 import 'db_helper.dart';
 import 'prayer_service.dart';
-import 'wear_service.dart';
+// import 'wear_service.dart';
 
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 
@@ -27,10 +27,18 @@ Future<void> onDidReceiveBackgroundNotificationResponse(
   NotificationResponse response,
 ) async {
   WidgetsFlutterBinding.ensureInitialized();
-  debugPrint('[ATHAN_BG_SERVICE] Background notification response received');
+  debugPrint(
+    '[ATHAN_BG_SERVICE] Background notification response: action=${response.actionId}, payload=${response.payload}',
+  );
 
   try {
     await NotificationService.instance.initialize();
+
+    if (response.actionId == NotificationService.actionStopAthan) {
+      await NotificationService.instance.stopAllPlayback();
+      return;
+    }
+
     // Wrap in a timeout to keep the isolate alive long enough for streaming
     await NotificationService.instance
         ._triggerNetworkSpeakerIfConfigured(
@@ -74,10 +82,12 @@ class NotificationService {
   static const String _speakerRouteKey = 'notification_speaker_route';
   static const String speakerGoogleCast = 'Google/Chromecast Speaker';
   static const String speakerGoogleCastIp = 'Google Cast (Static IP)';
+  static const String speakerPhoneAndCast = 'Phone + Google Cast';
   static const String speakerPhoneSpeaker = 'Phone Speaker (Alarm Stream)';
   static const String overrideMuteKey = 'settings_override_mute';
   static const String actionStopAthan = 'stop_athan_action';
   static const String googleCastMediaUrlKey = 'google_cast_media_url';
+  static const String popupNotificationKey = 'settings_popup_notification';
   static const String toneCustom = 'CUSTOM_FILE';
 
   final FlutterLocalNotificationsPlugin _plugin =
@@ -167,7 +177,8 @@ class NotificationService {
       // 2. Refresh discovery to populate MediaRouter
       await GoogleChromeCast.startDiscovery();
       // Discovery takes a moment to warm up, especially in background isolates
-      await Future.delayed(const Duration(seconds: 3));
+      // Increased from 3s to 5s to improve reliability in high-interference or wake-up scenarios
+      await Future.delayed(const Duration(seconds: 5));
 
       // 3. PRIORITY 1: Connect by IP (Most reliable in background)
       if (savedIp != null && savedIp.isNotEmpty) {
@@ -235,6 +246,7 @@ class NotificationService {
   Future<void> _triggerGoogleCastIfConfigured({
     String? prayerName,
     bool isBackground = false,
+    bool enableFallback = true,
   }) async {
     if (defaultTargetPlatform != TargetPlatform.android) return;
 
@@ -244,17 +256,16 @@ class NotificationService {
 
       if (!connected) {
         debugPrint(
-          '[ATHAN_BG_SERVICE] Cast connection failed. Falling back to phone speaker.',
+          '[ATHAN_BG_SERVICE] Cast connection failed. ${enableFallback ? "Falling back to phone speaker." : "Fallback disabled."}',
         );
-        if (isBackground) {
-          await _showFallbackNotification(
-            prayerName,
-            'Cast unavailable — athan playing on phone.',
-          );
-        }
-        await _triggerPhoneSpeakerNow(prayerName: prayerName);
-        if (isBackground) {
-          await Future.delayed(const Duration(seconds: 180));
+        if (enableFallback) {
+          if (isBackground) {
+            await _showFallbackNotification(
+              prayerName,
+              'Cast unavailable — athan playing on phone.',
+            );
+          }
+          await _triggerPhoneSpeakerNow(prayerName: prayerName);
         }
         return;
       }
@@ -275,16 +286,15 @@ class NotificationService {
       }
 
       if (castUrl == null || castUrl.isEmpty) {
-        debugPrint('[ATHAN_BG_SERVICE] No Cast URL available for $resolvedName. Falling back.');
-        if (isBackground) {
-          await _showFallbackNotification(
-            prayerName,
-            'No Cast media URL set — athan playing on phone.',
-          );
-        }
-        await _triggerPhoneSpeakerNow(prayerName: prayerName);
-        if (isBackground) {
-          await Future.delayed(const Duration(seconds: 180));
+        debugPrint('[ATHAN_BG_SERVICE] No Cast URL available for $resolvedName. ${enableFallback ? "Falling back." : "Fallback disabled."}');
+        if (enableFallback) {
+          if (isBackground) {
+            await _showFallbackNotification(
+              prayerName,
+              'No Cast media URL set — athan playing on phone.',
+            );
+          }
+          await _triggerPhoneSpeakerNow(prayerName: prayerName);
         }
         return;
       }
@@ -298,25 +308,16 @@ class NotificationService {
       await castController.loadAudio();
       await castController.play();
 
-      // ISOLATE PROTECTION: When the app is in the background, the speaker is
-      // pulling the file from the local server. We must keep the isolate alive.
-      if (isBackground) {
-        debugPrint(
-          '[ATHAN_BG_SERVICE] Isolate active for streaming duration...',
-        );
-        await Future.delayed(const Duration(seconds: 300));
-      }
     } catch (e) {
       debugPrint('[ATHAN_BG_SERVICE] Cast Trigger Error: $e');
-      if (isBackground) {
-        await _showFallbackNotification(
-          prayerName,
-          'Cast error — athan playing on phone.',
-        );
-      }
-      await _triggerPhoneSpeakerNow(prayerName: prayerName);
-      if (isBackground) {
-        await Future.delayed(const Duration(seconds: 180));
+      if (enableFallback) {
+        if (isBackground) {
+          await _showFallbackNotification(
+            prayerName,
+            'Cast error — athan playing on phone.',
+          );
+        }
+        await _triggerPhoneSpeakerNow(prayerName: prayerName);
       }
     }
   }
@@ -328,24 +329,36 @@ class NotificationService {
     final route = await _loadSpeakerRoutePreference();
     final prayerName = _prayerNameFromPayload(payload);
 
+    /*
     WearService.instance.initialize();
     if (prayerName != null) {
       unawaited(WearService.instance.sendAthanNotification(prayerName));
     }
+    */
 
     if (route == speakerGoogleCast || route == speakerGoogleCastIp) {
       await _triggerGoogleCastIfConfigured(
         prayerName: prayerName,
         isBackground: isBackground,
       );
+    } else if (route == speakerPhoneAndCast) {
+      debugPrint('[ATHAN_BG_SERVICE] Dual Route: Triggering Phone + Cast');
+      final castFuture = _triggerGoogleCastIfConfigured(
+        prayerName: prayerName,
+        isBackground: isBackground,
+        enableFallback: false,
+      );
+      final phoneFuture = _triggerPhoneSpeakerNow(prayerName: prayerName);
+      await Future.wait([castFuture, phoneFuture]);
     } else {
       // Direct local playback if route is Phone Speaker or as fallback
       await _triggerPhoneSpeakerNow(prayerName: prayerName);
+    }
 
-      if (isBackground) {
-        debugPrint('[ATHAN_BG_SERVICE] Isolate active for local playback...');
-        await Future.delayed(const Duration(seconds: 300));
-      }
+    // Consolidated background delay to keep isolate alive
+    if (isBackground) {
+      debugPrint('[ATHAN_BG_SERVICE] Isolate active for playback duration...');
+      await Future.delayed(const Duration(seconds: 300));
     }
   }
 
@@ -442,17 +455,21 @@ class NotificationService {
       );
       _assetServer!.listen((req) async {
         final filename = req.uri.path.replaceFirst('/', '');
+        debugPrint('[ASSET_SERVER] Request: ${req.method} ${req.uri.path} from ${req.connectionInfo?.remoteAddress.address}');
         try {
           final data = await rootBundle.load('assets/audio/$filename');
           final bytes = data.buffer.asUint8List();
-          final subtype = filename.endsWith('.wav') ? 'wav' : 'mpeg';
+          final subtype = filename.toLowerCase().endsWith('.wav') ? 'wav' : 'mpeg';
           req.response.headers
             ..contentType = ContentType('audio', subtype)
             ..contentLength = bytes.length
-            ..set('Accept-Ranges', 'bytes');
+            ..set('Accept-Ranges', 'bytes')
+            ..set('Access-Control-Allow-Origin', '*');
           req.response.add(bytes);
           await req.response.close();
-        } catch (_) {
+          debugPrint('[ASSET_SERVER] Served $filename (${bytes.length} bytes)');
+        } catch (e) {
+          debugPrint('[ASSET_SERVER] Failed to serve $filename: $e');
           req.response.statusCode = HttpStatus.notFound;
           await req.response.close();
         }
@@ -504,7 +521,10 @@ class NotificationService {
     debugPrint('[ASSET_SERVER] Selected phone IP: $ip');
     if (ip == null) return null;
     final filename = assetPath.split('/').last;
-    return 'http://$ip:$_assetServerPort/$filename';
+    // URL-encode the filename to handle spaces and special characters which
+    // can cause the Cast SDK or device to fail to fetch the media.
+    final encodedFilename = Uri.encodeComponent(filename);
+    return 'http://$ip:$_assetServerPort/$encodedFilename';
   }
 
   Future<void> cancelAllNotifications() async {
@@ -516,9 +536,13 @@ class NotificationService {
   Future<void> stopAllPlayback() async {
     try {
       _testAudioPlayer?.stop();
-      if (await GoogleChromeCast.isConnected()) {
-        final castController = CastController();
-        await castController.stop();
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        if (await GoogleChromeCast.isConnected()) {
+          final castController = CastController();
+          await castController.stop();
+        }
+        // Notify watch to dismiss Athan alert
+        // WearService.instance.sendStopAthanCommand();
       }
     } catch (e) {
       debugPrint('Error stopping playback: $e');
@@ -618,6 +642,9 @@ class NotificationService {
     final now = DateTime.now();
     int count = 0;
 
+    final isPopupEnabled =
+        (await DBHelper.getSetting(popupNotificationKey)) != 'false';
+
     // Schedule for next 7 days
     for (int i = 0; i < 7; i++) {
       final date = now.add(Duration(days: i));
@@ -637,16 +664,16 @@ class NotificationService {
           prayer.name,
           'Time for ${prayer.name} Athan',
           tz.TZDateTime.from(prayer.time, tz.local),
-          const NotificationDetails(
+          NotificationDetails(
             android: AndroidNotificationDetails(
               'athan_alerts',
               'Athan Alerts',
               channelDescription: 'Prayer time notifications and Athan playback',
-              importance: Importance.max,
-              priority: Priority.high,
-              fullScreenIntent: true,
+              importance: isPopupEnabled ? Importance.max : Importance.defaultImportance,
+              priority: isPopupEnabled ? Priority.high : Priority.defaultPriority,
+              fullScreenIntent: isPopupEnabled,
               category: AndroidNotificationCategory.alarm,
-              actions: [
+              actions: const [
                 AndroidNotificationAction(
                   actionStopAthan,
                   'Stop Athan',
@@ -654,7 +681,7 @@ class NotificationService {
                 ),
               ],
             ),
-            iOS: DarwinNotificationDetails(
+            iOS: const DarwinNotificationDetails(
               presentAlert: true,
               presentBadge: true,
               presentSound: true,
@@ -694,7 +721,23 @@ class NotificationService {
     required String routeOverride,
     String? prayerOverride,
   }) async {
-    final prayerName = prayerOverride ?? 'Fajr';
+    String prayerName = prayerOverride ?? 'Fajr';
+
+    if (prayerOverride == null) {
+      // "Auto" logic: find next prayer if possible
+      try {
+        final latStr = await DBHelper.getSetting('last_known_lat');
+        final lngStr = await DBHelper.getSetting('last_known_lng');
+        if (latStr != null && lngStr != null) {
+          final lat = double.parse(latStr);
+          final lng = double.parse(lngStr);
+          final next = PrayerService.getNextPrayer(lat, lng);
+          if (next != null) {
+            prayerName = next.name;
+          }
+        }
+      } catch (_) {}
+    }
 
     try {
       if (routeOverride == speakerGoogleCast || routeOverride == speakerGoogleCastIp) {
@@ -703,6 +746,16 @@ class NotificationService {
           isBackground: false,
         );
         return 'Test command sent to Google Cast ($prayerName)';
+      } else if (routeOverride == speakerPhoneAndCast) {
+        debugPrint('[ATHAN_TEST] Triggering Phone + Cast');
+        final castFuture = _triggerGoogleCastIfConfigured(
+          prayerName: prayerName,
+          isBackground: false,
+          enableFallback: false,
+        );
+        final phoneFuture = _triggerPhoneSpeakerNow(prayerName: prayerName);
+        await Future.wait([castFuture, phoneFuture]);
+        return 'Dual playback started ($prayerName)';
       } else {
         await _triggerPhoneSpeakerNow(prayerName: prayerName);
         return 'Local playback started ($prayerName)';

@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material3.*
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
-import com.google.android.gms.wearable.Wearable
+// import com.google.android.gms.wearable.Wearable
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -109,6 +109,7 @@ class WatchMainActivity : ComponentActivity(), SensorEventListener {
     }
 
     private fun requestSyncFromPhone() {
+        /*
         Log.d(TAG, "Requesting sync from phone")
         val messageClient = Wearable.getMessageClient(this)
         Wearable.getNodeClient(this).connectedNodes.addOnSuccessListener { nodes ->
@@ -116,9 +117,11 @@ class WatchMainActivity : ComponentActivity(), SensorEventListener {
                 messageClient.sendMessage(node.id, "/request_sync", null)
             }
         }
+        */
     }
 
     fun sendTrackerToggleToPhone(prayerName: String, completed: Boolean) {
+        /*
         val messageClient = Wearable.getMessageClient(this)
         val json = JSONObject().apply {
             put("prayerName", prayerName)
@@ -130,6 +133,7 @@ class WatchMainActivity : ComponentActivity(), SensorEventListener {
                 messageClient.sendMessage(node.id, "/tracker_update", data)
             }
         }
+        */
         
         // Optimistically update local cache
         syncDataState.value?.let { currentJson ->

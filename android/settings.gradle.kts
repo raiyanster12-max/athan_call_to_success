@@ -1,3 +1,5 @@
+rootProject.name = "athan_call_to_success"
+
 pluginManagement {
     val flutterSdkPath =
         run {
@@ -23,6 +25,7 @@ plugins {
     id("org.jetbrains.kotlin.android") version "2.2.20" apply false
     id("org.jetbrains.kotlin.plugin.compose") version "2.2.20" apply false
     id("com.google.gms.google-services") version "4.4.4" apply false
+    id("org.gradle.toolchains.foojay-resolver-convention") version "0.10.0"
 }
 
 include(":app")

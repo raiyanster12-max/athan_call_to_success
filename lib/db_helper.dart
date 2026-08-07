@@ -11,6 +11,9 @@ class DBHelper {
   /// Notifier to alert listeners (like HomePage) when the pinned masjid changes.
   static final ChangeNotifier pinnedChangeNotifier = ChangeNotifier();
 
+  @visibleForTesting
+  static String? testDatabasePath;
+
   static Future<void> _createFavoriteMasjidsTable(Database db) async {
     await db.execute(
       'CREATE TABLE favorite_masjids(id TEXT PRIMARY KEY, name TEXT, address TEXT, lat REAL, lng REAL)',
@@ -30,9 +33,10 @@ class DBHelper {
   }
 
   static Future<Database> database() async {
-    final dbPath = await getDatabasesPath();
+    final dbPath = testDatabasePath ?? await getDatabasesPath();
+    final name = testDatabasePath == inMemoryDatabasePath ? '' : 'athan_app.db';
     return openDatabase(
-      join(dbPath, 'athan_app.db'),
+      join(dbPath, name),
       onCreate: (db, version) async {
         await _createFavoriteMasjidsTable(db);
         await _createPrayerLogsTable(db);

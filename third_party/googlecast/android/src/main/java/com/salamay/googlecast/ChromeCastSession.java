@@ -398,8 +398,6 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
                 return "INTERRUPTED";
             case 15:
                 return "TIMEOUT";
-            case 2001:
-                return "AUTHENTICATION_EXPIRED";
             case 2100:
                 return "FAILED";
             case 2101:
@@ -410,6 +408,14 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
                 return "REPLACED";
             case 2104:
                 return "MESSAGE_SEND_BUFFER_TOO_FULL";
+            case 2105:
+                return "MEDIA_ERROR";
+            case 2106:
+                return "MEDIA_LOAD_FAILED";
+            case 2107:
+                return "MEDIA_LOAD_CANCELLED";
+            case 2111:
+                return "INVALID_REQUEST";
             default:
                 return "CODE_" + code;
         }
