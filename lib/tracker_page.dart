@@ -70,12 +70,10 @@ class _TrackerPageState extends State<TrackerPage> {
     super.initState();
     _loadTrackerData();
     _loadTasbeehData();
-    // WearService.trackerChangeNotifier.addListener(_loadTrackerData);
   }
 
   @override
   void dispose() {
-    // WearService.trackerChangeNotifier.removeListener(_loadTrackerData);
     super.dispose();
   }
 
@@ -686,7 +684,6 @@ class _TrackerPageState extends State<TrackerPage> {
         _prayerStatuses[prayer] = value;
       });
       unawaited(WidgetService.updateTrackerOnly(Map<String, bool>.from(_prayerStatuses)));
-      // unawaited(WearService.instance.syncLatestStateToWatch());
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

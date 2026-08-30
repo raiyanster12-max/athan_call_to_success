@@ -133,13 +133,16 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
         }
 
         final String contentType = inferContentType(audioData.getAudioUrl());
-        broadcastMessage("LOAD_REQUEST(" + contentType + ")");
+        broadcastMessage("LOAD_STARTING(" + audioData.getAudioUrl() + ")");
 
         MediaInfo mediaInfo = new MediaInfo.Builder(audioData.getAudioUrl())
                 .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
                 .setContentType(contentType)
                 .setMetadata(audioMetaData)
                 .build();
+        
+        Log.i(TAG, "Loading media: " + audioData.getAudioUrl() + " type: " + contentType);
+        
         PendingResult<RemoteMediaClient.MediaChannelResult> s=remoteMediaClient.load(
                 new MediaLoadRequestData.Builder().setMediaInfo(mediaInfo).setAutoplay(true).build()
         );
@@ -151,7 +154,12 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
                 Log.i(TAG, details);
                 broadcastMessage(details);
                 if(!status.isSuccess()){
-                    broadcastMessage("ERROR(" + statusCode + ":" + describeStatusCode(statusCode) + ")");
+                    String errorMsg = "ERROR(" + statusCode + ":" + describeStatusCode(statusCode) + ")";
+                    Log.e(TAG, "Media Load Failed: " + errorMsg);
+                    broadcastMessage(errorMsg);
+                } else {
+                    Log.i(TAG, "Media Load Success");
+                    broadcastMessage("LOAD_SUCCESS");
                 }
             }
         });
@@ -248,6 +256,17 @@ public class ChromeCastSession implements EventChannel.StreamHandler{
             public void onStatusUpdated() {
                 super.onStatusUpdated();
                 updateStatus();
+            }
+
+            @Override
+            public void onMetadataUpdated() {
+                super.onMetadataUpdated();
+                broadcastMessage("METADATA_UPDATED");
+            }
+
+            @Override
+            public void onQueueStatusUpdated() {
+                super.onQueueStatusUpdated();
             }
         });
         if(connectionEvent!=null){

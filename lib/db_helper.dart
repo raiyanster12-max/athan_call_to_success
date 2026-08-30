@@ -308,6 +308,7 @@ class DBHelper {
   static const _kIqIsha = 'iqamah_isha';
   static const _kJumaa1 = 'jumaa_time_1';
   static const _kJumaa2 = 'jumaa_time_2';
+  static const kAlertMode = 'settings_alert_mode';
 
   /// Returns iqamah settings with defaults matching Masjid Al-Salam:
   /// fajr=30, dhuhr=15, asr=15, maghrib=10, isha=15.

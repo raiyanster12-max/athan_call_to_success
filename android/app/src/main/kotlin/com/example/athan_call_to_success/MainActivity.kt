@@ -14,9 +14,8 @@ import io.flutter.plugin.common.MethodChannel
 
 private const val TAG = "MainActivity"
 
-open class MainActivity : FlutterFragmentActivity() /*, MessageClient.OnMessageReceivedListener */ {
+open class MainActivity : FlutterFragmentActivity() {
     private var deeplinkChannel: MethodChannel? = null
-    private var wearChannel: MethodChannel? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -37,50 +36,6 @@ open class MainActivity : FlutterFragmentActivity() /*, MessageClient.OnMessageR
                 else -> result.notImplemented()
             }
         }
-
-        // Wear Channel
-        wearChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WEAR_CHANNEL)
-        wearChannel?.setMethodCallHandler { call, result ->
-            when (call.method) {
-                "syncData" -> {
-                    /*
-                    val jsonStr = call.arguments as? String
-                    if (jsonStr != null) {
-                        syncDataToWatch(jsonStr)
-                        result.success(true)
-                    } else {
-                        result.error("INVALID_ARGUMENTS", "Data JSON is null", null)
-                    }
-                    */
-                    result.success(true)
-                }
-                "sendAthanNotification" -> {
-                    /*
-                    val prayerName = call.arguments as? String
-                    if (prayerName != null) {
-                        sendAthanNotificationToWatch(prayerName)
-                        result.success(true)
-                    } else {
-                        result.error("INVALID_ARGUMENTS", "Prayer name is null", null)
-                    }
-                    */
-                    result.success(true)
-                }
-                "sendStopAthan" -> {
-                    // sendStopAthanToWatch()
-                    result.success(true)
-                }
-                else -> result.notImplemented()
-            }
-        }
-
-        // Register Wearable Listener
-        // Wearable.getMessageClient(this).addListener(this)
-    }
-
-    override fun onDestroy() {
-        // Wearable.getMessageClient(this).removeListener(this)
-        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -150,6 +105,5 @@ open class MainActivity : FlutterFragmentActivity() /*, MessageClient.OnMessageR
 
     companion object {
         const val DEEPLINK_CHANNEL = "com.example.athan/deeplink"
-        const val WEAR_CHANNEL = "com.example.athan/wear"
     }
 }

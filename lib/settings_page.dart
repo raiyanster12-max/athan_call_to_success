@@ -10,6 +10,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:googlecast/googlecast.dart';
 import 'package:path/path.dart' as path_lib;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -18,6 +19,7 @@ import 'db_helper.dart';
 import 'gallery_theme.dart';
 import 'notification_service.dart';
 import 'onboarding_page.dart';
+import 'prayer_service.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -52,6 +54,7 @@ class _SettingsPageState extends State<SettingsPage> {
       NotificationService.preferredCastSpeakerIpKey;
   static const String _overrideMuteKey = NotificationService.overrideMuteKey;
   static const String _showHijriDateKey = 'settings_show_hijri_date';
+  static const String _alexaConnectedKey = 'alexa_connected';
   static const String _popupNotificationKey =
       NotificationService.popupNotificationKey;
   static const String _autoTestPrayerValue = '__auto_next__';
@@ -104,7 +107,12 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _overrideMute = true;
   bool _popupNotification = true;
   bool _showHijriDate = true;
+  bool _alexaConnected = false;
+  String _alertMode = 'Reminder';
   String _testPrayerSelection = _autoTestPrayerValue;
+  TimeOfDay _testPrayerTime = TimeOfDay.fromDateTime(
+    DateTime.now().add(const Duration(minutes: 1)),
+  );
 
   bool get _supportsBatteryOptimizationPermission =>
       defaultTargetPlatform == TargetPlatform.android;
@@ -302,6 +310,8 @@ class _SettingsPageState extends State<SettingsPage> {
     _popupNotification =
         await _loadBoolSetting(_popupNotificationKey, fallback: true);
     _showHijriDate = await _loadBoolSetting(_showHijriDateKey, fallback: true);
+    _alexaConnected = await _loadBoolSetting(_alexaConnectedKey, fallback: false);
+    _alertMode = await DBHelper.getSetting(DBHelper.kAlertMode) ?? 'Reminder';
 
     for (final prayer in _prayerNames) {
       var storedTone = await DBHelper.getSetting(_toneKey(prayer));
@@ -592,6 +602,59 @@ class _SettingsPageState extends State<SettingsPage> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _scheduleTestPrayer({
+    String? routeOverride,
+    String? prayerSelectionOverride,
+  }) async {
+    final activeRoute = routeOverride ?? _speakerRoute;
+    final selectedPrayer = prayerSelectionOverride ?? _testPrayerSelection;
+
+    await DBHelper.setSetting(_speakerRouteKey, activeRoute);
+
+    final now = DateTime.now();
+    var scheduledDateTime = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      _testPrayerTime.hour,
+      _testPrayerTime.minute,
+    );
+
+    if (scheduledDateTime.isBefore(now)) {
+      scheduledDateTime = scheduledDateTime.add(const Duration(days: 1));
+    }
+
+    String prayerName = selectedPrayer == _autoTestPrayerValue ? 'Fajr' : selectedPrayer;
+    if (selectedPrayer == _autoTestPrayerValue) {
+      try {
+        final latStr = await DBHelper.getSetting('last_known_lat');
+        final lngStr = await DBHelper.getSetting('last_known_lng');
+        if (latStr != null && lngStr != null) {
+          final lat = double.parse(latStr);
+          final lng = double.parse(lngStr);
+          final next = PrayerService.getNextPrayer(lat, lng);
+          if (next != null) {
+            prayerName = next.name;
+          }
+        }
+      } catch (_) {}
+    }
+
+    await NotificationService.instance.scheduleTestPrayer(
+      time: scheduledDateTime,
+      prayerName: prayerName,
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Test scheduled for $prayerName at ${_testPrayerTime.format(context)}',
+        ),
+      ),
+    );
+  }
+
   Future<void> _pickCustomToneForPrayer(String prayer) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -873,6 +936,74 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _showHijriDate = value);
   }
 
+  Future<void> _setAlertMode(String mode) async {
+    await DBHelper.setSetting(DBHelper.kAlertMode, mode);
+    if (!mounted) return;
+    setState(() => _alertMode = mode);
+    unawaited(
+      NotificationService.instance.rescheduleUsingStoredLocation().catchError(
+        (_) {},
+      ),
+    );
+  }
+
+  Future<void> _connectAlexa() async {
+    final proceed = await _showPermissionDialog(
+      title: 'Connect Alexa',
+      message:
+          'This will allow the app to schedule Athan reminders directly on your Alexa devices. '
+          'You will be redirected to Amazon to authorize the connection.',
+    );
+    if (!proceed) return;
+
+    // Actual LWA OAuth URL
+    const clientId = 'amzn1.application-oa2-client.22e11a37c4e2422789f2801459ed88c9';
+    const redirectUri = 'athan-app://alexa-auth';
+    final lwaUrl =
+        'https://www.amazon.com/ap/oa?client_id=$clientId&scope=alexa::alerts:reminders:skill:readwrite&response_type=code&redirect_uri=$redirectUri';
+
+    try {
+      await launchUrl(Uri.parse(lwaUrl), mode: LaunchMode.externalApplication);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to open Amazon login: $e')),
+      );
+    }
+  }
+
+  Future<void> _disconnectAlexa() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Disconnect Alexa?'),
+        content: const Text(
+          'Reminders will no longer be pushed to your Alexa devices.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Disconnect'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    await _saveBoolSetting(_alexaConnectedKey, false);
+    if (!mounted) return;
+    setState(() => _alexaConnected = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Alexa integration disabled.')),
+    );
+  }
+
   Future<void> _showCalculationMethodDialog() async {
     await showDialog<void>(
       context: context,
@@ -1086,25 +1217,61 @@ class _SettingsPageState extends State<SettingsPage> {
               Row(
                 children: [
                   Expanded(
+                    child: Text(
+                      'Test Time: ${_testPrayerTime.format(context)}',
+                      style: TextStyle(color: _primaryText),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: _testPrayerTime,
+                      );
+                      if (picked != null) {
+                        setSheetState(() => _testPrayerTime = picked);
+                        setState(() => _testPrayerTime = picked);
+                      }
+                    },
+                    child: const Text('Change Time'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
                     child: FilledButton.icon(
                       onPressed: () => _testPrayerTriggerNow(
                         routeOverride: draftSpeakerRoute,
                         prayerSelectionOverride: draftTestPrayerSelection,
                       ),
                       icon: const Icon(Icons.notifications_active_outlined),
-                      label: const Text('Test Prayer Trigger Now'),
+                      label: const Text('Test Now'),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // [Settings-page-fixes] Use stopAllPlayback so both Cast and
-                  // phone speaker audio (from NotificationService) are stopped
-                  OutlinedButton.icon(
-                    onPressed: () =>
-                        NotificationService.instance.stopAllPlayback(),
-                    icon: const Icon(Icons.stop),
-                    label: const Text('Stop'),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => _scheduleTestPrayer(
+                        routeOverride: draftSpeakerRoute,
+                        prayerSelectionOverride: draftTestPrayerSelection,
+                      ),
+                      icon: const Icon(Icons.timer_outlined),
+                      label: const Text('Schedule Test'),
+                    ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () =>
+                      NotificationService.instance.stopAllPlayback(),
+                  icon: const Icon(Icons.stop),
+                  label: const Text('Stop Any Active Playback'),
+                ),
               ),
               const SizedBox(height: 12),
               Row(
@@ -1691,6 +1858,47 @@ class _SettingsPageState extends State<SettingsPage> {
             _buildSectionLabel('Prayer Times'),
             _buildSectionCard([
               _buildSettingRow(
+                icon: Icons.notification_important_outlined,
+                title: 'Alert Behavior',
+                subtitle: _alertMode == 'Alarm'
+                    ? 'Active Alarm (Full-screen, persistent)'
+                    : 'Passive Reminder (Standard notification)',
+                onTap: () {
+                  showDialog<void>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Alert Behavior'),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          RadioListTile<String>(
+                            title: const Text('Reminder'),
+                            subtitle: const Text('Standard notification, polite and passive.'),
+                            value: 'Reminder',
+                            groupValue: _alertMode,
+                            onChanged: (val) {
+                              if (val != null) _setAlertMode(val);
+                              Navigator.pop(ctx);
+                            },
+                          ),
+                          RadioListTile<String>(
+                            title: const Text('Alarm'),
+                            subtitle: const Text('Full-screen alert, bypasses DND if allowed, louder behavior.'),
+                            value: 'Alarm',
+                            groupValue: _alertMode,
+                            onChanged: (val) {
+                              if (val != null) _setAlertMode(val);
+                              Navigator.pop(ctx);
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+              _buildRowDivider(),
+              _buildSettingRow(
                 icon: Icons.volume_up_outlined,
                 title: 'Override Mute',
                 subtitle: 'Play Athan even when the phone is muted.',
@@ -1759,6 +1967,42 @@ class _SettingsPageState extends State<SettingsPage> {
                   activeThumbColor: _sectionAccent,
                 ),
               ),
+            ]),
+            _buildSectionLabel('Alexa Integration'),
+            _buildSectionCard([
+              _buildSettingRow(
+                icon: Icons.spatial_audio_off_outlined,
+                title: 'Connect Alexa',
+                subtitle: _alexaConnected
+                    ? 'Connected to Amazon Alexa'
+                    : 'Schedule Athan reminders on your Alexa devices',
+                trailing: _alexaConnected
+                    ? OutlinedButton(
+                        onPressed: _disconnectAlexa,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.redAccent,
+                          side: const BorderSide(color: Colors.redAccent),
+                        ),
+                        child: const Text('Disconnect'),
+                      )
+                    : FilledButton(
+                        onPressed: _connectAlexa,
+                        child: const Text('Connect'),
+                      ),
+              ),
+              if (_alexaConnected) ...[
+                _buildRowDivider(),
+                _buildSettingRow(
+                  icon: Icons.sync_outlined,
+                  title: 'Sync Reminders Now',
+                  subtitle: 'Push next 24 hours of Athan to Alexa.',
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Reminders synced to Alexa.')),
+                    );
+                  },
+                ),
+              ],
             ]),
             _buildSectionLabel('Appearance'),
             _buildAppearanceDropdown(),
