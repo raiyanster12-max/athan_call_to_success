@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:isolate';
-import 'dart:ui';
 
 import 'package:adhan/adhan.dart';
 import 'package:flutter/foundation.dart';
@@ -56,6 +54,7 @@ Future<void> main() async {
   // This must happen before runApp so the background isolate can register properly.
   final notificationService = NotificationService.instance;
   await notificationService.initialize();
+  // WearService.instance.initialize();
 
   // 3. Initialize Alarm Manager (Required for Android background triggers)
   if (defaultTargetPlatform == TargetPlatform.android) {
@@ -342,30 +341,6 @@ class _MainNavigationState extends State<MainNavigation> {
       if (tab != null && tab >= 0 && mounted) {
         setState(() => _selectedIndex = tab);
       }
-    } else if (call.method == 'onDeeplinkReceived') {
-      final link = call.arguments as String?;
-      if (link != null && link.startsWith('athan-app://alexa-auth')) {
-        final uri = Uri.parse(link);
-        final code = uri.queryParameters['code'];
-        if (code != null) {
-          try {
-            await NotificationService.instance.exchangeAlexaCodeForToken(code);
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Amazon Alexa connected successfully!')),
-              );
-              // Trigger a sync now that we're connected
-              await NotificationService.instance.rescheduleUsingStoredLocation();
-            }
-          } catch (e) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Failed to connect Alexa: $e')),
-              );
-            }
-          }
-        }
-      }
     }
   }
 
@@ -488,7 +463,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Map<String, dynamic>? _nearestMasjid;
   Map<String, dynamic> _iqamahSettings = const {};
   String? _lastScheduledPrayerCoordKey;
-  final ReceivePort _uiReceivePort = ReceivePort();
 
   bool get _isUsingMasjidPrayerSource =>
       _pinnedMasjid != null || _nearestMasjid != null;
@@ -538,14 +512,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     DBHelper.pinnedChangeNotifier.addListener(_loadPinnedMasjidForHome);
     NotificationService.instance.refreshBatchIfNeeded();
-
-    IsolateNameServer.registerPortWithName(_uiReceivePort.sendPort, 'athan_ui_port');
-    _uiReceivePort.listen((message) {
-      if (message is bool && mounted) {
-        NotificationService.instance.isPlayingNotifier.value = message;
-      }
-    });
-
     unawaited(_loadPinnedMasjidForHome());
     unawaited(_loadIqamahSettingsForHome());
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -566,8 +532,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     DBHelper.pinnedChangeNotifier.removeListener(_loadPinnedMasjidForHome);
-    IsolateNameServer.removePortNameMapping('athan_ui_port');
-    _uiReceivePort.close();
     _clockTimer?.cancel();
     _countdownTimer?.cancel();
     super.dispose();
@@ -738,6 +702,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {
       _currentPrayerTimes = PrayerService.getTimes(coords.lat, coords.lng);
     });
+    // unawaited(WearService.instance.syncLatestStateToWatch());
   }
 
   Future<void> _scheduleNotificationsForBestSource() async {
@@ -1080,45 +1045,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ],
               ),
             ),
-          ),
-          // Playback Control Overlay
-          ValueListenableBuilder<bool>(
-            valueListenable: NotificationService.instance.isPlayingNotifier,
-            builder: (context, isPlaying, child) {
-              if (!isPlaying) return const SizedBox.shrink();
-              return Positioned(
-                left: 20,
-                right: 20,
-                bottom: 20,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.8),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white24),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black45, blurRadius: 10, spreadRadius: 2),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.music_note, color: AppPalette.accent),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Text(
-                          'Athan Playing...',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.stop, color: Colors.white),
-                        onPressed: () => NotificationService.instance.stopAllPlayback(),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
           ),
         ],
       ),
