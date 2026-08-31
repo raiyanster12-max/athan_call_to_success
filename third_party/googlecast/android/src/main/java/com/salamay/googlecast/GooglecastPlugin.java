@@ -67,10 +67,15 @@ public class GooglecastPlugin implements FlutterPlugin, MethodCallHandler,Activi
     new Handler(Looper.getMainLooper()).post(() -> {
       if (chromeCastSession == null) {
         try {
+          // Force CastContext initialization early to catch potential errors
+          CastContext.getSharedInstance(applicationContext);
           chromeCastSession = new ChromeCastSession(applicationContext);
-          connectionstatechanenel.setStreamHandler(chromeCastSession);
+          if (connectionstatechanenel != null) {
+              connectionstatechanenel.setStreamHandler(chromeCastSession);
+          }
+          Log.i(TAG, "ChromeCastSession initialized successfully in onAttachedToEngine");
         } catch (Exception e) {
-          Log.e(TAG, "Failed to initialize ChromeCastSession in onAttachedToEngine", e);
+          Log.e(TAG, "Failed to initialize ChromeCastSession in onAttachedToEngine: " + e.getMessage(), e);
         }
       }
     });

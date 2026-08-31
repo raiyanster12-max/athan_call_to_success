@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
+import 'dart:ui';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart';
@@ -9,8 +12,10 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:googlecast/CastController.dart';
 import 'package:googlecast/googlecast.dart';
+import 'package:http/http.dart' as http;
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:intl/intl.dart';
 
 import 'db_helper.dart';
 import 'prayer_service.dart';
@@ -36,16 +41,21 @@ Future<void> onDidReceiveBackgroundNotificationResponse(
 
     if (response.actionId == NotificationService.actionStopAthan) {
       await NotificationService.instance.stopAllPlayback();
-      return;
+    } else if (response.actionId == NotificationService.actionSnooze) {
+      await NotificationService.instance.snoozeAthan(response.payload);
+    } else if (response.actionId == NotificationService.actionOpenApp || response.actionId == null) {
+      // App will be launched by the system.
+      // We don't trigger the speaker here to avoid duplicate triggers if the alarm already fired.
+      debugPrint('[ATHAN_BG_SERVICE] Notification tapped, launching app...');
+    } else {
+      // Wrap in a timeout to keep the isolate alive long enough for streaming
+      await NotificationService.instance
+          ._triggerNetworkSpeakerIfConfigured(
+            payload: response.payload,
+            isBackground: true,
+          )
+          .timeout(const Duration(minutes: 5));
     }
-
-    // Wrap in a timeout to keep the isolate alive long enough for streaming
-    await NotificationService.instance
-        ._triggerNetworkSpeakerIfConfigured(
-          payload: response.payload,
-          isBackground: true,
-        )
-        .timeout(const Duration(minutes: 5));
   } catch (e) {
     debugPrint('[ATHAN_BG_SERVICE] Background handler error: $e');
   }
@@ -86,17 +96,28 @@ class NotificationService {
   static const String speakerPhoneSpeaker = 'Phone Speaker (Alarm Stream)';
   static const String overrideMuteKey = 'settings_override_mute';
   static const String actionStopAthan = 'stop_athan_action';
+  static const String actionSnooze = 'snooze_athan_action';
+  static const String actionOpenApp = 'open_app_action';
   static const String googleCastMediaUrlKey = 'google_cast_media_url';
   static const String popupNotificationKey = 'settings_popup_notification';
+  static const String alexaAccessTokenKey = 'alexa_access_token';
+  static const String alexaRefreshTokenKey = 'alexa_refresh_token';
+  static const String alexaClientId = 'YOUR_ALEXA_CLIENT_ID';
+  static const String alexaClientSecret = 'YOUR_ALEXA_CLIENT_SECRET';
   static const String toneCustom = 'CUSTOM_FILE';
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
+  static const _deeplinkChannel = MethodChannel('com.example.athan/deeplink');
+  
   AudioPlayer? _testAudioPlayer;
   bool _initialized = false;
   Future<void>? _initializationFuture;
   HttpServer? _assetServer;
   static const int _assetServerPort = 8765;
+  
+  final ValueNotifier<bool> isPlayingNotifier = ValueNotifier<bool>(false);
+  bool get isPlaying => isPlayingNotifier.value;
 
   static const int _notificationIdStart = 1000;
   static const int _alarmIdStart = 2000;
@@ -136,7 +157,12 @@ class NotificationService {
         onDidReceiveNotificationResponse: (response) {
           if (response.actionId == actionStopAthan) {
             stopAllPlayback();
+          } else if (response.actionId == actionSnooze) {
+            snoozeAthan(response.payload);
+          } else if (response.actionId == actionOpenApp) {
+            _deeplinkChannel.invokeMethod('navigateToTab', 0);
           } else {
+            _deeplinkChannel.invokeMethod('navigateToTab', 0);
             _triggerNetworkSpeakerIfConfigured(payload: response.payload);
           }
         },
@@ -306,6 +332,7 @@ class NotificationService {
       );
 
       await castController.loadAudio();
+      _updatePlayingStatus(true);
       await castController.play();
 
     } catch (e) {
@@ -328,13 +355,6 @@ class NotificationService {
   }) async {
     final route = await _loadSpeakerRoutePreference();
     final prayerName = _prayerNameFromPayload(payload);
-
-    /*
-    WearService.instance.initialize();
-    if (prayerName != null) {
-      unawaited(WearService.instance.sendAthanNotification(prayerName));
-    }
-    */
 
     if (route == speakerGoogleCast || route == speakerGoogleCastIp) {
       await _triggerGoogleCastIfConfigured(
@@ -365,6 +385,12 @@ class NotificationService {
   // ───────────────────────────────────────────────────────────────────────────
   // PHONE SPEAKER & CLEANUP
   // ───────────────────────────────────────────────────────────────────────────
+
+  void _updatePlayingStatus(bool value) {
+    isPlayingNotifier.value = value;
+    final port = IsolateNameServer.lookupPortByName('athan_ui_port');
+    port?.send(value);
+  }
 
   Future<void> _triggerPhoneSpeakerNow({String? prayerName}) async {
     debugPrint('[ATHAN_BG_SERVICE] Triggering Phone Speaker local playback...');
@@ -414,6 +440,7 @@ class NotificationService {
       }
 
       await _testAudioPlayer!.play(source);
+      _updatePlayingStatus(true);
     } catch (e) {
       debugPrint('[ATHAN_BG_SERVICE] Phone speaker trigger error: $e');
     }
@@ -454,10 +481,12 @@ class NotificationService {
         _assetServerPort,
       );
       _assetServer!.listen((req) async {
-        final filename = req.uri.path.replaceFirst('/', '');
-        debugPrint('[ASSET_SERVER] Request: ${req.method} ${req.uri.path} from ${req.connectionInfo?.remoteAddress.address}');
+        final filename = Uri.decodeComponent(req.uri.path.replaceFirst('/', ''));
+        debugPrint('[ASSET_SERVER] Request: ${req.method} ${req.uri.path} (decoded: $filename) from ${req.connectionInfo?.remoteAddress.address}');
         try {
-          final data = await rootBundle.load('assets/audio/$filename');
+          // Attempt to find the asset
+          final assetKey = 'assets/audio/$filename';
+          final data = await rootBundle.load(assetKey);
           final bytes = data.buffer.asUint8List();
           final subtype = filename.toLowerCase().endsWith('.wav') ? 'wav' : 'mpeg';
           req.response.headers
@@ -535,18 +564,36 @@ class NotificationService {
 
   Future<void> stopAllPlayback() async {
     try {
+      _updatePlayingStatus(false);
       _testAudioPlayer?.stop();
       if (defaultTargetPlatform == TargetPlatform.android) {
         if (await GoogleChromeCast.isConnected()) {
           final castController = CastController();
           await castController.stop();
         }
-        // Notify watch to dismiss Athan alert
-        // WearService.instance.sendStopAthanCommand();
       }
     } catch (e) {
       debugPrint('Error stopping playback: $e');
     }
+  }
+
+  Future<void> snoozeAthan(String? payload) async {
+    await stopAllPlayback();
+    final prayerName = _prayerNameFromPayload(payload) ?? 'Prayer';
+    final snoozeTime = DateTime.now().add(const Duration(minutes: 5));
+
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      await AndroidAlarmManager.oneShotAt(
+        snoozeTime,
+        9998, // Dedicated snooze alarm ID
+        onDidReceiveAlarm,
+        exact: true,
+        wakeup: true,
+        rescheduleOnReboot: true,
+        params: {'payload': 'SNOOZE_$prayerName'},
+      );
+    }
+    debugPrint('[ATHAN_BG_SERVICE] Snoozed $prayerName for 5 minutes until $snoozeTime');
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -555,11 +602,12 @@ class NotificationService {
 
   String? _prayerNameFromPayload(String? payload) {
     if (payload == null) return null;
-    if (payload.contains('Fajr')) return 'Fajr';
-    if (payload.contains('Dhuhr')) return 'Dhuhr';
-    if (payload.contains('Asr')) return 'Asr';
-    if (payload.contains('Maghrib')) return 'Maghrib';
-    if (payload.contains('Isha')) return 'Isha';
+    final cleanPayload = payload.replaceFirst('TEST_', '');
+    if (cleanPayload.contains('Fajr')) return 'Fajr';
+    if (cleanPayload.contains('Dhuhr')) return 'Dhuhr';
+    if (cleanPayload.contains('Asr')) return 'Asr';
+    if (cleanPayload.contains('Maghrib')) return 'Maghrib';
+    if (cleanPayload.contains('Isha')) return 'Isha';
     return null;
   }
 
@@ -644,6 +692,8 @@ class NotificationService {
 
     final isPopupEnabled =
         (await DBHelper.getSetting(popupNotificationKey)) != 'false';
+    final alertMode = await DBHelper.getSetting(DBHelper.kAlertMode) ?? 'Reminder';
+    final isAlarmMode = alertMode == 'Alarm';
 
     // Schedule for next 7 days
     for (int i = 0; i < 7; i++) {
@@ -669,14 +719,26 @@ class NotificationService {
               'athan_alerts',
               'Athan Alerts',
               channelDescription: 'Prayer time notifications and Athan playback',
-              importance: isPopupEnabled ? Importance.max : Importance.defaultImportance,
-              priority: isPopupEnabled ? Priority.high : Priority.defaultPriority,
-              fullScreenIntent: isPopupEnabled,
-              category: AndroidNotificationCategory.alarm,
+              importance: isAlarmMode ? Importance.max : (isPopupEnabled ? Importance.high : Importance.defaultImportance),
+              priority: isAlarmMode ? Priority.max : (isPopupEnabled ? Priority.high : Priority.defaultPriority),
+              fullScreenIntent: isAlarmMode,
+              category: isAlarmMode ? AndroidNotificationCategory.alarm : AndroidNotificationCategory.reminder,
+              visibility: NotificationVisibility.public,
               actions: const [
                 AndroidNotificationAction(
                   actionStopAthan,
                   'Stop Athan',
+                  showsUserInterface: true,
+                  cancelNotification: true,
+                ),
+                AndroidNotificationAction(
+                  actionSnooze,
+                  'Snooze (5m)',
+                  showsUserInterface: true,
+                ),
+                AndroidNotificationAction(
+                  actionOpenApp,
+                  'Open App',
                   showsUserInterface: true,
                 ),
               ],
@@ -708,6 +770,86 @@ class NotificationService {
       }
     }
     debugPrint('[ATHAN_BG_SERVICE] Scheduled $count rolling notifications/alarms');
+
+    // 3. Sync with Alexa if connected
+    unawaited(syncRemindersToAlexa(latitude: latitude, longitude: longitude));
+  }
+
+  Future<void> scheduleTestPrayer({
+    required DateTime time,
+    required String prayerName,
+  }) async {
+    if (kIsWeb) return;
+    await initialize();
+
+    const id = 9999;
+    const alarmId = 9999;
+
+    final isPopupEnabled =
+        (await DBHelper.getSetting(popupNotificationKey)) != 'false';
+    final alertMode = await DBHelper.getSetting(DBHelper.kAlertMode) ?? 'Reminder';
+    final isAlarmMode = alertMode == 'Alarm';
+
+    // 1. Local Notification
+    await _plugin.zonedSchedule(
+      id,
+      'Test Prayer: $prayerName',
+      'This is a test notification for $prayerName athan',
+      tz.TZDateTime.from(time, tz.local),
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'athan_alerts',
+          'Athan Alerts',
+          channelDescription: 'Prayer time notifications and Athan playback',
+          importance: isAlarmMode ? Importance.max : (isPopupEnabled ? Importance.high : Importance.defaultImportance),
+          priority: isAlarmMode ? Priority.max : (isPopupEnabled ? Priority.high : Priority.defaultPriority),
+          fullScreenIntent: isAlarmMode,
+          category: isAlarmMode ? AndroidNotificationCategory.alarm : AndroidNotificationCategory.reminder,
+          visibility: NotificationVisibility.public,
+          actions: const [
+            AndroidNotificationAction(
+              actionStopAthan,
+              'Stop Athan',
+              showsUserInterface: true,
+              cancelNotification: true,
+            ),
+            AndroidNotificationAction(
+              actionSnooze,
+              'Snooze (5m)',
+              showsUserInterface: true,
+            ),
+            AndroidNotificationAction(
+              actionOpenApp,
+              'Open App',
+              showsUserInterface: true,
+            ),
+          ],
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      payload: 'TEST_PRAYER_$prayerName',
+    );
+
+    // 2. Android Alarm
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      await AndroidAlarmManager.oneShotAt(
+        time,
+        alarmId,
+        onDidReceiveAlarm,
+        exact: true,
+        wakeup: true,
+        rescheduleOnReboot: true,
+        params: {'payload': 'TEST_PRAYER_$prayerName'},
+      );
+    }
+    debugPrint('[ATHAN_BG_SERVICE] Scheduled test notification/alarm at $time');
   }
 
   Future<void> triggerSelectedSpeakerNow({required String prayerName}) async {
@@ -715,6 +857,120 @@ class NotificationService {
       payload: 'PRAYER_$prayerName',
       isBackground: false,
     );
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // ALEXA INTEGRATION
+  // ───────────────────────────────────────────────────────────────────────────
+
+  Future<void> exchangeAlexaCodeForToken(String code) async {
+    final url = Uri.parse('https://api.amazon.com/auth/o2/token');
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: {
+          'grant_type': 'authorization_code',
+          'code': code,
+          'client_id': alexaClientId,
+          'client_secret': alexaClientSecret,
+          'redirect_uri': 'athan-app://alexa-auth',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final accessToken = data['access_token'] as String;
+        final refreshToken = data['refresh_token'] as String;
+
+        await DBHelper.setSetting(alexaAccessTokenKey, accessToken);
+        await DBHelper.setSetting(alexaRefreshTokenKey, refreshToken);
+        debugPrint('[ALEXA] Token exchange successful.');
+      } else {
+        debugPrint('[ALEXA] Token exchange failed: ${response.statusCode} ${response.body}');
+        throw Exception('Failed to exchange Alexa code');
+      }
+    } catch (e) {
+      debugPrint('[ALEXA] Token exchange error: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> syncRemindersToAlexa({
+    required double latitude,
+    required double longitude,
+  }) async {
+    final token = await DBHelper.getSetting(alexaAccessTokenKey);
+    if (token == null || token.isEmpty) {
+      debugPrint('[ALEXA] No access token found. Skipping sync.');
+      return;
+    }
+
+    final now = DateTime.now();
+    final times = PrayerService.getTimesForDate(latitude, longitude, now);
+    final prayers = PrayerService.getObligatoryPrayers(times);
+
+    for (final prayer in prayers) {
+      if (prayer.time.isBefore(now)) continue;
+      await _createAlexaReminder(token, prayer.name, prayer.time);
+    }
+  }
+
+  Future<void> _createAlexaReminder(
+    String token,
+    String prayerName,
+    DateTime time,
+  ) async {
+    final url = Uri.parse('https://api.amazonalexa.com/v1/alerts/reminders');
+    final scheduledTime = DateFormat("yyyy-MM-dd'T'HH:mm:ss").format(time);
+
+    final body = jsonEncode({
+      "displayInformation": {
+        "content": [
+          {
+            "locale": "en-US",
+            "text": "Time for $prayerName Athan",
+          }
+        ]
+      },
+      "trigger": {
+        "type": "SCHEDULED_ABSOLUTE",
+        "scheduledTime": scheduledTime,
+        "timeZoneId": tz.local.name,
+      },
+      "alertInfo": {
+        "spokenInfo": {
+          "content": [
+            {
+              "locale": "en-US",
+              "text": "It is time for $prayerName Athan",
+            }
+          ]
+        }
+      },
+      "pushNotification": {"status": "ENABLED"}
+    });
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: body,
+      );
+
+      if (response.statusCode == 201) {
+        debugPrint('[ALEXA] Reminder created for $prayerName at $scheduledTime');
+      } else {
+        debugPrint(
+          '[ALEXA] Failed to create reminder: ${response.statusCode} ${response.body}',
+        );
+      }
+    } catch (e) {
+      debugPrint('[ALEXA] Error creating reminder: $e');
+    }
   }
 
   Future<String> testSelectedSpeakerNow({
