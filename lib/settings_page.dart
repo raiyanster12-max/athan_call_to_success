@@ -1092,7 +1092,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   ],
                 ),
               ),
-              if (draftSpeakerRoute == NotificationService.speakerGoogleCast) ...[
+              if (draftSpeakerRoute == NotificationService.speakerGoogleCast ||
+                  draftSpeakerRoute == NotificationService.speakerPhoneAndCast) ...[
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
@@ -1114,7 +1115,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ),
               ],
-              if (draftSpeakerRoute == NotificationService.speakerGoogleCastIp) ...[
+              if (draftSpeakerRoute == NotificationService.speakerGoogleCastIp ||
+                  draftSpeakerRoute == NotificationService.speakerPhoneAndCast) ...[
                 const SizedBox(height: 12),
                 TextField(
                   controller: ipController,
@@ -1127,7 +1129,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ],
               if (draftSpeakerRoute == NotificationService.speakerGoogleCast ||
-                  draftSpeakerRoute == NotificationService.speakerGoogleCastIp) ...[
+                  draftSpeakerRoute == NotificationService.speakerGoogleCastIp ||
+                  draftSpeakerRoute == NotificationService.speakerPhoneAndCast) ...[
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -1142,7 +1145,8 @@ class _SettingsPageState extends State<SettingsPage> {
                             style: TextStyle(color: _primaryText),
                           ),
                           if (_preferredCastSpeakerName.isNotEmpty &&
-                              draftSpeakerRoute == NotificationService.speakerGoogleCast)
+                              (draftSpeakerRoute == NotificationService.speakerGoogleCast ||
+                               draftSpeakerRoute == NotificationService.speakerPhoneAndCast))
                             Text(
                               'Speaker: $_preferredCastSpeakerName',
                               style: TextStyle(

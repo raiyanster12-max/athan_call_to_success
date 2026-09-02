@@ -135,11 +135,13 @@ class NotificationService {
       await _configureLocalTimezone();
 
       // AUTO-RECONNECT ON STARTUP
-      // If we are on Android and the preferred route is Cast, try to reconnect
+      // If we are on Android and the preferred route involves Cast, try to reconnect
       // in the background as soon as the app/service starts.
       if (defaultTargetPlatform == TargetPlatform.android) {
         final route = await _loadSpeakerRoutePreference();
-        if (route == speakerGoogleCast || route == speakerGoogleCastIp) {
+        if (route == speakerGoogleCast ||
+            route == speakerGoogleCastIp ||
+            route == speakerPhoneAndCast) {
           unawaited(_ensureCastConnected().catchError((_) => false));
         }
       }
@@ -254,13 +256,14 @@ class NotificationService {
         message,
         const NotificationDetails(
           android: AndroidNotificationDetails(
-            'athan_alerts',
+            'athan_alerts_v2',
             'Athan Alerts',
             channelDescription: 'Prayer time notifications and Athan playback',
             importance: Importance.max,
             priority: Priority.high,
             fullScreenIntent: true,
             category: AndroidNotificationCategory.alarm,
+            visibility: NotificationVisibility.public,
           ),
         ),
       );
@@ -716,13 +719,13 @@ class NotificationService {
           tz.TZDateTime.from(prayer.time, tz.local),
           NotificationDetails(
             android: AndroidNotificationDetails(
-              'athan_alerts',
+              'athan_alerts_v2',
               'Athan Alerts',
               channelDescription: 'Prayer time notifications and Athan playback',
-              importance: isAlarmMode ? Importance.max : (isPopupEnabled ? Importance.high : Importance.defaultImportance),
-              priority: isAlarmMode ? Priority.max : (isPopupEnabled ? Priority.high : Priority.defaultPriority),
-              fullScreenIntent: isAlarmMode,
-              category: isAlarmMode ? AndroidNotificationCategory.alarm : AndroidNotificationCategory.reminder,
+              importance: Importance.max,
+              priority: Priority.max,
+              fullScreenIntent: true,
+              category: AndroidNotificationCategory.alarm,
               visibility: NotificationVisibility.public,
               actions: const [
                 AndroidNotificationAction(
@@ -798,13 +801,13 @@ class NotificationService {
       tz.TZDateTime.from(time, tz.local),
       NotificationDetails(
         android: AndroidNotificationDetails(
-          'athan_alerts',
+          'athan_alerts_v2',
           'Athan Alerts',
           channelDescription: 'Prayer time notifications and Athan playback',
-          importance: isAlarmMode ? Importance.max : (isPopupEnabled ? Importance.high : Importance.defaultImportance),
-          priority: isAlarmMode ? Priority.max : (isPopupEnabled ? Priority.high : Priority.defaultPriority),
-          fullScreenIntent: isAlarmMode,
-          category: isAlarmMode ? AndroidNotificationCategory.alarm : AndroidNotificationCategory.reminder,
+          importance: Importance.max,
+          priority: Priority.max,
+          fullScreenIntent: true,
+          category: AndroidNotificationCategory.alarm,
           visibility: NotificationVisibility.public,
           actions: const [
             AndroidNotificationAction(
