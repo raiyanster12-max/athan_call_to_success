@@ -19,7 +19,7 @@ import 'package:intl/intl.dart';
 
 import 'db_helper.dart';
 import 'prayer_service.dart';
-import 'wear_service.dart';
+// import 'wear_service.dart';
 
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 
@@ -336,9 +336,9 @@ class NotificationService {
 
       await castController.loadAudio();
       _updatePlayingStatus(true);
-      if (resolvedName != 'Prayer') {
-        unawaited(WearService.instance.sendAthanNotification(resolvedName));
-      }
+      // if (resolvedName != 'Prayer') {
+      //   unawaited(WearService.instance.sendAthanNotification(resolvedName));
+      // }
       await castController.play();
 
     } catch (e) {
@@ -447,9 +447,9 @@ class NotificationService {
 
       await _testAudioPlayer!.play(source);
       _updatePlayingStatus(true);
-      if (prayerName != null) {
-        unawaited(WearService.instance.sendAthanNotification(prayerName));
-      }
+      // if (prayerName != null) {
+      //   unawaited(WearService.instance.sendAthanNotification(prayerName));
+      // }
     } catch (e) {
       debugPrint('[ATHAN_BG_SERVICE] Phone speaker trigger error: $e');
     }

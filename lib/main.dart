@@ -54,7 +54,7 @@ Future<void> main() async {
   // This must happen before runApp so the background isolate can register properly.
   final notificationService = NotificationService.instance;
   await notificationService.initialize();
-  WearService.instance.initialize();
+  // WearService.instance.initialize();
 
   // 3. Initialize Alarm Manager (Required for Android background triggers)
   if (defaultTargetPlatform == TargetPlatform.android) {
@@ -702,7 +702,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {
       _currentPrayerTimes = PrayerService.getTimes(coords.lat, coords.lng);
     });
-    unawaited(WearService.instance.syncLatestStateToWatch());
+    // unawaited(WearService.instance.syncLatestStateToWatch());
   }
 
   Future<void> _scheduleNotificationsForBestSource() async {

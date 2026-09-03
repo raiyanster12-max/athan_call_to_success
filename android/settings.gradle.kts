@@ -29,5 +29,5 @@ plugins {
 }
 
 include(":app")
-include(":wear")
+// include(":wear")
 
