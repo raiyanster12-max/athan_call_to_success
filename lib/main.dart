@@ -14,7 +14,7 @@ import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'app_palette.dart';
 import 'db_helper.dart';
 import 'notification_service.dart';
-import 'wear_service.dart';
+// import 'wear_service.dart';
 import 'more_page.dart';
 import 'onboarding_page.dart';
 import 'mosque_service.dart';
