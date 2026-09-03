@@ -11,7 +11,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app_palette.dart';
 import 'db_helper.dart';
 import 'widget_service.dart';
-// import 'wear_service.dart';
 
 class TrackerPage extends StatefulWidget {
   const TrackerPage({super.key});
