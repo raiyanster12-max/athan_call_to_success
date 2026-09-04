@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:isolate';
 import 'dart:ui';
 
 import 'package:audioplayers/audioplayers.dart';
@@ -110,6 +109,7 @@ class NotificationService {
   static const _deeplinkChannel = MethodChannel('com.example.athan/deeplink');
   
   AudioPlayer? _testAudioPlayer;
+  StreamSubscription? _castDuaSubscription;
   bool _initialized = false;
   Future<void>? _initializationFuture;
   HttpServer? _assetServer;
@@ -337,6 +337,37 @@ class NotificationService {
       _updatePlayingStatus(true);
       await castController.play();
 
+      // Sequential playback for Google Cast
+      final tone = await _loadTonePreference(prayerName);
+      bool duaTriggered = false;
+      
+      await _castDuaSubscription?.cancel();
+      _castDuaSubscription =
+          GoogleChromeCast().messageStream.listen((message) async {
+        if (message == 'IDLE') {
+          if (isPlaying && _shouldPlayDuaAfter(tone) && !duaTriggered) {
+            duaTriggered = true;
+            debugPrint('[ATHAN_BG_SERVICE] Cast Athan IDLE, triggering Dua...');
+            final duaUrl = await _buildLocalAssetUrl('audio/athan_dua.mp3');
+            if (duaUrl != null) {
+              await castController.setMedia(
+                url: duaUrl,
+                title: 'Athan Dua',
+              );
+              await castController.loadAudio();
+              await castController.play();
+            } else {
+              _updatePlayingStatus(false);
+            }
+          } else {
+            debugPrint('[ATHAN_BG_SERVICE] Cast sequence complete.');
+            _updatePlayingStatus(false);
+            await _castDuaSubscription?.cancel();
+            _castDuaSubscription = null;
+          }
+        }
+      });
+
     } catch (e) {
       debugPrint('[ATHAN_BG_SERVICE] Cast Trigger Error: $e');
       if (enableFallback) {
@@ -394,6 +425,19 @@ class NotificationService {
     port?.send(value);
   }
 
+  bool _shouldPlayDuaAfter(String tone) {
+    if (tone == 'Beep' || tone == toneCustom) return false;
+    // Mishary Rashid's Athans already have the Dua integrated in the audio file.
+    // We check both current display names and legacy names for safety.
+    const integratedVoices = [
+      'Fajr Athan by Mishary Rashid',
+      'Muezzin Voice 1 with Fajr Athan',
+      'Athan by Mishary Rashid',
+      'Muezzin Voice 2 with Mishary Alafasi',
+    ];
+    return !integratedVoices.contains(tone);
+  }
+
   Future<void> _triggerPhoneSpeakerNow({String? prayerName}) async {
     debugPrint('[ATHAN_BG_SERVICE] Triggering Phone Speaker local playback...');
     try {
@@ -401,15 +445,11 @@ class NotificationService {
       final isOverrideMute =
           (await DBHelper.getSetting(overrideMuteKey)) == 'true';
 
-      // [Settings-page-fixes] Await stop/dispose so old audio fully stops before new source plays
       await _testAudioPlayer?.stop();
       await _testAudioPlayer?.dispose();
       _testAudioPlayer = AudioPlayer();
 
       if (isOverrideMute) {
-        // On Android, using the Alarm stream often bypasses "Do Not Disturb" or "Mute"
-        // depending on system settings and how the player is configured.
-        // For audioplayers 6.x, we use AudioContext.
         await _testAudioPlayer!.setAudioContext(AudioContext(
           android: AudioContextAndroid(
             usageType: AndroidUsageType.alarm,
@@ -441,8 +481,28 @@ class NotificationService {
         source = AssetSource(assetPath);
       }
 
-      await _testAudioPlayer!.play(source);
       _updatePlayingStatus(true);
+
+      // Play the Athan
+      await _testAudioPlayer!.play(source);
+
+      // Sequential playback and status reset listener
+      bool duaPlayed = false;
+      _testAudioPlayer!.onPlayerComplete.listen((event) async {
+        try {
+          if (isPlaying && !duaPlayed && tone != toneCustom && _shouldPlayDuaAfter(tone)) {
+            duaPlayed = true;
+            debugPrint('[ATHAN_BG_SERVICE] Athan finished, playing Dua...');
+            await _testAudioPlayer!.play(AssetSource('audio/athan_dua.mp3'));
+          } else {
+            debugPrint('[ATHAN_BG_SERVICE] Phone playback sequence complete.');
+            _updatePlayingStatus(false);
+          }
+        } catch (e) {
+          debugPrint('[ATHAN_BG_SERVICE] Completion listener error: $e');
+          _updatePlayingStatus(false);
+        }
+      });
     } catch (e) {
       debugPrint('[ATHAN_BG_SERVICE] Phone speaker trigger error: $e');
     }
@@ -451,14 +511,15 @@ class NotificationService {
   String _mapToneToAsset(String tone) {
     switch (tone) {
       case 'Fajr Athan by Mishary Rashid':
-      case 'Muezzin Voice 1 with Fajr Athan':
         return 'audio/Fajr Athan by Mishary Rashid.mp3';
       case 'Athan by Mishary Rashid':
-      case 'Muezzin Voice 2 with Mishary Alafasi':
         return 'audio/Athan by Mishary Rashid.mp3';
       case 'Athan by Wakilur R Chowdhury':
-      case 'Abbu_Athan':
         return 'audio/Athan by Wakilur R Chowdhury.mp3';
+      case 'Makkah Athan':
+        return 'audio/athan_makkah.mp3';
+      case 'Madinah Athan':
+        return 'audio/athan_madinah.mp3';
       case 'Beep':
       default:
         return 'audio/athan_beep.wav';
@@ -568,6 +629,9 @@ class NotificationService {
     try {
       _updatePlayingStatus(false);
       _testAudioPlayer?.stop();
+      await _castDuaSubscription?.cancel();
+      _castDuaSubscription = null;
+
       if (defaultTargetPlatform == TargetPlatform.android) {
         if (await GoogleChromeCast.isConnected()) {
           final castController = CastController();
@@ -692,11 +756,6 @@ class NotificationService {
     final now = DateTime.now();
     int count = 0;
 
-    final isPopupEnabled =
-        (await DBHelper.getSetting(popupNotificationKey)) != 'false';
-    final alertMode = await DBHelper.getSetting(DBHelper.kAlertMode) ?? 'Reminder';
-    final isAlarmMode = alertMode == 'Alarm';
-
     // Schedule for next 7 days
     for (int i = 0; i < 7; i++) {
       final date = now.add(Duration(days: i));
@@ -786,11 +845,6 @@ class NotificationService {
 
     const id = 9999;
     const alarmId = 9999;
-
-    final isPopupEnabled =
-        (await DBHelper.getSetting(popupNotificationKey)) != 'false';
-    final alertMode = await DBHelper.getSetting(DBHelper.kAlertMode) ?? 'Reminder';
-    final isAlarmMode = alertMode == 'Alarm';
 
     // 1. Local Notification
     await _plugin.zonedSchedule(
@@ -990,9 +1044,7 @@ class NotificationService {
           final lat = double.parse(latStr);
           final lng = double.parse(lngStr);
           final next = PrayerService.getNextPrayer(lat, lng);
-          if (next != null) {
-            prayerName = next.name;
-          }
+          prayerName = next.name;
         }
       } catch (_) {}
     }

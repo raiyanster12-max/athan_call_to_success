@@ -181,7 +181,10 @@ class _QuranPageState extends State<QuranPage> {
     super.dispose();
   }
 
-  void _onGalleryChange() => setState(() {});
+  void _onGalleryChange() {
+    if (!mounted) return;
+    setState(() {});
+  }
 
   Future<void> _loadQuranSettings() async {
     final currentLastReadSurah = _lastReadSurah ?? _sessionLastReadSurah;
@@ -1398,11 +1401,13 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
     });
 
     _reciterPlayer.onPlayerStateChanged.listen((state) {
-      if (mounted) setState(() => _playerState = state);
+      if (!mounted) return;
+      setState(() => _playerState = state);
     });
 
     _reciterPlayer.onPlayerComplete.listen((event) {
-      if (_isContinuousMode && mounted) {
+      if (!mounted) return;
+      if (_isContinuousMode) {
         _playNextAyah();
       }
     });
@@ -1421,7 +1426,10 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
     super.dispose();
   }
 
-  void _onGalleryChange() => setState(() {});
+  void _onGalleryChange() {
+    if (!mounted) return;
+    setState(() {});
+  }
 
   Future<void> _loadReaderState() async {
     int parsedLastRead =
@@ -1517,6 +1525,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
     await _setSelectedAyah(ayah);
 
     Future<bool> ensureTargetVisible() async {
+      if (!mounted) return true;
       final targetContext = _verseKeys[ayah - 1].currentContext;
       if (targetContext == null) return false;
       await Scrollable.ensureVisible(
@@ -1529,7 +1538,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
     }
 
     if (await ensureTargetVisible()) return;
-    if (!_scrollController.hasClients) return;
+    if (!mounted || !_scrollController.hasClients) return;
 
     // Long surahs lazily build off-screen cards. Jump by list fraction first,
     // then retry ensureVisible over a few frames once widgets are materialized.
@@ -1538,12 +1547,14 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
     final estimatedOffset = (maxExtent * fraction).clamp(0.0, maxExtent);
 
     if (animated) {
+      if (!mounted || !_scrollController.hasClients) return;
       await _scrollController.animateTo(
         estimatedOffset,
         duration: const Duration(milliseconds: 320),
         curve: Curves.easeOut,
       );
     } else {
+      if (!mounted || !_scrollController.hasClients) return;
       _scrollController.jumpTo(estimatedOffset);
     }
 
@@ -1590,6 +1601,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
   }
 
   void _playNextAyah() {
+    if (!mounted) return;
     if (_selectedAyah < _verseCount) {
       final nextAyah = _selectedAyah + 1;
       _scrollToAyah(nextAyah);
@@ -1602,6 +1614,7 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
   }
 
   void _toggleContinuousPlayback() {
+    if (!mounted) return;
     if (_playerState == PlayerState.playing) {
       _reciterPlayer.pause();
       setState(() {

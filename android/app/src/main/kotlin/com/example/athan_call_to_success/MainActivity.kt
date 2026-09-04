@@ -63,7 +63,38 @@ open class MainActivity : FlutterFragmentActivity() {
         setIntent(intent)
         val tab = intent.getIntExtra("deeplink_tab", -1)
         if (tab >= 0) {
-            deeplinkChannel?.invokeMethod("navigateToTab", tab)
+            // Use a small delay to ensure the Flutter side has time to register its method handler
+            // especially if the app is resuming from a background state.
+            val handler = android.os.Handler(android.os.Looper.getMainLooper())
+            var attempts = 0
+            val retryRunnable = object : Runnable {
+                override fun run() {
+                    val currentRunnable = this
+                    deeplinkChannel?.invokeMethod("navigateToTab", tab, object : MethodChannel.Result {
+                        override fun success(result: Any?) {
+                            Log.d(TAG, "Successfully navigated to tab $tab")
+                        }
+
+                        override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
+                            Log.e(TAG, "Error navigating to tab: $errorMessage")
+                            retryIfPossible()
+                        }
+
+                        override fun notImplemented() {
+                            Log.w(TAG, "Method navigateToTab not implemented")
+                            retryIfPossible()
+                        }
+
+                        private fun retryIfPossible() {
+                            if (attempts < 3) {
+                                attempts++
+                                handler.postDelayed(currentRunnable, 500)
+                            }
+                        }
+                    })
+                }
+            }
+            handler.post(retryRunnable)
         }
     }
 
