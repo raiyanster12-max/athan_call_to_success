@@ -71,9 +71,6 @@ flutter:
   # This section is REQUIRED for the image to show up in your Dart code
   assets:
     - assets/icon/athan_app_icon.png
-    - assets/audio/athan_beep.wav
-    - assets/audio/Fajr Athan by Mishary Rashid.mp3
-    - assets/audio/Athan by Mishary Rashid.mp3
-    - assets/audio/Athan by Wakilur R Chowdhury.mp3
+    - assets/audio/
     - assets/data/
     - assets/images/

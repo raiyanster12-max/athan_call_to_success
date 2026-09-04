@@ -38,10 +38,11 @@ class _SettingsPageState extends State<SettingsPage> {
   ];
 
   static const List<String> _toneOptions = [
-    'Beep',
     'Fajr Athan by Mishary Rashid',
     'Athan by Mishary Rashid',
     'Athan by Wakilur R Chowdhury',
+    'Makkah Athan',
+    'Madinah Athan',
   ];
 
   static final String _customFileTone = NotificationService.toneCustomFile ?? '';
@@ -354,9 +355,16 @@ class _SettingsPageState extends State<SettingsPage> {
 
   String? _migrateToneName(String? tone) {
     const legacy = {
+      'Beep': 'Fajr Athan by Mishary Rashid',
+      'Muezzin Voice 1': 'Fajr Athan by Mishary Rashid',
       'Muezzin Voice 1 with Fajr Athan': 'Fajr Athan by Mishary Rashid',
+      'Muezzin Voice 2': 'Athan by Mishary Rashid',
       'Muezzin Voice 2 with Mishary Alafasi': 'Athan by Mishary Rashid',
+      'Abbu Athan': 'Athan by Wakilur R Chowdhury',
       'Abbu_Athan': 'Athan by Wakilur R Chowdhury',
+      'athan_muezzin_1': 'Fajr Athan by Mishary Rashid',
+      'athan_muezzin_2': 'Athan by Mishary Rashid',
+      'athan_abbu_athan': 'Athan by Wakilur R Chowdhury',
     };
     return legacy[tone] ?? tone;
   }
@@ -633,9 +641,7 @@ class _SettingsPageState extends State<SettingsPage> {
           final lat = double.parse(latStr);
           final lng = double.parse(lngStr);
           final next = PrayerService.getNextPrayer(lat, lng);
-          if (next != null) {
-            prayerName = next.name;
-          }
+          prayerName = next.name;
         }
       } catch (_) {}
     }
@@ -1483,7 +1489,7 @@ class _SettingsPageState extends State<SettingsPage> {
             dropdownColor: _surfaceBackground,
             style: TextStyle(color: _primaryText),
             decoration: _sheetInputDecoration('Tone'),
-            items: _toneOptions
+            items: _allToneOptions
                 .map(
                   (tone) => DropdownMenuItem<String>(
                     value: tone,
@@ -1494,10 +1500,50 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 )
                 .toList(),
-            onChanged: (value) {
-              if (value != null) onChanged(value);
+            onChanged: (value) async {
+              if (value == null) return;
+              if (value == _customFileTone && !kIsWeb) {
+                await _pickCustomToneForPrayer(prayer);
+                // After picking, the state is updated globally.
+                // We should reflect it in the sheet.
+                onChanged(_customFileTone);
+                return;
+              }
+              onChanged(value);
             },
           ),
+          if (localPrefs[prayer] == _customFileTone && !kIsWeb) ...[
+            const SizedBox(height: 10),
+            Text(
+              _customToneFileNames[prayer]!.isEmpty
+                  ? 'No custom file selected'
+                  : 'Selected: ${_customToneFileNames[prayer]}',
+              style: TextStyle(color: _secondaryText, fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (_customToneFileNames[prayer]!.isNotEmpty)
+                  _playingPrayer == prayer
+                      ? OutlinedButton.icon(
+                          onPressed: _stopPlayback,
+                          icon: const Icon(Icons.stop),
+                          label: const Text('Stop'),
+                        )
+                      : OutlinedButton.icon(
+                          onPressed: () => _playCustomTone(prayer),
+                          icon: const Icon(Icons.play_arrow),
+                          label: const Text('Preview'),
+                        ),
+                OutlinedButton(
+                  onPressed: () => _pickCustomToneForPrayer(prayer),
+                  child: const Text('Change file'),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
