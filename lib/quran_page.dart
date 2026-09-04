@@ -1170,7 +1170,42 @@ class _SurahDetailsPage extends StatefulWidget {
 class _SurahDetailsPageState extends State<_SurahDetailsPage> {
   static const int _readingGoalMinutes = 5;
   static const String _ayahBookmarksKey = 'quran_bookmarked_ayahs';
+  static const String _reciterKey = 'quran_selected_reciter';
+  static const String _playbackSpeedKey = 'quran_playback_speed';
   static final Map<int, int> _sessionLastReadAyahBySurah = <int, int>{};
+
+  static const List<_Reciter> _reciters = [
+    _Reciter(
+      name: 'Mishary Rashid Alafasy',
+      identifier: 'alafasy',
+      subFolder: 'Alafasy_128kbps',
+    ),
+    _Reciter(
+      name: 'Abdul Basit (Murattal)',
+      identifier: 'abdulbasit-murattal',
+      subFolder: 'Abdul_Basit_Murattal_192kbps',
+    ),
+    _Reciter(
+      name: 'Abdul Basit (Mujawwad)',
+      identifier: 'abdulbasit-mujawwad',
+      subFolder: 'Abdul_Basit_Mujawwad_128kbps',
+    ),
+    _Reciter(
+      name: 'Maher Al-Muaiqly',
+      identifier: 'al-muaiqly',
+      subFolder: 'Maher_AlMuaiqly_64kbps',
+    ),
+    _Reciter(
+      name: 'Saad Al-Ghamdi',
+      identifier: 'al-ghamdi',
+      subFolder: 'Ghamadi_40kbps',
+    ),
+    _Reciter(
+      name: 'Abu Bakr Al-Shatri',
+      identifier: 'al-shatri',
+      subFolder: 'Abu_Bakr_Ash-Shaatree_128kbps',
+    ),
+  ];
 
   late final int _verseCount;
   late final List<GlobalKey> _verseKeys;
@@ -1191,6 +1226,11 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
   bool _showTajweed = false;
   String? _loadError;
   final Set<String> _ayahBookmarks = <String>{};
+
+  _Reciter _selectedReciter = _reciters.first;
+  double _playbackSpeed = 1.0;
+  PlayerState _playerState = PlayerState.stopped;
+  bool _isContinuousMode = false;
 
   String _ayahBookmarkToken(int ayahNumber) =>
       '${widget.surah.number}:$ayahNumber';
@@ -1356,6 +1396,16 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
         _readingDuration += const Duration(seconds: 1);
       });
     });
+
+    _reciterPlayer.onPlayerStateChanged.listen((state) {
+      if (mounted) setState(() => _playerState = state);
+    });
+
+    _reciterPlayer.onPlayerComplete.listen((event) {
+      if (_isContinuousMode && mounted) {
+        _playNextAyah();
+      }
+    });
   }
 
   @override
@@ -1392,6 +1442,20 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                 .map((entry) => entry.trim())
                 .where((entry) => entry.isNotEmpty),
           );
+
+        final savedReciterId = await DBHelper.getSetting(_reciterKey);
+        if (savedReciterId != null) {
+          final found = _reciters.firstWhere(
+            (r) => r.identifier == savedReciterId,
+            orElse: () => _reciters.first,
+          );
+          _selectedReciter = found;
+        }
+
+        final savedSpeed = await DBHelper.getSetting(_playbackSpeedKey);
+        if (savedSpeed != null) {
+          _playbackSpeed = double.tryParse(savedSpeed) ?? 1.0;
+        }
       } catch (_) {}
 
       final verseItems = List<_AyahContent>.generate(_verseCount, (index) {
@@ -1501,37 +1565,58 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
   String _everyAyahUrl(int surahNumber, int ayahNumber) {
     final surah = surahNumber.toString().padLeft(3, '0');
     final ayah = ayahNumber.toString().padLeft(3, '0');
-    return 'https://everyayah.com/data/Alafasy_128kbps/$surah$ayah.mp3';
+    return 'https://everyayah.com/data/${_selectedReciter.subFolder}/$surah$ayah.mp3';
   }
 
   Future<void> _playAyahRecitation(int ayahNumber) async {
-    final quranUrl = _normalizeAudioUrl(
-      quran.getAudioURLByVerse(
-        widget.surah.number,
-        ayahNumber,
-        reciter: quran.Reciter.arAlafasy,
-      ),
-    );
-    final fallbackUrl = _everyAyahUrl(widget.surah.number, ayahNumber);
-    final candidates = <String>{quranUrl, fallbackUrl}.toList(growable: false);
+    await _setSelectedAyah(ayahNumber);
+    final url = _everyAyahUrl(widget.surah.number, ayahNumber);
 
-    Object? lastError;
-    for (final url in candidates) {
-      try {
-        await _reciterPlayer.stop();
-        await _reciterPlayer.setSourceUrl(url);
-        await _reciterPlayer.resume();
-        return;
-      } catch (e) {
-        lastError = e;
-        debugPrint('Ayah recitation source failed: $url -> $e');
+    try {
+      await _reciterPlayer.stop();
+      await _reciterPlayer.setPlaybackRate(_playbackSpeed);
+      await _reciterPlayer.setSourceUrl(url);
+      await _reciterPlayer.resume();
+    } catch (e) {
+      debugPrint('Ayah recitation failed: $url -> $e');
+      if (!mounted) return;
+      setState(() {
+        _isContinuousMode = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ayah recitation failed: $e')),
+      );
+    }
+  }
+
+  void _playNextAyah() {
+    if (_selectedAyah < _verseCount) {
+      final nextAyah = _selectedAyah + 1;
+      _scrollToAyah(nextAyah);
+      _playAyahRecitation(nextAyah);
+    } else {
+      setState(() {
+        _isContinuousMode = false;
+      });
+    }
+  }
+
+  void _toggleContinuousPlayback() {
+    if (_playerState == PlayerState.playing) {
+      _reciterPlayer.pause();
+      setState(() {
+        _isContinuousMode = false;
+      });
+    } else {
+      setState(() {
+        _isContinuousMode = true;
+      });
+      if (_playerState == PlayerState.paused) {
+        _reciterPlayer.resume();
+      } else {
+        _playAyahRecitation(_selectedAyah);
       }
     }
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Ayah recitation failed: $lastError')),
-    );
   }
 
   Future<void> _scrollToTop() async {
@@ -1640,6 +1725,84 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                           onChanged: (v) => syncState(() => _showTajweed = v),
                           activeThumbColor: AppPalette.accent,
                           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 14),
+                    // ── Reciter selection ───────────────────────────────
+                    Row(
+                      children: [
+                        const SizedBox(width: 4),
+                        Text(
+                          'Reciter',
+                          style: TextStyle(
+                            color: _qp(context).textSecondary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Spacer(),
+                        DropdownButton<_Reciter>(
+                          value: _selectedReciter,
+                          underline: const SizedBox.shrink(),
+                          alignment: Alignment.centerRight,
+                          items: _reciters.map((r) {
+                            return DropdownMenuItem<_Reciter>(
+                              value: r,
+                              child: Text(
+                                r.name,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (r) async {
+                            if (r == null) return;
+                            syncState(() => _selectedReciter = r);
+                            try {
+                              await DBHelper.setSetting(_reciterKey, r.identifier);
+                            } catch (_) {}
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    // ── Playback Speed ─────────────────────────────────
+                    Row(
+                      children: [
+                        const SizedBox(width: 4),
+                        Text(
+                          'Speed',
+                          style: TextStyle(
+                            color: _qp(context).textSecondary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Spacer(),
+                        DropdownButton<double>(
+                          value: _playbackSpeed,
+                          underline: const SizedBox.shrink(),
+                          alignment: Alignment.centerRight,
+                          items: [0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((s) {
+                            return DropdownMenuItem<double>(
+                              value: s,
+                              child: Text(
+                                '${s}x',
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (s) async {
+                            if (s == null) return;
+                            syncState(() => _playbackSpeed = s);
+                            try {
+                              await DBHelper.setSetting(
+                                _playbackSpeedKey,
+                                s.toString(),
+                              );
+                              await _reciterPlayer.setPlaybackRate(s);
+                            } catch (_) {}
+                          },
                         ),
                       ],
                     ),
@@ -1811,6 +1974,19 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           FloatingActionButton.small(
+            heroTag: 'quran-play-pause',
+            backgroundColor: AppPalette.accent,
+            foregroundColor: Colors.white,
+            onPressed: _toggleContinuousPlayback,
+            tooltip: _playerState == PlayerState.playing ? 'Pause' : 'Play Continuous',
+            child: Icon(
+              _playerState == PlayerState.playing
+                  ? Icons.pause_rounded
+                  : Icons.play_arrow_rounded,
+            ),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton.small(
             heroTag: 'quran-surah-controls',
             backgroundColor: _qp(context).surfaceRaised,
             foregroundColor: _qp(context).textPrimary,
@@ -1948,6 +2124,84 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                         ],
                       ),
                       const Divider(height: 12),
+                      // ── Reciter selection ───────────────────────────────
+                      Row(
+                        children: [
+                          const SizedBox(width: 4),
+                          Text(
+                            'Reciter',
+                            style: TextStyle(
+                              color: _qp(context).textSecondary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const Spacer(),
+                          DropdownButton<_Reciter>(
+                            value: _selectedReciter,
+                            underline: const SizedBox.shrink(),
+                            alignment: Alignment.centerRight,
+                            items: _reciters.map((r) {
+                              return DropdownMenuItem<_Reciter>(
+                                value: r,
+                                child: Text(
+                                  r.name,
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (r) async {
+                              if (r == null) return;
+                              setState(() => _selectedReciter = r);
+                              try {
+                                await DBHelper.setSetting(_reciterKey, r.identifier);
+                              } catch (_) {}
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      // ── Playback Speed ─────────────────────────────────
+                      Row(
+                        children: [
+                          const SizedBox(width: 4),
+                          Text(
+                            'Speed',
+                            style: TextStyle(
+                              color: _qp(context).textSecondary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const Spacer(),
+                          DropdownButton<double>(
+                            value: _playbackSpeed,
+                            underline: const SizedBox.shrink(),
+                            alignment: Alignment.centerRight,
+                            items: [0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((s) {
+                              return DropdownMenuItem<double>(
+                                value: s,
+                                child: Text(
+                                  '${s}x',
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (s) async {
+                              if (s == null) return;
+                              setState(() => _playbackSpeed = s);
+                              try {
+                                await DBHelper.setSetting(
+                                  _playbackSpeedKey,
+                                  s.toString(),
+                                );
+                                await _reciterPlayer.setPlaybackRate(s);
+                              } catch (_) {}
+                            },
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 12),
                       // ── Ayah jump + last read ────────────────────────────
                       Row(
                         children: [
@@ -2062,7 +2316,10 @@ class _SurahDetailsPageState extends State<_SurahDetailsPage> {
                       const SizedBox(height: 6),
                       GestureDetector(
                         behavior: HitTestBehavior.translucent,
-                        onTap: () => _playAyahRecitation(ayah.ayahNumber),
+                        onTap: () {
+                          setState(() => _isContinuousMode = false);
+                          _playAyahRecitation(ayah.ayahNumber);
+                        },
                         child: Wrap(
                           alignment: WrapAlignment.end,
                           crossAxisAlignment: WrapCrossAlignment.center,
@@ -2134,6 +2391,18 @@ class _AyahContent {
   final int ayahNumber;
   final String arabic;
   final String translation;
+}
+
+class _Reciter {
+  const _Reciter({
+    required this.name,
+    required this.identifier,
+    required this.subFolder,
+  });
+
+  final String name;
+  final String identifier;
+  final String subFolder;
 }
 
 /// A labelled font-size control row used inside Surah Controls panel.
